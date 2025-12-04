@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Cognitive Backend Debugger</title>
+    <style>
+        body { background: #111; color: #eee; font-family: 'Courier New', monospace; display: flex; gap: 20px; padding: 20px; }
+        #left-panel { flex: 0 0 60%; }
+        #right-panel { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+
+        /* Map Rendering */
+        #game-map {
+            display: grid;
+            background: #000;
+            border: 1px solid #444;
+            line-height: 1;
+            /* Grid size will be set via JS */
+        }
+        .tile { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+        .wall { background: #333; color: #555; }
+        .floor { background: #111; color: #222; }
+        .player { color: cyan; font-weight: bold; text-shadow: 0 0 5px cyan; }
+        .npc { color: yellow; }
+        .enemy { color: red; }
+
+        /* Logs */
+        #logs {
+            height: 400px; overflow-y: auto; border: 1px solid #444; padding: 10px; font-size: 12px;
+            background: #0a0a0a; display: flex; flex-direction: column-reverse;
+        }
+        .log-entry { margin-bottom: 4px; border-bottom: 1px solid #222; padding-bottom: 2px; }
+        .log-time { color: #666; margin-right: 5px; }
+        .log-type-INFO { color: #88ccff; }
+        .log-type-ERROR { color: #ff5555; }
+        .log-type-SPEECH { color: #ffffaa; }
+
+        /* Controls */
+        button { background: #333; color: white; border: 1px solid #555; padding: 10px; cursor: pointer; }
+        button:hover { background: #555; }
+        .d-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; width: 150px; margin-bottom: 20px; }
+        textarea { background: #222; color: #fff; border: 1px solid #444; padding: 5px; width: 100%; height: 60px; font-family: monospace; }
+    </style>
+</head>
+<body>
+
+<div id="left-panel">
+    <h3>Visualizer (Map)</h3>
+    <div id="game-map">Нет соединения...</div>
+    <div style="margin-top: 10px;">
+        State: <span id="status-text">Disconnected</span> |
+        Tick: <span id="tick-val">0</span> |
+        Pos: <span id="pos-val">0,0</span>
+    </div>
+</div>
+
+<div id="right-panel">
+    <h3>Controls</h3>
+    <div class="d-pad">
+        <div></div>
+        <button onclick="sendMove(0, -1)">⬆️ N</button>
+        <div></div>
+        <button onclick="sendMove(-1, 0)">⬅️ W</button>
+        <button onclick="sendWait()">WAIT</button>
+        <button onclick="sendMove(1, 0)">E ➡️</button>
+        <div></div>
+        <button onclick="sendMove(0, 1)">⬇️ S</button>
+        <div></div>
+    </div>
+
+    <div>
+        <label>Manual JSON:</label>
+        <textarea id="json-input">{"action": "TALK", "payload": "Привет!"}</textarea>
+        <button onclick="sendRaw()">Send JSON</button>
+    </div>
+
+    <h3>Server Logs</h3>
+    <div id="logs"></div>
+</div>
+
+<script>
+    const ws = new WebSocket("ws://localhost:8080/ws");
+    const mapEl = document.getElementById("game-map");
+    const statusEl = document.getElementById("status-text");
+    const logsEl = document.getElementById("logs");
+
+    ws.onopen = () => {
+        statusEl.innerText = "Connected";
+        statusEl.style.color = "lightgreen";
+        addLog("System", "INFO", "Connection established");
+    };
+
+    ws.onclose = () => {
+        statusEl.innerText = "Disconnected";
+        statusEl.style.color = "red";
+    };
+
+    ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        console.log("RX:", msg);
+
+        if (msg.type === "INIT" || msg.type === "UPDATE") {
+            if (msg.world) renderMap(msg.world);
+            if (msg.player) updateStats(msg.player, msg.world ? msg.world.globalTick : 0);
+            if (msg.entities) window.currentEntities = msg.entities; // store for rendering
+            if (msg.logs) msg.logs.forEach(l => addLog(l.id, l.type, l.text));
+
+            // Re-render entities over map if map exists
+            if (msg.world && msg.player && msg.entities) drawEntities(msg.player, msg.entities);
+        }
+    };
+
+    function sendMove(dx, dy) {
+        send({
+            action: "MOVE",
+            payload: { dx, dy }
+        });
+    }
+
+    function sendWait() {
+        send({ action: "WAIT", payload: {} });
+    }
+
+    function sendRaw() {
+        const text = document.getElementById("json-input").value;
+        try {
+            const json = JSON.parse(text);
+            ws.send(JSON.stringify(json));
+        } catch (e) {
+            alert("Invalid JSON");
+        }
+    }
+
+    function send(obj) {
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(obj));
+        }
+    }
+
+    // --- Rendering Logic ---
+
+    function updateStats(player, tick) {
+        document.getElementById("pos-val").innerText = `${player.pos.x},${player.pos.y}`;
+        document.getElementById("tick-val").innerText = tick;
+    }
+
+    function renderMap(world) {
+        mapEl.style.gridTemplateColumns = `repeat(${world.width}, 20px)`;
+        mapEl.style.gridTemplateRows = `repeat(${world.height}, 20px)`;
+        mapEl.innerHTML = '';
+
+        world.map.forEach(row => {
+            row.forEach(tile => {
+                const div = document.createElement("div");
+                div.className = "tile " + (tile.isWall ? "wall" : "floor");
+                div.innerText = tile.isWall ? "#" : ".";
+                div.id = `cell-${tile.x}-${tile.y}`; // ID for quick entity placement
+                mapEl.appendChild(div);
+            });
+        });
+    }
+
+    function drawEntities(player, entities) {
+        // Clear previous entities visual (simple hack: re-render symbols)
+        // In real app we would track them, here we just rely on map redraw or manual cleanup
+        // For debug, let's just find the cell and put text
+
+        // Draw Enemies/NPCs
+        entities.forEach(e => {
+            const cell = document.getElementById(`cell-${e.pos.x}-${e.pos.y}`);
+            if (cell) {
+                cell.innerText = e.symbol;
+                cell.className += " " + (e.type === "NPC" ? "npc" : "enemy");
+            }
+        });
+
+        // Draw Player
+        const pCell = document.getElementById(`cell-${player.pos.x}-${player.pos.y}`);
+        if (pCell) {
+            pCell.innerText = player.symbol;
+            pCell.className += " player";
+        }
+    }
+
+    function addLog(id, type, text) {
+        const div = document.createElement("div");
+        div.className = "log-entry";
+        div.innerHTML = `<span class="log-time">[${new Date().toLocaleTimeString()}]</span> <span class="log-type-${type}">${type}</span>: ${text}`;
+        logsEl.prepend(div);
+    }
+</script>
+
+</body>
+</html>
