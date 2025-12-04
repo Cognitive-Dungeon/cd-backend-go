@@ -6,7 +6,7 @@ import "encoding/json"
 const (
 	EntityTypePlayer = "PLAYER"
 	EntityTypeNPC    = "NPC"
-	EntityTypeEnemy  = "GOBLIN"
+	EntityTypeEnemy  = "ENEMY"
 	EntityTypeItem   = "ITEM"
 	EntityTypeExit   = "EXIT"
 )

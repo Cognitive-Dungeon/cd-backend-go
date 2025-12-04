@@ -2,6 +2,7 @@ package engine
 
 import (
 	"cognitive-server/internal/models"
+	"cognitive-server/pkg/dungeon"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -15,46 +16,27 @@ type GameEngine struct {
 }
 
 func NewGame() *GameEngine {
-	width, height := 40, 25
+	// Генерируем Уровень 1
+	world, entities, startPos := dungeon.Generate(1)
 
-	// 1. Генерируем пустую карту (коробка)
-	gameMap := make([][]models.Tile, height)
-	for y := 0; y < height; y++ {
-		row := make([]models.Tile, width)
-		for x := 0; x < width; x++ {
-			isWall := x == 0 || x == width-1 || y == 0 || y == height-1
-			env := "floor"
-			if isWall {
-				env = "stone"
-			}
-			row[x] = models.Tile{
-				X: x, Y: y, IsWall: isWall, Env: env,
-				IsVisible: true, IsExplored: true, // Пока всё видно для теста
-			}
-		}
-		gameMap[y] = row
-	}
-
-	// 2. Создаем игрока
+	// Создаем игрока
 	player := &models.Entity{
-		ID: "p1", Name: "Герой", Symbol: "@", Color: "text-cyan-400", Type: models.EntityTypePlayer,
-		Pos:   models.Position{X: 5, Y: 5},
-		Stats: models.Stats{HP: 100, MaxHP: 100, Stamina: 100, MaxStamina: 100, Gold: 10},
-	}
-
-	// 3. Создаем NPC (манекен для теста)
-	npc := models.Entity{
-		ID: "npc1", Name: "Стражник", Symbol: "☺", Color: "text-yellow-200", Type: models.EntityTypeNPC,
-		Pos:   models.Position{X: 10, Y: 10},
-		Stats: models.Stats{HP: 100, MaxHP: 100},
+		ID:     "p1",
+		Label:  "Hero",
+		Name:   "Герой",
+		Symbol: "@",
+		Color:  "text-cyan-400",
+		Type:   models.EntityTypePlayer,
+		Pos:    startPos,
+		Stats: models.Stats{
+			HP: 100, MaxHP: 100, Stamina: 100, MaxStamina: 100, Gold: 50, Strength: 10,
+		},
 	}
 
 	return &GameEngine{
-		World: &models.GameWorld{
-			Map: gameMap, Width: width, Height: height, Level: 0, GlobalTick: 0,
-		},
+		World:    world,
 		Player:   player,
-		Entities: []models.Entity{npc},
+		Entities: entities,
 		Logs:     []models.LogEntry{},
 	}
 }
