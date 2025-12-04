@@ -1,0 +1,30 @@
+# Binaries
+# Игнорируем скомпилированные файлы
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+dist/
+
+# IDEs
+# Игнорируем настройки GoLand и VSCode
+.idea/
+.vscode/
+*.iml
+
+# Dependency directories (обычно не нужно в Go, но на всякий случай)
+vendor/
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment Variables (КРИТИЧНО для безопасности)
+# Здесь будут лежать API ключи, их нельзя пушить!
+.env
+.env.local
