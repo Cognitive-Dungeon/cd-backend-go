@@ -11,6 +11,19 @@ const (
 	EntityTypeExit   = "EXIT"
 )
 
+const (
+	// Стоимость действий в тиках
+	TimeCostMove        = 100
+	TimeCostAttackLight = 80
+	TimeCostAttackHeavy = 150
+	TimeCostWait        = 50
+	TimeCostInteract    = 50
+
+	// Радиусы
+	VisionRadius = 8
+	AggroRadius  = 10
+)
+
 // --- Базовые структуры ---
 
 type Position struct {
