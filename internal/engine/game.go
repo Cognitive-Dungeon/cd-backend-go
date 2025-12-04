@@ -191,20 +191,56 @@ func (g *GameEngine) processNPC(npc *models.Entity) {
 			// Тратим время NPC
 			npc.NextActionTick += models.TimeCostAttackLight
 		} else {
-			// ДВИЖЕНИЕ К ИГРОКУ
-			dx := sign(g.Player.Pos.X - npc.Pos.X)
-			dy := sign(g.Player.Pos.Y - npc.Pos.Y)
+			// ДВИЖЕНИЕ К ИГРОКУ (Smart Sliding)
+			dx := g.Player.Pos.X - npc.Pos.X
+			dy := g.Player.Pos.Y - npc.Pos.Y
 
-			// Простая проверка стен (без поиска пути A* пока что)
-			newX, newY := npc.Pos.X+dx, npc.Pos.Y+dy
-			if !g.isBlocked(newX, newY) {
-				npc.Pos.X = newX
-				npc.Pos.Y = newY
-				npc.NextActionTick += models.TimeCostMove
-			} else {
-				// Если застрял - ждет
-				npc.NextActionTick += models.TimeCostWait
+			stepX := sign(dx)
+			stepY := sign(dy)
+
+			// 1. Попытка идеального хода (по диагонали или прямой)
+			nextX, nextY := npc.Pos.X+stepX, npc.Pos.Y+stepY
+
+			// Если идеальный путь заблокирован, пробуем альтернативы
+			if g.isBlocked(nextX, nextY) {
+				// Определяем приоритетную ось (где расстояние больше)
+				tryXFirst := math.Abs(float64(dx)) > math.Abs(float64(dy))
+
+				moved := false
+
+				if tryXFirst {
+					// Пробуем только X
+					if stepX != 0 && !g.isBlocked(npc.Pos.X+stepX, npc.Pos.Y) {
+						nextX, nextY = npc.Pos.X+stepX, npc.Pos.Y
+						moved = true
+					} else if stepY != 0 && !g.isBlocked(npc.Pos.X, npc.Pos.Y+stepY) {
+						// Если X занят, пробуем Y
+						nextX, nextY = npc.Pos.X, npc.Pos.Y+stepY
+						moved = true
+					}
+				} else {
+					// Пробуем только Y
+					if stepY != 0 && !g.isBlocked(npc.Pos.X, npc.Pos.Y+stepY) {
+						nextX, nextY = npc.Pos.X, npc.Pos.Y+stepY
+						moved = true
+					} else if stepX != 0 && !g.isBlocked(npc.Pos.X+stepX, npc.Pos.Y) {
+						// Если Y занят, пробуем X
+						nextX, nextY = npc.Pos.X+stepX, npc.Pos.Y
+						moved = true
+					}
+				}
+
+				if !moved {
+					// Враг в тупике или зажат
+					npc.NextActionTick += models.TimeCostWait
+					return
+				}
 			}
+
+			// Применяем движение
+			npc.Pos.X = nextX
+			npc.Pos.Y = nextY
+			npc.NextActionTick += models.TimeCostMove
 		}
 	} else {
 		// IDLE: Просто стоит и ждет
