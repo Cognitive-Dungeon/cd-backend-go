@@ -244,23 +244,33 @@
 
     function drawEntities(entities) {
         entities.forEach(e => {
+            // Убедись, что ID ячеек совпадают с теми, что в renderMap (t-x-y или c-x-y)
+            // В последней версии было t-${x}-${y}
             const el = document.getElementById(`t-${e.pos.x}-${e.pos.y}`);
             if (!el) return;
 
-            el.innerText = e.symbol;
-            el.className = "tile entity"; // Base entity class
+            // 1. Достаем Символ из RenderComponent
+            if (e.render) {
+                el.innerText = e.render.symbol;
+            } else {
+                el.innerText = "?"; // Если компонента нет
+            }
 
-            // Color mapping based on type
+            el.className = "tile entity"; // Сброс классов
+
+            // 2. Красим по типам
             if (e.type === "PLAYER") el.classList.add("player");
             else if (e.type === "ENEMY") el.classList.add("enemy");
             else if (e.type === "NPC") el.classList.add("npc");
 
-            if (e.isDead) {
+            // 3. Проверка на смерть (теперь внутри Stats)
+            if (e.stats && e.stats.isDead) {
                 el.classList.remove("enemy", "npc", "player");
+                el.classList.add("corpse");
                 el.style.color = "#555";
             }
 
-            // Highlight selection
+            // Выделение цели
             if (e.id === selectedTarget) {
                 el.classList.add("selected");
             }

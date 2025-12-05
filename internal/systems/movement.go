@@ -18,29 +18,36 @@ func CalculateMove(e *domain.Entity, dx, dy int, w *domain.GameWorld, entities [
 	newY := e.Pos.Y + dy
 	res := MovementResult{NewX: newX, NewY: newY}
 
-	// 1. Проверка границ карты
+	// 1. Границы и Стены
 	if newX < 0 || newX >= w.Width || newY < 0 || newY >= w.Height {
 		res.IsWall = true
 		return res
 	}
-
-	// 2. Проверка стен
 	if w.Map[newY][newX].IsWall {
 		res.IsWall = true
 		return res
 	}
 
-	// 3. Проверка сущностей (Коллизия)
+	// 2. Сущности
 	for i := range entities {
 		other := &entities[i]
-		if !other.IsDead && other.Pos.X == newX && other.Pos.Y == newY {
-			// Мы не можем наступить на другую сущность (пока что)
-			res.BlockedBy = other
-			return res
+
+		// Игнорируем самого себя
+		if other.ID == e.ID {
+			continue
+		}
+
+		if other.Pos.X == newX && other.Pos.Y == newY {
+			// Логика коллизии:
+			// Блокируем, только если у сущности есть Stats (тело) и она жива.
+			// Предметы и выходы (Stats == nil) проходимы.
+			if other.Stats != nil && !other.Stats.IsDead {
+				res.BlockedBy = other
+				return res
+			}
 		}
 	}
 
-	// Если дошли сюда - путь свободен
 	res.HasMoved = true
 	return res
 }

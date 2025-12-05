@@ -97,8 +97,17 @@ func Generate(level int) (*domain.GameWorld, []domain.Entity, domain.Position) {
 
 		// Лестница ВВЕРХ там же
 		entities = append(entities, domain.Entity{
-			ID: "exit_up", Label: "<", Symbol: "<", Type: domain.EntityTypeExit, Color: "text-white",
-			Name: "Лестница вверх", Pos: domain.Position{X: cx, Y: cy},
+			ID:   "exit_up",
+			Type: domain.EntityTypeExit,
+			Name: "Лестница вверх",
+			Pos:  domain.Position{X: cx, Y: cy},
+			Render: &domain.RenderComponent{
+				Symbol: "<",
+				Color:  "text-white", Label: "<",
+			},
+			Narrative: &domain.NarrativeComponent{
+				Description: "Старая каменная лестница, ведущая на поверхность.",
+			},
 		})
 	}
 
@@ -111,56 +120,62 @@ func Generate(level int) (*domain.GameWorld, []domain.Entity, domain.Position) {
 		if rand.Float32() > 0.3 {
 			isOrc := rand.Float32() > 0.7 || level > 3
 
+			// Заготовка врага
 			enemy := domain.Entity{
-				ID:        fmt.Sprintf("e_%d", i),
-				Type:      domain.EntityTypeEnemy,
-				IsHostile: true,
-				Stats: domain.Stats{
+				ID:   fmt.Sprintf("e_%d", i),
+				Type: domain.EntityTypeEnemy,
+				Pos:  domain.Position{X: cx + randRange(-1, 1), Y: cy + randRange(-1, 1)},
+
+				// Компоненты
+				Stats: &domain.StatsComponent{
 					HP: 15 + level*2, MaxHP: 15 + level*2,
 					Strength: 2 + level/2,
+					Gold:     randRange(1, 10), // Золото в карманах
 				},
-				NextActionTick: 0,
+				AI: &domain.AIComponent{
+					IsHostile:      true,
+					NextActionTick: 0,
+					State:          "IDLE",
+				},
+				Render:    &domain.RenderComponent{},    // Заполнится ниже
+				Narrative: &domain.NarrativeComponent{}, // Заполнится ниже
 			}
 
 			if isOrc {
 				enemy.Name = "Свирепый Орк"
-				enemy.Symbol = "O"
-				enemy.Color = "text-red-600"
-				enemy.Personality = "Furious"
+				enemy.Render.Symbol = "O"
+				enemy.Render.Color = "text-red-600"
+				enemy.AI.Personality = "Furious"
 				enemy.Stats.HP *= 2
 				enemy.Stats.Strength += 2
+				enemy.Narrative.Description = "Огромный зеленокожий орк с тяжелой дубиной."
 			} else {
 				enemy.Name = "Хитрый Гоблин"
-				enemy.Symbol = "g"
-				enemy.Color = "text-green-500"
-				enemy.Personality = "Cowardly"
+				enemy.Render.Symbol = "g"
+				enemy.Render.Color = "text-green-500"
+				enemy.AI.Personality = "Cowardly"
+				enemy.Narrative.Description = "Мелкий пакостный гоблин, воровато оглядывается."
 			}
-
-			// Небольшой сдвиг от центра комнаты, чтобы не стоять друг на друге
-			enemy.Pos = domain.Position{X: cx + randRange(-1, 1), Y: cy + randRange(-1, 1)}
 			entities = append(entities, enemy)
 		}
 	}
 
 	// 5. Лестница ВНИЗ (в последней комнате)
 	if len(rooms) > 0 {
-		lastRoom := rooms[len(rooms)-1]
-		lx, ly := lastRoom.Center()
+		lx, ly := rooms[len(rooms)-1].Center()
 		entities = append(entities, domain.Entity{
-			ID: "exit_down", Label: ">", Symbol: ">", Type: domain.EntityTypeExit, Color: "text-white",
-			Name: "Лестница вниз", Pos: domain.Position{X: lx, Y: ly},
+			ID:        "exit_down",
+			Type:      domain.EntityTypeExit,
+			Name:      "Лестница вниз",
+			Pos:       domain.Position{X: lx, Y: ly},
+			Render:    &domain.RenderComponent{Symbol: ">", Color: "text-white", Label: ">"},
+			Narrative: &domain.NarrativeComponent{Description: "Темный проход, ведущий вглубь подземелья."},
 		})
 	}
 
-	world := &domain.GameWorld{
-		Map:        gameMap,
-		Width:      MapWidth,
-		Height:     MapHeight,
-		Level:      level,
-		GlobalTick: 0,
-	}
-
-	return world, entities, startPos
+	return &domain.GameWorld{
+		Map: gameMap, Width: MapWidth, Height: MapHeight, Level: level,
+	}, entities, startPos
 }
 
 // --- Вспомогательные функции ---
