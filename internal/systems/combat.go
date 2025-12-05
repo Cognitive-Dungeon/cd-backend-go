@@ -5,20 +5,31 @@ import (
 	"fmt"
 )
 
-// ApplyAttack рассчитывает урон, применяет его и возвращает лог события
 func ApplyAttack(attacker, target *domain.Entity) string {
-	damage := attacker.Stats.Strength
+	if target.Stats == nil {
+		return fmt.Sprintf("Вы атакуете %s, но это бесполезно.", target.Name)
+	}
+	if target.Stats.IsDead {
+		return fmt.Sprintf("Вы пинаете труп %s.", target.Name)
+	}
 
-	// В будущем тут будет защита (Armor) и уклонение
-	target.Stats.HP -= damage
+	damage := 1
+	if attacker.Stats != nil {
+		damage = attacker.Stats.Strength
+	}
+
+	died := target.Stats.TakeDamage(damage)
 
 	logMsg := fmt.Sprintf("%s наносит %d урона по %s.", attacker.Name, damage, target.Name)
 
-	if target.Stats.HP <= 0 {
-		target.IsDead = true
-		target.Symbol = "%"
-		target.Color = "text-gray-500"
-		target.IsHostile = false // Мертвые не кусаются
+	if died {
+		if target.Render != nil {
+			target.Render.Symbol = "%"
+			target.Render.Color = "text-gray-500"
+		}
+		if target.AI != nil {
+			target.AI.IsHostile = false
+		}
 		logMsg += fmt.Sprintf(" %s погибает.", target.Name)
 	}
 

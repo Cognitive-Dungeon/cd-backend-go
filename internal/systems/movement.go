@@ -14,33 +14,47 @@ type MovementResult struct {
 
 // CalculateMove вычисляет новую позицию. Не меняет состояние мира!
 func CalculateMove(e *domain.Entity, dx, dy int, w *domain.GameWorld, entities []domain.Entity) MovementResult {
-	newX := e.Pos.X + dx
-	newY := e.Pos.Y + dy
-	res := MovementResult{NewX: newX, NewY: newY}
+	// ИСПОЛЬЗУЕМ НОВЫЙ МЕТОД Shift
+	// Он возвращает новую структуру Position, не меняя текущую
+	targetPos := e.Pos.Shift(dx, dy)
 
-	// 1. Проверка границ карты
-	if newX < 0 || newX >= w.Width || newY < 0 || newY >= w.Height {
+	res := MovementResult{NewX: targetPos.X, NewY: targetPos.Y}
+
+	// 1. Проверка границ
+	if targetPos.X < 0 || targetPos.X >= w.Width || targetPos.Y < 0 || targetPos.Y >= w.Height {
 		res.IsWall = true
 		return res
 	}
 
 	// 2. Проверка стен
-	if w.Map[newY][newX].IsWall {
+	if w.Map[targetPos.Y][targetPos.X].IsWall {
 		res.IsWall = true
 		return res
 	}
 
-	// 3. Проверка сущностей (Коллизия)
+	// 3. Проверка сущностей
 	for i := range entities {
 		other := &entities[i]
-		if !other.IsDead && other.Pos.X == newX && other.Pos.Y == newY {
-			// Мы не можем наступить на другую сущность (пока что)
-			res.BlockedBy = other
-			return res
+		if other.ID == e.ID {
+			continue
+		}
+
+		// Игнорируем самого себя
+		if other.ID == e.ID {
+			continue
+		}
+
+		if other.Pos.X == targetPos.X && other.Pos.Y == targetPos.Y {
+			// Логика коллизии:
+			// Блокируем, только если у сущности есть Stats (тело) и она жива.
+			// Предметы и выходы (Stats == nil) проходимы.
+			if other.Stats != nil && !other.Stats.IsDead {
+				res.BlockedBy = other
+				return res
+			}
 		}
 	}
 
-	// Если дошли сюда - путь свободен
 	res.HasMoved = true
 	return res
 }

@@ -49,7 +49,7 @@ func (b *Bot) makeMove(state domain.ServerResponse) {
 		}
 	}
 
-	if me == nil || me.IsDead {
+	if me == nil || me.Stats == nil || me.Stats.IsDead {
 		return
 	}
 

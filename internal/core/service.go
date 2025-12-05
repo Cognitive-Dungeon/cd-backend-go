@@ -24,14 +24,22 @@ type GameService struct {
 func NewService() *GameService {
 	world, entities, startPos := dungeon.Generate(1)
 	player := &domain.Entity{
-		ID:     "p1",
-		Name:   "Герой",
-		Symbol: "@",
-		Color:  "text-cyan-400",
-		Type:   domain.EntityTypePlayer,
-		Pos:    startPos,
-		Stats: domain.Stats{
+		ID:   "p1",
+		Name: "Герой",
+		Type: domain.EntityTypePlayer,
+		Pos:  startPos,
+
+		Render: &domain.RenderComponent{Symbol: "@", Color: "text-cyan-400"},
+		Stats: &domain.StatsComponent{
 			HP: 100, MaxHP: 100, Stamina: 100, MaxStamina: 100, Gold: 50, Strength: 10,
+		},
+		// Игроку нужен AI компонент ТОЛЬКО для хранения тиков времени
+		AI: &domain.AIComponent{
+			NextActionTick: 0,
+			IsHostile:      false,
+		},
+		Narrative: &domain.NarrativeComponent{
+			Description: "Искатель приключений с горящими глазами.",
 		},
 	}
 
@@ -97,7 +105,7 @@ func (s *GameService) RunGameLoop() {
 	for {
 		// 1. Кто ходит?
 		activeActor := s.getNextActor()
-		s.World.GlobalTick = activeActor.NextActionTick
+		s.World.GlobalTick = activeActor.AI.NextActionTick
 
 		// 2. Уведомляем всех: "Сейчас ход ID=..."
 		s.publishTurn(activeActor.ID)
@@ -131,7 +139,7 @@ func (s *GameService) RunGameLoop() {
 
 			case <-timeout:
 				log.Printf("[ARBITER] Timeout for %s. Forcing WAIT.", activeActor.Name)
-				activeActor.NextActionTick += domain.TimeCostWait
+				activeActor.AI.Wait(domain.TimeCostWait)
 				commandProcessed = true
 			}
 		}
@@ -182,8 +190,12 @@ func (s *GameService) executeCommand(cmd domain.ClientCommand, actor *domain.Ent
 		}
 
 	case "WAIT":
-		s.AddLog(fmt.Sprintf("%s пропускает ход.", actor.Name), "INFO")
-		actor.NextActionTick += domain.TimeCostWait
+		if actor.Type == domain.EntityTypePlayer {
+			s.AddLog(fmt.Sprintf("%s пропускает ход.", actor.Name), "INFO")
+		}
+		if actor.AI != nil {
+			actor.AI.Wait(domain.TimeCostWait)
+		}
 
 	case "TALK":
 		var p domain.EntityPayload
@@ -200,46 +212,56 @@ func (s *GameService) executeCommand(cmd domain.ClientCommand, actor *domain.Ent
 // --- LOGIC ---
 
 func (s *GameService) getNextActor() *domain.Entity {
-	// 1. Собираем всех ЖИВЫХ и АКТИВНЫХ
-	// Игрок всегда активен
 	activeEntities := []*domain.Entity{s.Player}
-
 	for i := range s.Entities {
 		e := &s.Entities[i]
-		// Фильтр: Мертвые и Пассивные объекты не участвуют в очереди
-		if !e.IsDead && (e.Type == domain.EntityTypeNPC || e.Type == domain.EntityTypeEnemy) {
+		// Берем только тех, у кого есть AI и кто жив
+		if e.AI != nil && e.Stats != nil && !e.Stats.IsDead {
 			activeEntities = append(activeEntities, e)
 		}
 	}
 
-	// 2. Сортируем: кто меньше ждал, тот и ходит
 	sort.Slice(activeEntities, func(i, j int) bool {
-		return activeEntities[i].NextActionTick < activeEntities[j].NextActionTick
+		// !!! Доступ через .AI
+		return activeEntities[i].AI.NextActionTick < activeEntities[j].AI.NextActionTick
 	})
-
 	return activeEntities[0]
 }
 
 func (s *GameService) handleMove(actor *domain.Entity, dx, dy int) {
+	// Проверка наличия AI для тиков (у игрока он есть)
+	if actor.AI == nil {
+		return
+	}
+
 	res := systems.CalculateMove(actor, dx, dy, s.World, s.Entities)
 
-	if res.BlockedBy != nil && res.BlockedBy.IsHostile != actor.IsHostile {
-		// Атака при столкновении
-		logMsg := systems.ApplyAttack(actor, res.BlockedBy)
-		s.AddLog(logMsg, "COMBAT")
-		actor.NextActionTick += domain.TimeCostAttackLight
-	} else if res.HasMoved {
+	if res.BlockedBy != nil {
+		// Атака? Проверяем враждебность через AI
+		// Если у кого-то нет AI (манекен), считаем его не враждебным (false)
+		actorHostile := actor.AI.IsHostile
+		targetHostile := false
+		if res.BlockedBy.AI != nil {
+			targetHostile = res.BlockedBy.AI.IsHostile
+		}
+
+		if actorHostile != targetHostile {
+			logMsg := systems.ApplyAttack(actor, res.BlockedBy)
+			s.AddLog(logMsg, "COMBAT")
+			actor.AI.Wait(domain.TimeCostAttackLight)
+			return
+		}
+	}
+
+	if res.HasMoved {
 		actor.Pos.X = res.NewX
 		actor.Pos.Y = res.NewY
-		actor.NextActionTick += domain.TimeCostMove
-	} else {
-		// Если уперся в стену.
-		// Пишем ошибку только для игрока, чтобы не спамить логами тупых ботов
+		actor.AI.Wait(domain.TimeCostMove)
+	} else if res.IsWall {
 		if actor.Type == domain.EntityTypePlayer {
 			s.AddLog("Путь прегражден.", "ERROR")
 		} else {
-			// Бота штрафуем, чтобы он не ддосил сервер попытками пройти сквозь стену
-			actor.NextActionTick += domain.TimeCostWait
+			actor.AI.Wait(domain.TimeCostWait)
 		}
 	}
 }
@@ -260,7 +282,7 @@ func (s *GameService) handleAttack(actor *domain.Entity, targetID string) {
 	if target != nil {
 		logMsg := systems.ApplyAttack(actor, target)
 		s.AddLog(logMsg, "COMBAT")
-		actor.NextActionTick += domain.TimeCostAttackLight
+		actor.AI.Wait(domain.TimeCostAttackLight)
 	}
 }
 
