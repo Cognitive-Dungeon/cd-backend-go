@@ -6,16 +6,16 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"time" // Добавили для time.Sleep
 
 	"github.com/gorilla/websocket"
 )
 
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true }, // CORS
+	// Разрешаем CORS запросы (нужно для разработки React на другом порту)
+	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-// Создаем инстанс, но пока не запускаем
+// Инициализируем игровой сервис (Арбитр)
 var gameInstance = core.NewService()
 
 func wsHandler(w http.ResponseWriter, r *http.Request) {
@@ -26,51 +26,38 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	log.Println("Player connected")
+	log.Println("Client connected")
 
-	// --- 1. INIT ---
-	// Отправляем команду инициализации в движок
+	// 1. Подписка
+	clientChan := gameInstance.Hub.Subscribe()
+	defer gameInstance.Hub.Unsubscribe(clientChan)
+
+	// 2. Инициализация
+	// Это сообщение уйдет в движок, он сгенерирует ответ и
+	// пришлет его обратно в clientChan через broadcast.
 	gameInstance.ProcessCommand(domain.ClientCommand{Action: "INIT"})
 
-	// ХАК: Даем движку 10мс прожевать команду (так как каналы асинхронны)
-	// В будущем здесь будет ожидание события из канала обновлений
-	time.Sleep(10 * time.Millisecond)
+	// 3. Запуск писателя (Server -> Client)
+	go func() {
+		for event := range clientChan {
+			if err := conn.WriteJSON(event); err != nil {
+				log.Println("Write error:", err)
+				return
+			}
+		}
+	}()
 
-	// Берем текущее состояние вручную
-	initResp := gameInstance.GetState()
-	initResp.Type = "INIT" // Явно ставим тип для фронтенда
-
-	if err := conn.WriteJSON(initResp); err != nil {
-		log.Println("Write init error:", err)
-		return
-	}
-
-	// --- 2. GAME LOOP (Слушаем сокет) ---
+	// 4. Запуск читателя (Client -> Server)
 	for {
 		var cmd domain.ClientCommand
 		err := conn.ReadJSON(&cmd)
 		if err != nil {
-			log.Println("Read error:", err)
+			log.Println("Read error / Disconnect:", err)
 			break
 		}
 
 		log.Printf("Command received: %s\n", cmd.Action)
-
-		// 1. Кидаем команду в канал движка (неблокирующая операция)
 		gameInstance.ProcessCommand(cmd)
-
-		// 2. ХАК: Ждем обработки (временное решение для совместимости с React)
-		time.Sleep(10 * time.Millisecond)
-
-		// 3. Забираем актуальное состояние мира
-		resp := gameInstance.GetState()
-
-		// 4. Отправляем клиенту
-		err = conn.WriteJSON(resp)
-		if err != nil {
-			log.Println("Write error:", err)
-			break
-		}
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"cognitive-server/pkg/dungeon"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sort"
 	"time"
 )
@@ -17,10 +18,10 @@ type GameService struct {
 	Logs     []domain.LogEntry
 
 	CommandChan chan domain.ClientCommand
+	Hub         *Broadcaster
 }
 
 func NewService() *GameService {
-	// Генерация (без изменений)
 	world, entities, startPos := dungeon.Generate(1)
 	player := &domain.Entity{
 		ID:     "p1",
@@ -39,87 +40,113 @@ func NewService() *GameService {
 		Player:      player,
 		Entities:    entities,
 		Logs:        []domain.LogEntry{},
-		CommandChan: make(chan domain.ClientCommand, 100), // Буфер побольше
+		CommandChan: make(chan domain.ClientCommand, 100),
+		Hub:         NewBroadcaster(),
 	}
 }
 
-// Start - запускает "сердце" сервера
 func (s *GameService) Start() {
 	go s.RunGameLoop()
 }
 
-// ProcessCommand - Публичный метод: просто кладет в очередь (не блокирует)
 func (s *GameService) ProcessCommand(cmd domain.ClientCommand) {
 	select {
 	case s.CommandChan <- cmd:
 	default:
-		fmt.Println("Command queue full")
+		log.Println("[WARN] Command queue full")
 	}
 }
 
-// GetState возвращает снапшот и очищает очередь логов,
-// чтобы они не дублировались при следующем обновлении.
-func (s *GameService) GetState() *domain.ServerResponse {
-	// 1. Копируем текущие логи
+func (s *GameService) publishUpdate() {
+	// Копируем логи
 	currentLogs := make([]domain.LogEntry, len(s.Logs))
 	copy(currentLogs, s.Logs)
-
-	// 2. Очищаем массив в сервисе
 	s.Logs = []domain.LogEntry{}
 
-	// 3. Возвращаем копию
+	response := domain.ServerResponse{
+		Type:     "UPDATE",
+		World:    s.World,
+		Player:   s.Player,
+		Entities: s.Entities,
+		Logs:     currentLogs,
+	}
+
+	log.Printf("[BROADCAST] Sending update. Logs count: %d", len(currentLogs))
+	s.Hub.Broadcast(response)
+}
+
+func (s *GameService) GetState() *domain.ServerResponse {
+	currentLogs := make([]domain.LogEntry, len(s.Logs))
+	copy(currentLogs, s.Logs)
+	s.Logs = []domain.LogEntry{}
+
 	return &domain.ServerResponse{
 		Type:     "UPDATE",
 		World:    s.World,
 		Player:   s.Player,
 		Entities: s.Entities,
-		Logs:     currentLogs, // Отдаем только новые
+		Logs:     currentLogs,
 	}
 }
 
-// --- ГЛАВНЫЙ ЦИКЛ АРБИТРА ---
+// --- ГЛАВНЫЙ ЦИКЛ ---
 
 func (s *GameService) RunGameLoop() {
+	log.Println("[LOOP] Game Loop started")
+	const MaxLoops = 1000
+	loops := 0
+
 	for {
-		// 1. Определяем, чей сейчас ход (на основе Времени)
+		// 1. Кто ходит?
 		activeActor := s.getNextActor()
 
-		// 2. Обновляем глобальное время
+		// Лог, чтобы видеть порядок ходов
+		log.Printf("[LOOP] Active: %s (Tick: %d)", activeActor.Name, activeActor.NextActionTick)
+
+		// 2. Обновляем время мира
 		s.World.GlobalTick = activeActor.NextActionTick
 
-		// 3. Если ход ИГРОКА
+		// 3. Ход Игрока
 		if activeActor.ID == s.Player.ID {
-			// Мы БЛОКИРУЕМ цикл и ждем команду от клиента.
-			// Потому что пока игрок не походит, время в мире стопнуто.
+			loops = 0 // Сбрасываем счетчик защиты, так как управление у человека
+
+			log.Println("[LOOP] Waiting for Player command...")
 			select {
 			case cmd := <-s.CommandChan:
-				s.executeCommand(cmd) // Выполняем команду
+				log.Printf("[LOOP] Player Action: %s", cmd.Action)
+				s.executeCommand(cmd)
 			}
 		} else {
-			// 4. Если ход NPC
-			// Проверяем, не пришла ли системная команда (например, выход игрока), пока ходит NPC
+			// 4. Ход NPC
+			loops++
+			if loops > MaxLoops {
+				log.Println("[LOOP] Infinite loop detected! Forcing break.")
+				time.Sleep(1 * time.Second) // Тормозим, чтобы не повесить CPU
+				loops = 0
+			}
+
+			// Проверяем приоритетные команды (например, INIT)
 			select {
 			case cmd := <-s.CommandChan:
-				// Обрабатываем приоритетные команды даже в ход NPC (опционально)
 				if cmd.Action == "INIT" {
 					s.executeCommand(cmd)
 				}
 			default:
-				// Если команд нет - NPC делает ход
+				// Логика NPC
 				s.processNPC(activeActor)
+
+				// ОБЯЗАТЕЛЬНО: Отправляем обновление клиенту, чтобы он увидел ход врага
+				s.publishUpdate()
 			}
 		}
 	}
 }
 
-// executeCommand - Внутренняя логика обработки (бывший ProcessCommand)
 func (s *GameService) executeCommand(cmd domain.ClientCommand) {
-	// Очищаем логи (или накапливаем, тут зависит от геймдизайна)
-	// s.Logs = []domain.LogEntry{}
-
 	switch cmd.Action {
 	case "INIT":
 		s.AddLog("Добро пожаловать в Cognitive Dungeon.", "INFO")
+		s.publishUpdate() // Сразу шлем ответ на INIT
 
 	case "MOVE":
 		var p domain.MovePayload
@@ -130,24 +157,27 @@ func (s *GameService) executeCommand(cmd domain.ClientCommand) {
 	case "WAIT":
 		s.AddLog("Вы ждете...", "INFO")
 		s.Player.NextActionTick += domain.TimeCostWait
+		s.publishUpdate()
+
+	case "TALK":
+		// Заглушка для теста логов
+		s.AddLog("Вы что-то бормочете.", "SPEECH")
+		s.publishUpdate()
 	}
 }
 
-// --- УТИЛИТЫ ---
+// --- LOGIC ---
 
 func (s *GameService) getNextActor() *domain.Entity {
-	// Собираем всех живых
 	activeEntities := []*domain.Entity{s.Player}
 	for i := range s.Entities {
 		if !s.Entities[i].IsDead {
 			activeEntities = append(activeEntities, &s.Entities[i])
 		}
 	}
-	// Сортируем: кто меньше ждал, тот и ходит
 	sort.Slice(activeEntities, func(i, j int) bool {
 		return activeEntities[i].NextActionTick < activeEntities[j].NextActionTick
 	})
-
 	return activeEntities[0]
 }
 
@@ -165,10 +195,15 @@ func (s *GameService) handlePlayerMove(dx, dy int) {
 	} else if res.IsWall {
 		s.AddLog("Путь прегражден.", "ERROR")
 	}
+
+	// Важно: Мы НЕ вызываем publishUpdate здесь, так как он вызовется
+	// в executeCommand или цикл прокрутится дальше.
 }
 
 func (s *GameService) processNPC(npc *domain.Entity) {
 	action, target, dx, dy := systems.ComputeNPCAction(npc, s.Player, s.World, s.Entities)
+
+	log.Printf("[NPC] %s decided to: %s", npc.Name, action)
 
 	if action == "ATTACK" && target != nil {
 		logMsg := systems.ApplyAttack(npc, target)
@@ -179,6 +214,7 @@ func (s *GameService) processNPC(npc *domain.Entity) {
 		npc.Pos.Y += dy
 		npc.NextActionTick += domain.TimeCostMove
 	} else {
+		// WAIT
 		npc.NextActionTick += domain.TimeCostWait
 	}
 }
