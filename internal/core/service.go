@@ -15,13 +15,13 @@ type GameService struct {
 	Player   *domain.Entity
 	Entities []domain.Entity
 	Logs     []domain.LogEntry
+
+	CommandChan chan domain.ClientCommand
 }
 
 func NewService() *GameService {
-	// Генерация мира
+	// Генерация (без изменений)
 	world, entities, startPos := dungeon.Generate(1)
-
-	// Создание игрока
 	player := &domain.Entity{
 		ID:     "p1",
 		Name:   "Герой",
@@ -35,124 +35,139 @@ func NewService() *GameService {
 	}
 
 	return &GameService{
-		World:    world,
-		Player:   player,
-		Entities: entities,
-		Logs:     []domain.LogEntry{},
+		World:       world,
+		Player:      player,
+		Entities:    entities,
+		Logs:        []domain.LogEntry{},
+		CommandChan: make(chan domain.ClientCommand, 100), // Буфер побольше
 	}
 }
 
-// ProcessCommand - Обработка ввода от клиента
-func (s *GameService) ProcessCommand(cmd domain.ClientCommand) *domain.ServerResponse {
-	s.Logs = []domain.LogEntry{} // Очистка старых логов
-	response := &domain.ServerResponse{Type: "UPDATE"}
+// Start - запускает "сердце" сервера
+func (s *GameService) Start() {
+	go s.RunGameLoop()
+}
 
-	playerActed := false
+// ProcessCommand - Публичный метод: просто кладет в очередь (не блокирует)
+func (s *GameService) ProcessCommand(cmd domain.ClientCommand) {
+	select {
+	case s.CommandChan <- cmd:
+	default:
+		fmt.Println("Command queue full")
+	}
+}
+
+// GetState возвращает снапшот и очищает очередь логов,
+// чтобы они не дублировались при следующем обновлении.
+func (s *GameService) GetState() *domain.ServerResponse {
+	// 1. Копируем текущие логи
+	currentLogs := make([]domain.LogEntry, len(s.Logs))
+	copy(currentLogs, s.Logs)
+
+	// 2. Очищаем массив в сервисе
+	s.Logs = []domain.LogEntry{}
+
+	// 3. Возвращаем копию
+	return &domain.ServerResponse{
+		Type:     "UPDATE",
+		World:    s.World,
+		Player:   s.Player,
+		Entities: s.Entities,
+		Logs:     currentLogs, // Отдаем только новые
+	}
+}
+
+// --- ГЛАВНЫЙ ЦИКЛ АРБИТРА ---
+
+func (s *GameService) RunGameLoop() {
+	for {
+		// 1. Определяем, чей сейчас ход (на основе Времени)
+		activeActor := s.getNextActor()
+
+		// 2. Обновляем глобальное время
+		s.World.GlobalTick = activeActor.NextActionTick
+
+		// 3. Если ход ИГРОКА
+		if activeActor.ID == s.Player.ID {
+			// Мы БЛОКИРУЕМ цикл и ждем команду от клиента.
+			// Потому что пока игрок не походит, время в мире стопнуто.
+			select {
+			case cmd := <-s.CommandChan:
+				s.executeCommand(cmd) // Выполняем команду
+			}
+		} else {
+			// 4. Если ход NPC
+			// Проверяем, не пришла ли системная команда (например, выход игрока), пока ходит NPC
+			select {
+			case cmd := <-s.CommandChan:
+				// Обрабатываем приоритетные команды даже в ход NPC (опционально)
+				if cmd.Action == "INIT" {
+					s.executeCommand(cmd)
+				}
+			default:
+				// Если команд нет - NPC делает ход
+				s.processNPC(activeActor)
+			}
+		}
+	}
+}
+
+// executeCommand - Внутренняя логика обработки (бывший ProcessCommand)
+func (s *GameService) executeCommand(cmd domain.ClientCommand) {
+	// Очищаем логи (или накапливаем, тут зависит от геймдизайна)
+	// s.Logs = []domain.LogEntry{}
 
 	switch cmd.Action {
 	case "INIT":
 		s.AddLog("Добро пожаловать в Cognitive Dungeon.", "INFO")
-		response.Type = "INIT"
 
 	case "MOVE":
 		var p domain.MovePayload
 		if err := json.Unmarshal(cmd.Payload, &p); err == nil {
-			if s.handlePlayerMove(p.Dx, p.Dy) {
-				playerActed = true
-			}
+			s.handlePlayerMove(p.Dx, p.Dy)
 		}
 
 	case "WAIT":
 		s.AddLog("Вы ждете...", "INFO")
 		s.Player.NextActionTick += domain.TimeCostWait
-		playerActed = true
 	}
-
-	// Если игрок потратил время, запускаем симуляцию мира
-	if playerActed {
-		s.RunGameLoop()
-	}
-
-	// Формируем ответ
-	response.World = s.World
-	response.Player = s.Player
-	response.Entities = s.Entities
-	response.Logs = s.Logs
-
-	return response
 }
 
-// handlePlayerMove использует System Movement и Combat
-func (s *GameService) handlePlayerMove(dx, dy int) bool {
-	// 1. Спрашиваем систему движения: "Куда я попаду?"
+// --- УТИЛИТЫ ---
+
+func (s *GameService) getNextActor() *domain.Entity {
+	// Собираем всех живых
+	activeEntities := []*domain.Entity{s.Player}
+	for i := range s.Entities {
+		if !s.Entities[i].IsDead {
+			activeEntities = append(activeEntities, &s.Entities[i])
+		}
+	}
+	// Сортируем: кто меньше ждал, тот и ходит
+	sort.Slice(activeEntities, func(i, j int) bool {
+		return activeEntities[i].NextActionTick < activeEntities[j].NextActionTick
+	})
+
+	return activeEntities[0]
+}
+
+func (s *GameService) handlePlayerMove(dx, dy int) {
 	res := systems.CalculateMove(s.Player, dx, dy, s.World, s.Entities)
 
-	// 2. Если врезались во врага -> Атака
 	if res.BlockedBy != nil && res.BlockedBy.IsHostile {
 		logMsg := systems.ApplyAttack(s.Player, res.BlockedBy)
 		s.AddLog(logMsg, "COMBAT")
 		s.Player.NextActionTick += domain.TimeCostAttackLight
-		return true
-	}
-
-	// 3. Если путь свободен -> Движение
-	if res.HasMoved {
+	} else if res.HasMoved {
 		s.Player.Pos.X = res.NewX
 		s.Player.Pos.Y = res.NewY
 		s.Player.NextActionTick += domain.TimeCostMove
-		return true
-	}
-
-	// 4. Если стена
-	if res.IsWall {
+	} else if res.IsWall {
 		s.AddLog("Путь прегражден.", "ERROR")
-		return false
-	}
-
-	return false
-}
-
-// RunGameLoop - Крутит время и ИИ
-func (s *GameService) RunGameLoop() {
-	loops := 0
-	const MaxLoops = 1000
-
-	for {
-		// 1. Собираем всех живых
-		activeEntities := []*domain.Entity{s.Player}
-		for i := range s.Entities {
-			if !s.Entities[i].IsDead {
-				activeEntities = append(activeEntities, &s.Entities[i])
-			}
-		}
-
-		// 2. Сортировка по времени (Priority Queue)
-		sort.Slice(activeEntities, func(i, j int) bool {
-			return activeEntities[i].NextActionTick < activeEntities[j].NextActionTick
-		})
-
-		actor := activeEntities[0]
-		s.World.GlobalTick = actor.NextActionTick
-
-		// 3. Если ход Игрока -> выход
-		if actor.ID == s.Player.ID {
-			break
-		}
-
-		// 4. Ход NPC
-		s.processNPC(actor)
-
-		loops++
-		if loops > MaxLoops {
-			s.AddLog("System: Time loop break", "ERROR")
-			break
-		}
 	}
 }
 
-// processNPC использует System AI
 func (s *GameService) processNPC(npc *domain.Entity) {
-	// Спрашиваем ИИ: "Что делать?"
 	action, target, dx, dy := systems.ComputeNPCAction(npc, s.Player, s.World, s.Entities)
 
 	if action == "ATTACK" && target != nil {
@@ -164,7 +179,6 @@ func (s *GameService) processNPC(npc *domain.Entity) {
 		npc.Pos.Y += dy
 		npc.NextActionTick += domain.TimeCostMove
 	} else {
-		// WAIT
 		npc.NextActionTick += domain.TimeCostWait
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time" // Добавили для time.Sleep
 
 	"github.com/gorilla/websocket"
 )
@@ -14,7 +15,7 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true }, // CORS
 }
 
-// В MVP один инстанс игры на всех
+// Создаем инстанс, но пока не запускаем
 var gameInstance = core.NewService()
 
 func wsHandler(w http.ResponseWriter, r *http.Request) {
@@ -27,12 +28,25 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("Player connected")
 
-	// 1. Отправляем INIT состояние
-	initResp := gameInstance.ProcessCommand(domain.ClientCommand{Action: "INIT"})
-	conn.WriteJSON(initResp)
+	// --- 1. INIT ---
+	// Отправляем команду инициализации в движок
+	gameInstance.ProcessCommand(domain.ClientCommand{Action: "INIT"})
 
+	// ХАК: Даем движку 10мс прожевать команду (так как каналы асинхронны)
+	// В будущем здесь будет ожидание события из канала обновлений
+	time.Sleep(10 * time.Millisecond)
+
+	// Берем текущее состояние вручную
+	initResp := gameInstance.GetState()
+	initResp.Type = "INIT" // Явно ставим тип для фронтенда
+
+	if err := conn.WriteJSON(initResp); err != nil {
+		log.Println("Write init error:", err)
+		return
+	}
+
+	// --- 2. GAME LOOP (Слушаем сокет) ---
 	for {
-		// 2. Читаем команду
 		var cmd domain.ClientCommand
 		err := conn.ReadJSON(&cmd)
 		if err != nil {
@@ -42,10 +56,16 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 
 		log.Printf("Command received: %s\n", cmd.Action)
 
-		// 3. Обрабатываем
-		resp := gameInstance.ProcessCommand(cmd)
+		// 1. Кидаем команду в канал движка (неблокирующая операция)
+		gameInstance.ProcessCommand(cmd)
 
-		// 4. Отправляем ответ
+		// 2. ХАК: Ждем обработки (временное решение для совместимости с React)
+		time.Sleep(10 * time.Millisecond)
+
+		// 3. Забираем актуальное состояние мира
+		resp := gameInstance.GetState()
+
+		// 4. Отправляем клиенту
 		err = conn.WriteJSON(resp)
 		if err != nil {
 			log.Println("Write error:", err)
@@ -60,9 +80,13 @@ func main() {
 		port = "8080"
 	}
 
+	// ВАЖНО: Запускаем игровой цикл в фоне перед стартом сервера
+	log.Println("Starting Game Loop...")
+	gameInstance.Start()
+
 	http.HandleFunc("/ws", wsHandler)
 
-	log.Println("🛡️  Cognitive Dungeon Server running on :8080")
+	log.Println("🛡️  Cognitive Dungeon Server running on :" + port)
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		log.Fatal(err)
 	}
