@@ -1,8 +1,8 @@
 package main
 
 import (
+	"cognitive-server/internal/core"
 	"cognitive-server/internal/domain"
-	"cognitive-server/internal/engine"
 	"log"
 	"net/http"
 	"os"
@@ -15,7 +15,7 @@ var upgrader = websocket.Upgrader{
 }
 
 // В MVP один инстанс игры на всех
-var gameInstance = engine.NewGame()
+var gameInstance = core.NewService()
 
 func wsHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
