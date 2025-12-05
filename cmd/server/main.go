@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cognitive-server/internal/agent"
 	"cognitive-server/internal/core"
 	"cognitive-server/internal/domain"
 	"log"
@@ -11,10 +12,11 @@ import (
 )
 
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true }, // CORS
+	// Разрешаем CORS запросы (нужно для разработки React на другом порту)
+	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-// В MVP один инстанс игры на всех
+// Инициализируем игровой сервис (Арбитр)
 var gameInstance = core.NewService()
 
 func wsHandler(w http.ResponseWriter, r *http.Request) {
@@ -25,32 +27,38 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	log.Println("Player connected")
+	log.Println("Client connected")
 
-	// 1. Отправляем INIT состояние
-	initResp := gameInstance.ProcessCommand(domain.ClientCommand{Action: "INIT"})
-	conn.WriteJSON(initResp)
+	// 1. Подписка
+	clientChan := gameInstance.Hub.Subscribe()
+	defer gameInstance.Hub.Unsubscribe(clientChan)
 
+	// 2. Инициализация
+	// Это сообщение уйдет в движок, он сгенерирует ответ и
+	// пришлет его обратно в clientChan через broadcast.
+	gameInstance.ProcessCommand(domain.ClientCommand{Action: "INIT"})
+
+	// 3. Запуск писателя (Server -> Client)
+	go func() {
+		for event := range clientChan {
+			if err := conn.WriteJSON(event); err != nil {
+				log.Println("Write error:", err)
+				return
+			}
+		}
+	}()
+
+	// 4. Запуск читателя (Client -> Server)
 	for {
-		// 2. Читаем команду
 		var cmd domain.ClientCommand
 		err := conn.ReadJSON(&cmd)
 		if err != nil {
-			log.Println("Read error:", err)
+			log.Println("Read error / Disconnect:", err)
 			break
 		}
 
-		log.Printf("Command received: %s\n", cmd.Action)
-
-		// 3. Обрабатываем
-		resp := gameInstance.ProcessCommand(cmd)
-
-		// 4. Отправляем ответ
-		err = conn.WriteJSON(resp)
-		if err != nil {
-			log.Println("Write error:", err)
-			break
-		}
+		log.Printf("Command received: %s,%s\n", cmd.Token, cmd.Action)
+		gameInstance.ProcessCommand(cmd)
 	}
 }
 
@@ -60,9 +68,24 @@ func main() {
 		port = "8080"
 	}
 
+	// ВАЖНО: Запускаем игровой цикл в фоне перед стартом сервера
+	log.Println("Starting Game Loop...")
+	gameInstance.Start()
+
+	// --- ЗАПУСК БОТОВ ---
+	// Пробегаем по всем сущностям. Если это NPC/ENEMY - создаем для него бота.
+	for i := range gameInstance.Entities {
+		e := &gameInstance.Entities[i]
+		if e.Type == domain.EntityTypeEnemy || e.Type == domain.EntityTypeNPC {
+			bot := agent.NewBot(e.ID, gameInstance)
+			go bot.Run() // Запускаем мозг в отдельной горутине
+			log.Printf("Bot started for %s (%s)", e.Name, e.ID)
+		}
+	}
+
 	http.HandleFunc("/ws", wsHandler)
 
-	log.Println("🛡️  Cognitive Dungeon Server running on :8080")
+	log.Println("🛡️  Cognitive Dungeon Server running on :" + port)
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		log.Fatal(err)
 	}

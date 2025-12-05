@@ -12,21 +12,39 @@ type LogEntry struct {
 
 // ClientCommand - входящее сообщение от React
 type ClientCommand struct {
-	Action  string          `json:"action"` // MOVE, WAIT, TALK
+	Token   string          `json:"token,omitempty"` // ID сущности, которая шлет команду
+	Action  string          `json:"action"`          // MOVE, WAIT, TALK
 	Payload json.RawMessage `json:"payload"`
 }
 
 // Payloads
-type MovePayload struct {
+
+// DirectionPayload: Для WASD движения или толчков
+// Используется в: MOVE
+type DirectionPayload struct {
 	Dx int `json:"dx"`
 	Dy int `json:"dy"`
 }
 
+// EntityPayload: Для взаимодействия с конкретным объектом
+// Используется в: ATTACK, TALK, INSPECT, PICKUP, TRADE
+type EntityPayload struct {
+	TargetID string `json:"targetId"`
+}
+
+// PositionPayload: Для клика по карте или AoE магии (на будущее)
+// Используется в: TELEPORT, CAST_AREA
+type PositionPayload struct {
+	X int `json:"x"`
+	Y int `json:"y"`
+}
+
 // ServerResponse - исходящее сообщение (Снапшот)
 type ServerResponse struct {
-	Type     string     `json:"type"` // INIT, UPDATE
-	World    *GameWorld `json:"world,omitempty"`
-	Player   *Entity    `json:"player,omitempty"`
-	Entities []Entity   `json:"entities,omitempty"`
-	Logs     []LogEntry `json:"logs,omitempty"`
+	Type           string     `json:"type"` // INIT, UPDATE, TURN
+	World          *GameWorld `json:"world,omitempty"`
+	Player         *Entity    `json:"player,omitempty"` // Для игрока-человека
+	Entities       []Entity   `json:"entities,omitempty"`
+	Logs           []LogEntry `json:"logs,omitempty"`
+	ActiveEntityID string     `json:"activeEntityId,omitempty"`
 }

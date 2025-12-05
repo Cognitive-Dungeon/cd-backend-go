@@ -2,190 +2,306 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Cognitive Backend Debugger</title>
+    <title>Cognitive Debugger v3</title>
     <style>
-        body { background: #111; color: #eee; font-family: 'Courier New', monospace; display: flex; gap: 20px; padding: 20px; }
-        #left-panel { flex: 0 0 60%; }
-        #right-panel { flex: 1; display: flex; flex-direction: column; gap: 10px; }
-
-        /* Map Rendering */
-        #game-map {
-            display: grid;
-            background: #000;
-            border: 1px solid #444;
-            line-height: 1;
-            /* Grid size will be set via JS */
+        :root {
+            --bg: #0d1117;
+            --panel: #161b22;
+            --border: #30363d;
+            --text: #c9d1d9;
+            --accent: #58a6ff;
+            --danger: #da3633;
+            --success: #238636;
         }
-        .tile { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+        body {
+            background: var(--bg); color: var(--text);
+            font-family: 'Consolas', monospace;
+            margin: 0; padding: 20px;
+            display: flex; gap: 20px; height: 95vh; box-sizing: border-box;
+        }
+
+        /* Panels */
+        .panel {
+            background: var(--panel); border: 1px solid var(--border);
+            border-radius: 6px; padding: 15px; display: flex; flex-direction: column;
+        }
+        #left-panel { flex: 0 0 auto; }
+        #right-panel { flex: 1; min-width: 300px; gap: 10px; }
+
+        /* Map */
+        #map-container {
+            position: relative;
+            border: 2px solid #000;
+            display: inline-block;
+            background: #000;
+        }
+        #game-map { display: grid; }
+
+        .tile {
+            width: 20px; height: 20px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px; cursor: crosshair; user-select: none;
+        }
+        .tile:hover { background: #333; }
         .wall { background: #333; color: #555; }
         .floor { background: #111; color: #222; }
-        .player { color: cyan; font-weight: bold; text-shadow: 0 0 5px cyan; }
-        .npc { color: yellow; }
-        .enemy { color: red; }
+
+        /* Entities */
+        .entity { cursor: pointer; z-index: 10; font-weight: bold; }
+        .player { color: #58a6ff; text-shadow: 0 0 5px #58a6ff; }
+        .enemy { color: #ff7b72; }
+        .npc { color: #d29922; }
+
+        /* Selection Ring */
+        .selected {
+            box-shadow: inset 0 0 0 2px var(--danger);
+            background: rgba(218, 54, 51, 0.2) !important;
+        }
+
+        /* Controls */
+        .control-group { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
+        .d-pad { display: grid; grid-template-columns: repeat(3, 40px); gap: 5px; }
+
+        button {
+            background: #21262d; color: var(--text); border: 1px solid var(--border);
+            padding: 8px 12px; cursor: pointer; border-radius: 6px; font-family: inherit;
+        }
+        button:hover { background: #30363d; }
+        button:active { background: #1f2428; transform: translateY(1px); }
+        button.primary { background: #238636; border-color: rgba(240,246,252,0.1); color: #fff; }
+        button.danger { background: #da3633; border-color: rgba(240,246,252,0.1); color: #fff; }
 
         /* Logs */
         #logs {
-            height: 400px; overflow-y: auto; border: 1px solid #444; padding: 10px; font-size: 12px;
-            background: #0a0a0a; display: flex; flex-direction: column-reverse;
+            flex: 1; overflow-y: auto; background: #000;
+            border: 1px solid var(--border); padding: 10px; font-size: 12px;
         }
-        .log-entry { margin-bottom: 4px; border-bottom: 1px solid #222; padding-bottom: 2px; }
-        .log-time { color: #666; margin-right: 5px; }
-        .log-type-INFO { color: #88ccff; }
-        .log-type-ERROR { color: #ff5555; }
-        .log-type-SPEECH { color: #ffffaa; }
+        .log-line { margin-bottom: 4px; border-bottom: 1px solid #111; padding-bottom: 2px; }
+        .t-COMBAT { color: #ff7b72; }
+        .t-INFO { color: #8b949e; }
+        .t-SPEECH { color: #f2cc60; font-style: italic; }
 
-        /* Controls */
-        button { background: #333; color: white; border: 1px solid #555; padding: 10px; cursor: pointer; }
-        button:hover { background: #555; }
-        .d-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; width: 150px; margin-bottom: 20px; }
-        textarea { background: #222; color: #fff; border: 1px solid #444; padding: 5px; width: 100%; height: 60px; font-family: monospace; }
+        /* HUD */
+        #hud { margin-bottom: 10px; font-size: 13px; }
+        .active-turn { border-color: var(--success); box-shadow: 0 0 10px var(--success); }
+        .stat-val { color: var(--accent); font-weight: bold; }
     </style>
 </head>
 <body>
 
-<div id="left-panel">
-    <h3>Visualizer (Map)</h3>
-    <div id="game-map">Нет соединения...</div>
-    <div style="margin-top: 10px;">
-        State: <span id="status-text">Disconnected</span> |
-        Tick: <span id="tick-val">0</span> |
-        Pos: <span id="pos-val">0,0</span>
+<div id="left-panel" class="panel">
+    <div id="hud">
+        Tick: <span id="tick" class="stat-val">0</span> |
+        Pos: <span id="pos" class="stat-val">0,0</span> |
+        Target: <span id="target-info" style="color: var(--danger)">None</span>
+    </div>
+    <div id="map-container">
+        <div id="game-map">Connecting...</div>
     </div>
 </div>
 
-<div id="right-panel">
-    <h3>Controls</h3>
-    <div class="d-pad">
-        <div></div>
-        <button onclick="sendMove(0, -1)">⬆️ N</button>
-        <div></div>
-        <button onclick="sendMove(-1, 0)">⬅️ W</button>
-        <button onclick="sendWait()">WAIT</button>
-        <button onclick="sendMove(1, 0)">E ➡️</button>
-        <div></div>
-        <button onclick="sendMove(0, 1)">⬇️ S</button>
-        <div></div>
+<div id="right-panel" class="panel">
+    <div class="control-group">
+        <div class="d-pad">
+            <div></div>
+            <button onclick="sendDir(0, -1)">W</button>
+            <div></div>
+            <button onclick="sendDir(-1, 0)">A</button>
+            <button onclick="sendWait()">Wait</button>
+            <button onclick="sendDir(1, 0)">D</button>
+            <div></div>
+            <button onclick="sendDir(0, 1)">S</button>
+            <div></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 5px; width: 100%">
+            <button class="danger" onclick="sendAction('ATTACK')">⚔️ ATTACK (Target)</button>
+            <button class="primary" onclick="sendAction('TALK')">💬 TALK (Target)</button>
+            <button onclick="sendAction('INIT')">🔄 RESET</button>
+        </div>
     </div>
 
-    <div>
-        <label>Manual JSON:</label>
-        <textarea id="json-input">{"action": "TALK", "payload": "Привет!"}</textarea>
-        <button onclick="sendRaw()">Send JSON</button>
+    <div style="font-size: 11px; color: #666">
+        Controls: WASD to Move, SPACE to Wait, Click entity to Target.
     </div>
 
-    <h3>Server Logs</h3>
     <div id="logs"></div>
 </div>
 
 <script>
     const ws = new WebSocket("ws://localhost:8080/ws");
+
+    // State
+    let myId = "";
+    let selectedTarget = null;
+    let gridInitialized = false;
+    let entitiesCache = [];
+
+    // UI Refs
     const mapEl = document.getElementById("game-map");
-    const statusEl = document.getElementById("status-text");
-    const logsEl = document.getElementById("logs");
+    const leftPanel = document.getElementById("left-panel");
+    const targetLabel = document.getElementById("target-info");
 
-    ws.onopen = () => {
-        statusEl.innerText = "Connected";
-        statusEl.style.color = "lightgreen";
-        addLog("System", "INFO", "Connection established");
-    };
-
-    ws.onclose = () => {
-        statusEl.innerText = "Disconnected";
-        statusEl.style.color = "red";
-    };
-
-    ws.onmessage = (event) => {
-        const msg = JSON.parse(event.data);
-        console.log("RX:", msg);
+    ws.onmessage = (evt) => {
+        const msg = JSON.parse(evt.data);
 
         if (msg.type === "INIT" || msg.type === "UPDATE") {
-            if (msg.world) renderMap(msg.world);
-            if (msg.player) updateStats(msg.player, msg.world ? msg.world.globalTick : 0);
-            if (msg.entities) window.currentEntities = msg.entities; // store for rendering
-            if (msg.logs) msg.logs.forEach(l => addLog(l.id, l.type, l.text));
+            if (msg.player) myId = msg.player.id;
 
-            // Re-render entities over map if map exists
-            if (msg.world && msg.player && msg.entities) drawEntities(msg.player, msg.entities);
+            // Render
+            if (msg.world) renderMap(msg.world);
+            if (msg.entities) {
+                entitiesCache = [...msg.entities];
+                if (msg.player) entitiesCache.push(msg.player); // Add player to visuals
+                drawEntities(entitiesCache);
+            }
+            if (msg.player) updateStats(msg.player, msg.world?.globalTick);
+            if (msg.logs) renderLogs(msg.logs);
+
+            // Turn Indicator
+            if (msg.activeEntityId && msg.activeEntityId === myId) {
+                leftPanel.classList.add("active-turn");
+            } else {
+                leftPanel.classList.remove("active-turn");
+            }
         }
     };
 
-    function sendMove(dx, dy) {
-        send({
+    // --- Controls ---
+
+    function sendDir(dx, dy) {
+        ws.send(JSON.stringify({
             action: "MOVE",
-            payload: { dx, dy }
-        });
+            payload: { dx, dy } // DirectionPayload
+        }));
     }
 
     function sendWait() {
-        send({ action: "WAIT", payload: {} });
+        ws.send(JSON.stringify({ action: "WAIT", payload: {} }));
     }
 
-    function sendRaw() {
-        const text = document.getElementById("json-input").value;
-        try {
-            const json = JSON.parse(text);
-            ws.send(JSON.stringify(json));
-        } catch (e) {
-            alert("Invalid JSON");
+    function sendAction(action) {
+        if (!selectedTarget) {
+            alert("Select a target on the map first!");
+            return;
         }
+        ws.send(JSON.stringify({
+            action: action,
+            payload: { targetId: selectedTarget } // EntityPayload
+        }));
     }
 
-    function send(obj) {
-        if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify(obj));
+    // Keyboard
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "w") sendDir(0, -1);
+        if (e.key === "s") sendDir(0, 1);
+        if (e.key === "a") sendDir(-1, 0);
+        if (e.key === "d") sendDir(1, 0);
+        if (e.key === " ") sendWait();
+    });
+
+    // --- Core Rendering ---
+
+    function initGrid(w, h) {
+        mapEl.innerHTML = '';
+        mapEl.style.gridTemplateColumns = `repeat(${w}, 20px)`;
+        mapEl.style.gridTemplateRows = `repeat(${h}, 20px)`;
+
+        for(let y=0; y<h; y++) {
+            for(let x=0; x<w; x++) {
+                const div = document.createElement("div");
+                div.id = `t-${x}-${y}`;
+                div.className = "tile";
+                div.onclick = () => selectTile(x, y); // Click to select
+                mapEl.appendChild(div);
+            }
         }
-    }
-
-    // --- Rendering Logic ---
-
-    function updateStats(player, tick) {
-        document.getElementById("pos-val").innerText = `${player.pos.x},${player.pos.y}`;
-        document.getElementById("tick-val").innerText = tick;
+        gridInitialized = true;
     }
 
     function renderMap(world) {
-        mapEl.style.gridTemplateColumns = `repeat(${world.width}, 20px)`;
-        mapEl.style.gridTemplateRows = `repeat(${world.height}, 20px)`;
-        mapEl.innerHTML = '';
+        if (!gridInitialized) initGrid(world.width, world.height);
 
         world.map.forEach(row => {
             row.forEach(tile => {
-                const div = document.createElement("div");
-                div.className = "tile " + (tile.isWall ? "wall" : "floor");
-                div.innerText = tile.isWall ? "#" : ".";
-                div.id = `cell-${tile.x}-${tile.y}`; // ID for quick entity placement
-                mapEl.appendChild(div);
+                const el = document.getElementById(`t-${tile.x}-${tile.y}`);
+                if (!el) return;
+
+                // Reset
+                el.className = "tile";
+                el.innerText = "";
+                el.style.backgroundColor = "";
+
+                if (tile.isWall) {
+                    el.classList.add("wall");
+                    el.innerText = "#";
+                } else {
+                    el.classList.add("floor");
+                    el.innerText = ".";
+                }
             });
         });
     }
 
-    function drawEntities(player, entities) {
-        // Clear previous entities visual (simple hack: re-render symbols)
-        // In real app we would track them, here we just rely on map redraw or manual cleanup
-        // For debug, let's just find the cell and put text
-
-        // Draw Enemies/NPCs
+    function drawEntities(entities) {
         entities.forEach(e => {
-            const cell = document.getElementById(`cell-${e.pos.x}-${e.pos.y}`);
-            if (cell) {
-                cell.innerText = e.symbol;
-                cell.className += " " + (e.type === "NPC" ? "npc" : "enemy");
+            const el = document.getElementById(`t-${e.pos.x}-${e.pos.y}`);
+            if (!el) return;
+
+            el.innerText = e.symbol;
+            el.className = "tile entity"; // Base entity class
+
+            // Color mapping based on type
+            if (e.type === "PLAYER") el.classList.add("player");
+            else if (e.type === "ENEMY") el.classList.add("enemy");
+            else if (e.type === "NPC") el.classList.add("npc");
+
+            if (e.isDead) {
+                el.classList.remove("enemy", "npc", "player");
+                el.style.color = "#555";
+            }
+
+            // Highlight selection
+            if (e.id === selectedTarget) {
+                el.classList.add("selected");
             }
         });
-
-        // Draw Player
-        const pCell = document.getElementById(`cell-${player.pos.x}-${player.pos.y}`);
-        if (pCell) {
-            pCell.innerText = player.symbol;
-            pCell.className += " player";
-        }
     }
 
-    function addLog(id, type, text) {
-        const div = document.createElement("div");
-        div.className = "log-entry";
-        div.innerHTML = `<span class="log-time">[${new Date().toLocaleTimeString()}]</span> <span class="log-type-${type}">${type}</span>: ${text}`;
-        logsEl.prepend(div);
+    // --- Selection Logic ---
+
+    function selectTile(x, y) {
+        // Find entity at this pos
+        const ent = entitiesCache.find(e => e.pos.x === x && e.pos.y === y && !e.isDead && e.id !== myId);
+
+        if (ent) {
+            selectedTarget = ent.id;
+            targetLabel.innerText = `${ent.name} (${ent.id})`;
+            targetLabel.style.color = "#fff";
+        } else {
+            selectedTarget = null;
+            targetLabel.innerText = "None";
+            targetLabel.style.color = "#555";
+        }
+
+        // Redraw to show selection ring
+        drawEntities(entitiesCache);
+    }
+
+    function updateStats(p, tick) {
+        document.getElementById("tick").innerText = tick;
+        document.getElementById("pos").innerText = `${p.pos.x},${p.pos.y}`;
+    }
+
+    const logsEl = document.getElementById("logs");
+    function renderLogs(logs) {
+        logs.forEach(l => {
+            const row = document.createElement("div");
+            row.className = `log-line t-${l.type}`;
+            const time = new Date(l.timestamp).toLocaleTimeString();
+            row.innerText = `[${time}] ${l.text}`;
+            logsEl.appendChild(row);
+        });
+        logsEl.scrollTop = logsEl.scrollHeight;
     }
 </script>
 
