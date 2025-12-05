@@ -1,7 +1,7 @@
 package dungeon
 
 import (
-	"cognitive-server/internal/models"
+	"cognitive-server/internal/domain"
 	"fmt"
 	"math/rand"
 	"time"
@@ -31,17 +31,17 @@ func (r Rect) Intersects(other Rect) bool {
 }
 
 // Generate создает новый уровень
-func Generate(level int) (*models.GameWorld, []models.Entity, models.Position) {
+func Generate(level int) (*domain.GameWorld, []domain.Entity, domain.Position) {
 	// Инициализируем рандом (важно, иначе карта будет одинаковой)
 	// В Go 1.20+ глобальный сид рандомен, но для надежности можно так:
 	rand.Seed(time.Now().UnixNano())
 
 	// 1. Заполняем стенами
-	gameMap := make([][]models.Tile, MapHeight)
+	gameMap := make([][]domain.Tile, MapHeight)
 	for y := 0; y < MapHeight; y++ {
-		row := make([]models.Tile, MapWidth)
+		row := make([]domain.Tile, MapWidth)
 		for x := 0; x < MapWidth; x++ {
-			row[x] = models.Tile{
+			row[x] = domain.Tile{
 				X: x, Y: y, IsWall: true, Env: "stone",
 				IsVisible: false, IsExplored: false,
 			}
@@ -50,7 +50,7 @@ func Generate(level int) (*models.GameWorld, []models.Entity, models.Position) {
 	}
 
 	var rooms []Rect
-	var entities []models.Entity
+	var entities []domain.Entity
 
 	// 2. Генерируем комнаты
 	for i := 0; i < MaxRooms; i++ {
@@ -90,15 +90,15 @@ func Generate(level int) (*models.GameWorld, []models.Entity, models.Position) {
 	}
 
 	// 3. Спавн игрока (в центре первой комнаты)
-	startPos := models.Position{X: 0, Y: 0}
+	startPos := domain.Position{X: 0, Y: 0}
 	if len(rooms) > 0 {
 		cx, cy := rooms[0].Center()
-		startPos = models.Position{X: cx, Y: cy}
+		startPos = domain.Position{X: cx, Y: cy}
 
 		// Лестница ВВЕРХ там же
-		entities = append(entities, models.Entity{
-			ID: "exit_up", Label: "<", Symbol: "<", Type: models.EntityTypeExit, Color: "text-white",
-			Name: "Лестница вверх", Pos: models.Position{X: cx, Y: cy},
+		entities = append(entities, domain.Entity{
+			ID: "exit_up", Label: "<", Symbol: "<", Type: domain.EntityTypeExit, Color: "text-white",
+			Name: "Лестница вверх", Pos: domain.Position{X: cx, Y: cy},
 		})
 	}
 
@@ -111,11 +111,11 @@ func Generate(level int) (*models.GameWorld, []models.Entity, models.Position) {
 		if rand.Float32() > 0.3 {
 			isOrc := rand.Float32() > 0.7 || level > 3
 
-			enemy := models.Entity{
+			enemy := domain.Entity{
 				ID:        fmt.Sprintf("e_%d", i),
-				Type:      models.EntityTypeEnemy,
+				Type:      domain.EntityTypeEnemy,
 				IsHostile: true,
-				Stats: models.Stats{
+				Stats: domain.Stats{
 					HP: 15 + level*2, MaxHP: 15 + level*2,
 					Strength: 2 + level/2,
 				},
@@ -137,7 +137,7 @@ func Generate(level int) (*models.GameWorld, []models.Entity, models.Position) {
 			}
 
 			// Небольшой сдвиг от центра комнаты, чтобы не стоять друг на друге
-			enemy.Pos = models.Position{X: cx + randRange(-1, 1), Y: cy + randRange(-1, 1)}
+			enemy.Pos = domain.Position{X: cx + randRange(-1, 1), Y: cy + randRange(-1, 1)}
 			entities = append(entities, enemy)
 		}
 	}
@@ -146,13 +146,13 @@ func Generate(level int) (*models.GameWorld, []models.Entity, models.Position) {
 	if len(rooms) > 0 {
 		lastRoom := rooms[len(rooms)-1]
 		lx, ly := lastRoom.Center()
-		entities = append(entities, models.Entity{
-			ID: "exit_down", Label: ">", Symbol: ">", Type: models.EntityTypeExit, Color: "text-white",
-			Name: "Лестница вниз", Pos: models.Position{X: lx, Y: ly},
+		entities = append(entities, domain.Entity{
+			ID: "exit_down", Label: ">", Symbol: ">", Type: domain.EntityTypeExit, Color: "text-white",
+			Name: "Лестница вниз", Pos: domain.Position{X: lx, Y: ly},
 		})
 	}
 
-	world := &models.GameWorld{
+	world := &domain.GameWorld{
 		Map:        gameMap,
 		Width:      MapWidth,
 		Height:     MapHeight,
@@ -165,7 +165,7 @@ func Generate(level int) (*models.GameWorld, []models.Entity, models.Position) {
 
 // --- Вспомогательные функции ---
 
-func createRoom(gameMap [][]models.Tile, room Rect) {
+func createRoom(gameMap [][]domain.Tile, room Rect) {
 	for y := room.Y + 1; y < room.Y+room.H; y++ {
 		for x := room.X + 1; x < room.X+room.W; x++ {
 			gameMap[y][x].IsWall = false
@@ -174,7 +174,7 @@ func createRoom(gameMap [][]models.Tile, room Rect) {
 	}
 }
 
-func createHCorridor(gameMap [][]models.Tile, x1, x2, y int) {
+func createHCorridor(gameMap [][]domain.Tile, x1, x2, y int) {
 	start := min(x1, x2)
 	end := max(x1, x2)
 	for x := start; x <= end; x++ {
@@ -183,7 +183,7 @@ func createHCorridor(gameMap [][]models.Tile, x1, x2, y int) {
 	}
 }
 
-func createVCorridor(gameMap [][]models.Tile, y1, y2, x int) {
+func createVCorridor(gameMap [][]domain.Tile, y1, y2, x int) {
 	start := min(y1, y2)
 	end := max(y1, y2)
 	for y := start; y <= end; y++ {
