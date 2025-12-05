@@ -1,7 +1,7 @@
 package engine
 
 import (
-	"cognitive-server/internal/models"
+	"cognitive-server/internal/domain"
 	"cognitive-server/pkg/dungeon"
 	"encoding/json"
 	"fmt"
@@ -11,10 +11,10 @@ import (
 )
 
 type GameEngine struct {
-	World    *models.GameWorld
-	Player   *models.Entity
-	Entities []models.Entity
-	Logs     []models.LogEntry
+	World    *domain.GameWorld
+	Player   *domain.Entity
+	Entities []domain.Entity
+	Logs     []domain.LogEntry
 }
 
 func NewGame() *GameEngine {
@@ -22,15 +22,15 @@ func NewGame() *GameEngine {
 	world, entities, startPos := dungeon.Generate(1)
 
 	// Создаем игрока
-	player := &models.Entity{
+	player := &domain.Entity{
 		ID:     "p1",
 		Label:  "Hero",
 		Name:   "Герой",
 		Symbol: "@",
 		Color:  "text-cyan-400",
-		Type:   models.EntityTypePlayer,
+		Type:   domain.EntityTypePlayer,
 		Pos:    startPos,
-		Stats: models.Stats{
+		Stats: domain.Stats{
 			HP: 100, MaxHP: 100, Stamina: 100, MaxStamina: 100, Gold: 50, Strength: 10,
 		},
 	}
@@ -39,14 +39,14 @@ func NewGame() *GameEngine {
 		World:    world,
 		Player:   player,
 		Entities: entities,
-		Logs:     []models.LogEntry{},
+		Logs:     []domain.LogEntry{},
 	}
 }
 
 // ProcessCommand - главный метод обработки ввода
-func (g *GameEngine) ProcessCommand(cmd models.ClientCommand) *models.ServerResponse {
-	g.Logs = []models.LogEntry{}
-	response := &models.ServerResponse{Type: "UPDATE"}
+func (g *GameEngine) ProcessCommand(cmd domain.ClientCommand) *domain.ServerResponse {
+	g.Logs = []domain.LogEntry{}
+	response := &domain.ServerResponse{Type: "UPDATE"}
 
 	playerActed := false // Флаг: совершил ли игрок действие, требующее времени
 
@@ -56,7 +56,7 @@ func (g *GameEngine) ProcessCommand(cmd models.ClientCommand) *models.ServerResp
 		response.Type = "INIT"
 
 	case "MOVE":
-		var p models.MovePayload
+		var p domain.MovePayload
 		if err := json.Unmarshal(cmd.Payload, &p); err == nil {
 			// Если handleMove вернул true, значит ход сделан
 			if g.handleMove(p.Dx, p.Dy) {
@@ -66,7 +66,7 @@ func (g *GameEngine) ProcessCommand(cmd models.ClientCommand) *models.ServerResp
 
 	case "WAIT":
 		g.AddLog("Вы пропускаете ход.", "INFO")
-		g.Player.NextActionTick += models.TimeCostWait
+		g.Player.NextActionTick += domain.TimeCostWait
 		playerActed = true
 	}
 
@@ -105,7 +105,7 @@ func (g *GameEngine) handleMove(dx, dy int) bool {
 					g.AddLog(fmt.Sprintf("%s умирает.", e.Name), "COMBAT")
 				}
 
-				g.Player.NextActionTick += models.TimeCostAttackLight
+				g.Player.NextActionTick += domain.TimeCostAttackLight
 				return true
 			}
 		}
@@ -118,12 +118,12 @@ func (g *GameEngine) handleMove(dx, dy int) bool {
 	g.Player.Pos.Y = newY
 
 	// Теперь время добавляется к NextActionTick, а не глобальному
-	g.Player.NextActionTick += models.TimeCostMove
+	g.Player.NextActionTick += domain.TimeCostMove
 	return true
 }
 
 func (g *GameEngine) AddLog(text, logType string) {
-	g.Logs = append(g.Logs, models.LogEntry{
+	g.Logs = append(g.Logs, domain.LogEntry{
 		ID:        fmt.Sprintf("%d", time.Now().UnixNano()),
 		Text:      text,
 		Type:      logType,
@@ -139,7 +139,7 @@ func (g *GameEngine) RunGameLoop() {
 
 	for {
 		// 1. Собираем всех активных участников (Игрок + Живые NPC)
-		var activeEntities []*models.Entity
+		var activeEntities []*domain.Entity
 		activeEntities = append(activeEntities, g.Player)
 
 		for i := range g.Entities {
@@ -177,11 +177,11 @@ func (g *GameEngine) RunGameLoop() {
 }
 
 // processNPC - Хардкорная логика (пока без LLM)
-func (g *GameEngine) processNPC(npc *models.Entity) {
+func (g *GameEngine) processNPC(npc *domain.Entity) {
 	// Если NPC враждебен и видит игрока
 	dist := distance(npc.Pos, g.Player.Pos)
 
-	if npc.IsHostile && dist <= models.AggroRadius {
+	if npc.IsHostile && dist <= domain.AggroRadius {
 		if dist <= 1.5 { // Рядом (диагональ считается за 1.41)
 			// АТАКА
 			damage := npc.Stats.Strength
@@ -189,7 +189,7 @@ func (g *GameEngine) processNPC(npc *models.Entity) {
 			g.AddLog(fmt.Sprintf("%s бьет вас! -%d HP", npc.Name, damage), "COMBAT")
 
 			// Тратим время NPC
-			npc.NextActionTick += models.TimeCostAttackLight
+			npc.NextActionTick += domain.TimeCostAttackLight
 		} else {
 			// ДВИЖЕНИЕ К ИГРОКУ (Smart Sliding)
 			dx := g.Player.Pos.X - npc.Pos.X
@@ -232,7 +232,7 @@ func (g *GameEngine) processNPC(npc *models.Entity) {
 
 				if !moved {
 					// Враг в тупике или зажат
-					npc.NextActionTick += models.TimeCostWait
+					npc.NextActionTick += domain.TimeCostWait
 					return
 				}
 			}
@@ -240,16 +240,16 @@ func (g *GameEngine) processNPC(npc *models.Entity) {
 			// Применяем движение
 			npc.Pos.X = nextX
 			npc.Pos.Y = nextY
-			npc.NextActionTick += models.TimeCostMove
+			npc.NextActionTick += domain.TimeCostMove
 		}
 	} else {
 		// IDLE: Просто стоит и ждет
-		npc.NextActionTick += models.TimeCostWait + 50
+		npc.NextActionTick += domain.TimeCostWait + 50
 	}
 }
 
 // Вспомогательные функции
-func distance(p1, p2 models.Position) float64 {
+func distance(p1, p2 domain.Position) float64 {
 	return math.Sqrt(math.Pow(float64(p1.X-p2.X), 2) + math.Pow(float64(p1.Y-p2.Y), 2))
 }
 

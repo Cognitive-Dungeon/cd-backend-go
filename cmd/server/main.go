@@ -1,8 +1,8 @@
 package main
 
 import (
+	"cognitive-server/internal/domain"
 	"cognitive-server/internal/engine"
-	"cognitive-server/internal/models"
 	"log"
 	"net/http"
 	"os"
@@ -28,12 +28,12 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("Player connected")
 
 	// 1. Отправляем INIT состояние
-	initResp := gameInstance.ProcessCommand(models.ClientCommand{Action: "INIT"})
+	initResp := gameInstance.ProcessCommand(domain.ClientCommand{Action: "INIT"})
 	conn.WriteJSON(initResp)
 
 	for {
 		// 2. Читаем команду
-		var cmd models.ClientCommand
+		var cmd domain.ClientCommand
 		err := conn.ReadJSON(&cmd)
 		if err != nil {
 			log.Println("Read error:", err)
