@@ -19,7 +19,7 @@ func ComputeNPCAction(npc *domain.Entity, player *domain.Entity, w *domain.GameW
 		return "WAIT", nil, 0, 0
 	}
 
-	dist := distance(npc.Pos, player.Pos)
+	dist := npc.Pos.DistanceTo(player.Pos)
 
 	// 3. Логика дистанции
 	if dist > domain.AggroRadius {
@@ -78,10 +78,6 @@ func calculateSmartMove(npc, target *domain.Entity, w *domain.GameWorld, ents []
 func checkMove(e *domain.Entity, dx, dy int, w *domain.GameWorld, ents []domain.Entity) bool {
 	res := CalculateMove(e, dx, dy, w, ents)
 	return res.HasMoved
-}
-
-func distance(p1, p2 domain.Position) float64 {
-	return math.Sqrt(math.Pow(float64(p1.X-p2.X), 2) + math.Pow(float64(p1.Y-p2.Y), 2))
 }
 
 func sign(x int) int {

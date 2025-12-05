@@ -139,7 +139,7 @@ func (s *GameService) RunGameLoop() {
 
 			case <-timeout:
 				log.Printf("[ARBITER] Timeout for %s. Forcing WAIT.", activeActor.Name)
-				activeActor.AI.NextActionTick += domain.TimeCostWait
+				activeActor.AI.Wait(domain.TimeCostWait)
 				commandProcessed = true
 			}
 		}
@@ -194,7 +194,7 @@ func (s *GameService) executeCommand(cmd domain.ClientCommand, actor *domain.Ent
 			s.AddLog(fmt.Sprintf("%s пропускает ход.", actor.Name), "INFO")
 		}
 		if actor.AI != nil {
-			actor.AI.NextActionTick += domain.TimeCostWait
+			actor.AI.Wait(domain.TimeCostWait)
 		}
 
 	case "TALK":
@@ -248,7 +248,7 @@ func (s *GameService) handleMove(actor *domain.Entity, dx, dy int) {
 		if actorHostile != targetHostile {
 			logMsg := systems.ApplyAttack(actor, res.BlockedBy)
 			s.AddLog(logMsg, "COMBAT")
-			actor.AI.NextActionTick += domain.TimeCostAttackLight
+			actor.AI.Wait(domain.TimeCostAttackLight)
 			return
 		}
 	}
@@ -256,12 +256,12 @@ func (s *GameService) handleMove(actor *domain.Entity, dx, dy int) {
 	if res.HasMoved {
 		actor.Pos.X = res.NewX
 		actor.Pos.Y = res.NewY
-		actor.AI.NextActionTick += domain.TimeCostMove
+		actor.AI.Wait(domain.TimeCostMove)
 	} else if res.IsWall {
 		if actor.Type == domain.EntityTypePlayer {
 			s.AddLog("Путь прегражден.", "ERROR")
 		} else {
-			actor.AI.NextActionTick += domain.TimeCostWait
+			actor.AI.Wait(domain.TimeCostWait)
 		}
 	}
 }
@@ -282,7 +282,7 @@ func (s *GameService) handleAttack(actor *domain.Entity, targetID string) {
 	if target != nil {
 		logMsg := systems.ApplyAttack(actor, target)
 		s.AddLog(logMsg, "COMBAT")
-		actor.AI.NextActionTick += domain.TimeCostAttackLight
+		actor.AI.Wait(domain.TimeCostAttackLight)
 	}
 }
 
