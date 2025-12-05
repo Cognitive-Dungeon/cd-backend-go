@@ -2,203 +2,234 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Cognitive Backend Debugger v2</title>
+    <title>Cognitive Debugger v3</title>
     <style>
+        :root {
+            --bg: #0d1117;
+            --panel: #161b22;
+            --border: #30363d;
+            --text: #c9d1d9;
+            --accent: #58a6ff;
+            --danger: #da3633;
+            --success: #238636;
+        }
         body {
-            background: #0f0f10; color: #ccc;
-            font-family: 'Consolas', 'Courier New', monospace;
-            display: flex; gap: 20px; padding: 20px; height: 95vh;
+            background: var(--bg); color: var(--text);
+            font-family: 'Consolas', monospace;
+            margin: 0; padding: 20px;
+            display: flex; gap: 20px; height: 95vh; box-sizing: border-box;
         }
 
-        /* Layout */
-        #left-panel { flex: 0 0 auto; display: flex; flex-direction: column; }
-        #right-panel { flex: 1; display: flex; flex-direction: column; gap: 15px; min-width: 300px; }
+        /* Panels */
+        .panel {
+            background: var(--panel); border: 1px solid var(--border);
+            border-radius: 6px; padding: 15px; display: flex; flex-direction: column;
+        }
+        #left-panel { flex: 0 0 auto; }
+        #right-panel { flex: 1; min-width: 300px; gap: 10px; }
 
-        /* Map Container */
-        #viewport {
-            border: 2px solid #333;
-            background: #000;
+        /* Map */
+        #map-container {
+            position: relative;
+            border: 2px solid #000;
             display: inline-block;
-            padding: 5px;
+            background: #000;
         }
-
-        /* Grid Logic */
-        #game-map {
-            display: grid;
-            /* Columns/Rows set via JS */
-        }
+        #game-map { display: grid; }
 
         .tile {
             width: 20px; height: 20px;
             display: flex; align-items: center; justify-content: center;
-            font-size: 16px; cursor: default;
+            font-size: 16px; cursor: crosshair; user-select: none;
         }
+        .tile:hover { background: #333; }
+        .wall { background: #333; color: #555; }
+        .floor { background: #111; color: #222; }
 
-        /* Entity Colors */
-        .wall {
-            background: #444;
-            color: #aaa;
-        }
-        .floor {
-            background: #111;
-            color: #333;
-        }
-        .fog {
-            opacity: 0.3;
-        }
-        .player { color: #0ff; font-weight: bold; text-shadow: 0 0 5px #0ff; }
-        .enemy { color: #f55; font-weight: bold; }
-        .npc { color: #fb0; }
-        .item { color: #d0f; }
-        .corpse { color: #555; }
+        /* Entities */
+        .entity { cursor: pointer; z-index: 10; font-weight: bold; }
+        .player { color: #58a6ff; text-shadow: 0 0 5px #58a6ff; }
+        .enemy { color: #ff7b72; }
+        .npc { color: #d29922; }
 
-        /* Logs */
-        #logs-container {
-            flex: 1; border: 1px solid #333; background: #050505;
-            padding: 10px; overflow-y: auto; font-size: 13px;
-            display: flex; flex-direction: column;
+        /* Selection Ring */
+        .selected {
+            box-shadow: inset 0 0 0 2px var(--danger);
+            background: rgba(218, 54, 51, 0.2) !important;
         }
-        .log-entry { margin-bottom: 4px; line-height: 1.4; border-bottom: 1px solid #1a1a1a; }
-        .ts { color: #555; margin-right: 8px; font-size: 11px; }
-        .type-INFO { color: #8cf; }
-        .type-ERROR { color: #f55; }
-        .type-COMBAT { color: #f55; font-weight: bold; }
-        .type-SPEECH { color: #fdaa; font-style: italic; }
 
         /* Controls */
-        .controls-area { background: #1a1a1a; padding: 15px; border-radius: 8px; }
-        .d-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; width: 120px; margin-bottom: 15px; }
-        button {
-            background: #333; color: white; border: 1px solid #555;
-            padding: 10px; cursor: pointer; border-radius: 4px;
-            font-family: inherit; font-weight: bold;
-        }
-        button:hover { background: #444; border-color: #777; }
-        button:active { background: #555; transform: translateY(1px); }
+        .control-group { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
+        .d-pad { display: grid; grid-template-columns: repeat(3, 40px); gap: 5px; }
 
-        textarea {
-            width: 100%; height: 50px; background: #222; color: #fff;
-            border: 1px solid #444; padding: 5px; font-family: monospace; margin-bottom: 5px;
+        button {
+            background: #21262d; color: var(--text); border: 1px solid var(--border);
+            padding: 8px 12px; cursor: pointer; border-radius: 6px; font-family: inherit;
         }
+        button:hover { background: #30363d; }
+        button:active { background: #1f2428; transform: translateY(1px); }
+        button.primary { background: #238636; border-color: rgba(240,246,252,0.1); color: #fff; }
+        button.danger { background: #da3633; border-color: rgba(240,246,252,0.1); color: #fff; }
+
+        /* Logs */
+        #logs {
+            flex: 1; overflow-y: auto; background: #000;
+            border: 1px solid var(--border); padding: 10px; font-size: 12px;
+        }
+        .log-line { margin-bottom: 4px; border-bottom: 1px solid #111; padding-bottom: 2px; }
+        .t-COMBAT { color: #ff7b72; }
+        .t-INFO { color: #8b949e; }
+        .t-SPEECH { color: #f2cc60; font-style: italic; }
+
+        /* HUD */
+        #hud { margin-bottom: 10px; font-size: 13px; }
+        .active-turn { border-color: var(--success); box-shadow: 0 0 10px var(--success); }
+        .stat-val { color: var(--accent); font-weight: bold; }
     </style>
 </head>
 <body>
 
-<div id="left-panel">
-    <div id="viewport">
-        <div id="game-map">Connecting...</div>
+<div id="left-panel" class="panel">
+    <div id="hud">
+        Tick: <span id="tick" class="stat-val">0</span> |
+        Pos: <span id="pos" class="stat-val">0,0</span> |
+        Target: <span id="target-info" style="color: var(--danger)">None</span>
     </div>
-    <div style="margin-top: 10px; font-size: 12px; color: #777;">
-        Status: <span id="status" style="color: yellow">Wait</span> |
-        Tick: <span id="tick" style="color: white">0</span> |
-        Pos: <span id="pos" style="color: white">0,0</span>
+    <div id="map-container">
+        <div id="game-map">Connecting...</div>
     </div>
 </div>
 
-<div id="right-panel">
-    <div class="controls-area">
+<div id="right-panel" class="panel">
+    <div class="control-group">
         <div class="d-pad">
             <div></div>
-            <button onclick="cmd('MOVE', {dy: -1, dx: 0})">▲</button>
+            <button onclick="sendDir(0, -1)">W</button>
             <div></div>
-            <button onclick="cmd('MOVE', {dx: -1, dy: 0})">◀</button>
-            <button onclick="cmd('WAIT', {})">Wait</button>
-            <button onclick="cmd('MOVE', {dx: 1, dy: 0})">▶</button>
+            <button onclick="sendDir(-1, 0)">A</button>
+            <button onclick="sendWait()">Wait</button>
+            <button onclick="sendDir(1, 0)">D</button>
             <div></div>
-            <button onclick="cmd('MOVE', {dy: 1, dx: 0})">▼</button>
+            <button onclick="sendDir(0, 1)">S</button>
             <div></div>
         </div>
-
-        <div>
-            <textarea id="raw-json">{"action": "TALK", "payload": "Привет!"}</textarea>
-            <button onclick="sendRaw()" style="width: 100%">Send Raw JSON</button>
+        <div style="display: flex; flex-direction: column; gap: 5px; width: 100%">
+            <button class="danger" onclick="sendAction('ATTACK')">⚔️ ATTACK (Target)</button>
+            <button class="primary" onclick="sendAction('TALK')">💬 TALK (Target)</button>
+            <button onclick="sendAction('INIT')">🔄 RESET</button>
         </div>
     </div>
 
-    <div id="logs-container"></div>
+    <div style="font-size: 11px; color: #666">
+        Controls: WASD to Move, SPACE to Wait, Click entity to Target.
+    </div>
+
+    <div id="logs"></div>
 </div>
 
 <script>
     const ws = new WebSocket("ws://localhost:8080/ws");
-    const mapContainer = document.getElementById("game-map");
-    const logsContainer = document.getElementById("logs-container");
 
-    // State cache to avoid redraws
+    // State
+    let myId = "";
+    let selectedTarget = null;
     let gridInitialized = false;
-    let gridW = 0, gridH = 0;
+    let entitiesCache = [];
 
-    ws.onopen = () => {
-        document.getElementById("status").innerText = "CONNECTED";
-        document.getElementById("status").style.color = "#0f0";
-    };
-
-    ws.onclose = () => {
-        document.getElementById("status").innerText = "DISCONNECTED";
-        document.getElementById("status").style.color = "#f00";
-    };
+    // UI Refs
+    const mapEl = document.getElementById("game-map");
+    const leftPanel = document.getElementById("left-panel");
+    const targetLabel = document.getElementById("target-info");
 
     ws.onmessage = (evt) => {
         const msg = JSON.parse(evt.data);
 
         if (msg.type === "INIT" || msg.type === "UPDATE") {
-            if (msg.world) renderWorld(msg.world);
-            if (msg.player) updateHUD(msg.player, msg.world?.globalTick);
+            if (msg.player) myId = msg.player.id;
 
-            // Render entities on top of the world
-            if (msg.world && msg.player) {
-                drawEntities(msg.player, msg.entities || []);
+            // Render
+            if (msg.world) renderMap(msg.world);
+            if (msg.entities) {
+                entitiesCache = [...msg.entities];
+                if (msg.player) entitiesCache.push(msg.player); // Add player to visuals
+                drawEntities(entitiesCache);
             }
-
+            if (msg.player) updateStats(msg.player, msg.world?.globalTick);
             if (msg.logs) renderLogs(msg.logs);
+
+            // Turn Indicator
+            if (msg.activeEntityId && msg.activeEntityId === myId) {
+                leftPanel.classList.add("active-turn");
+            } else {
+                leftPanel.classList.remove("active-turn");
+            }
         }
     };
 
-    function cmd(action, payload) {
-        if(ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ action, payload }));
+    // --- Controls ---
+
+    function sendDir(dx, dy) {
+        ws.send(JSON.stringify({
+            action: "MOVE",
+            payload: { dx, dy } // DirectionPayload
+        }));
+    }
+
+    function sendWait() {
+        ws.send(JSON.stringify({ action: "WAIT", payload: {} }));
+    }
+
+    function sendAction(action) {
+        if (!selectedTarget) {
+            alert("Select a target on the map first!");
+            return;
         }
+        ws.send(JSON.stringify({
+            action: action,
+            payload: { targetId: selectedTarget } // EntityPayload
+        }));
     }
 
-    function sendRaw() {
-        try {
-            const val = document.getElementById("raw-json").value;
-            ws.send(val);
-        } catch(e) { alert("Bad JSON"); }
-    }
+    // Keyboard
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "w") sendDir(0, -1);
+        if (e.key === "s") sendDir(0, 1);
+        if (e.key === "a") sendDir(-1, 0);
+        if (e.key === "d") sendDir(1, 0);
+        if (e.key === " ") sendWait();
+    });
 
-    // --- Rendering ---
+    // --- Core Rendering ---
 
     function initGrid(w, h) {
-        mapContainer.innerHTML = '';
-        mapContainer.style.gridTemplateColumns = `repeat(${w}, 20px)`;
-        mapContainer.style.gridTemplateRows = `repeat(${h}, 20px)`;
+        mapEl.innerHTML = '';
+        mapEl.style.gridTemplateColumns = `repeat(${w}, 20px)`;
+        mapEl.style.gridTemplateRows = `repeat(${h}, 20px)`;
 
         for(let y=0; y<h; y++) {
             for(let x=0; x<w; x++) {
                 const div = document.createElement("div");
-                div.id = `c-${x}-${y}`;
+                div.id = `t-${x}-${y}`;
                 div.className = "tile";
-                mapContainer.appendChild(div);
+                div.onclick = () => selectTile(x, y); // Click to select
+                mapEl.appendChild(div);
             }
         }
-        gridW = w; gridH = h;
         gridInitialized = true;
     }
 
-    function renderWorld(world) {
-        // Инициализация сетки (один раз)
-        if (!gridInitialized || gridW !== world.width || gridH !== world.height) {
-            initGrid(world.width, world.height);
-        }
+    function renderMap(world) {
+        if (!gridInitialized) initGrid(world.width, world.height);
 
-        // Обновление тайлов
         world.map.forEach(row => {
             row.forEach(tile => {
-                const el = document.getElementById(`c-${tile.x}-${tile.y}`);
+                const el = document.getElementById(`t-${tile.x}-${tile.y}`);
                 if (!el) return;
 
-                // 1. Сброс и Базовая логика (Всегда применяем классы!)
+                // Reset
                 el.className = "tile";
+                el.innerText = "";
+                el.style.backgroundColor = "";
 
                 if (tile.isWall) {
                     el.classList.add("wall");
@@ -207,58 +238,70 @@
                     el.classList.add("floor");
                     el.innerText = ".";
                 }
-
-                // 2. Визуализация "Тумана войны" (Опционально для дебага)
-                // Если сервер говорит "не видно", делаем полупрозрачным, но НЕ скрываем
-                if (!tile.isVisible && !tile.isExplored) {
-                    // el.classList.add("fog"); // Раскомментируй, если хочешь видеть зоны видимости
-                }
             });
         });
     }
 
-    function drawEntities(player, entities) {
-        // Draw Others
+    function drawEntities(entities) {
         entities.forEach(e => {
-            const el = document.getElementById(`c-${e.pos.x}-${e.pos.y}`);
-            if (el) {
-                el.innerText = e.symbol;
-                el.className = "tile"; // reset
+            const el = document.getElementById(`t-${e.pos.x}-${e.pos.y}`);
+            if (!el) return;
 
-                if (e.isDead) el.classList.add("corpse");
-                else if (e.type === "ENEMY") el.classList.add("enemy");
-                else if (e.type === "NPC") el.classList.add("npc");
-                else if (e.type === "ITEM") el.classList.add("item");
+            el.innerText = e.symbol;
+            el.className = "tile entity"; // Base entity class
+
+            // Color mapping based on type
+            if (e.type === "PLAYER") el.classList.add("player");
+            else if (e.type === "ENEMY") el.classList.add("enemy");
+            else if (e.type === "NPC") el.classList.add("npc");
+
+            if (e.isDead) {
+                el.classList.remove("enemy", "npc", "player");
+                el.style.color = "#555";
+            }
+
+            // Highlight selection
+            if (e.id === selectedTarget) {
+                el.classList.add("selected");
             }
         });
+    }
 
-        // Draw Player
-        const pEl = document.getElementById(`c-${player.pos.x}-${player.pos.y}`);
-        if (pEl) {
-            pEl.innerText = player.symbol;
-            pEl.className = "tile player";
+    // --- Selection Logic ---
+
+    function selectTile(x, y) {
+        // Find entity at this pos
+        const ent = entitiesCache.find(e => e.pos.x === x && e.pos.y === y && !e.isDead && e.id !== myId);
+
+        if (ent) {
+            selectedTarget = ent.id;
+            targetLabel.innerText = `${ent.name} (${ent.id})`;
+            targetLabel.style.color = "#fff";
+        } else {
+            selectedTarget = null;
+            targetLabel.innerText = "None";
+            targetLabel.style.color = "#555";
         }
+
+        // Redraw to show selection ring
+        drawEntities(entitiesCache);
     }
 
-    function updateHUD(player, tick) {
-        document.getElementById("pos").innerText = `${player.pos.x},${player.pos.y}`;
-        document.getElementById("tick").innerText = tick || 0;
+    function updateStats(p, tick) {
+        document.getElementById("tick").innerText = tick;
+        document.getElementById("pos").innerText = `${p.pos.x},${p.pos.y}`;
     }
 
+    const logsEl = document.getElementById("logs");
     function renderLogs(logs) {
-        if (!logs || logs.length === 0) return;
-
         logs.forEach(l => {
-            const div = document.createElement("div");
-            div.className = `log-entry type-${l.type}`;
-
-            const time = new Date(l.timestamp).toLocaleTimeString([], {hour12:false});
-            div.innerHTML = `<span class="ts">[${time}]</span> ${l.text}`;
-            logsContainer.appendChild(div);
+            const row = document.createElement("div");
+            row.className = `log-line t-${l.type}`;
+            const time = new Date(l.timestamp).toLocaleTimeString();
+            row.innerText = `[${time}] ${l.text}`;
+            logsEl.appendChild(row);
         });
-
-        // Scroll to bottom
-        logsContainer.scrollTop = logsContainer.scrollHeight;
+        logsEl.scrollTop = logsEl.scrollHeight;
     }
 </script>
 

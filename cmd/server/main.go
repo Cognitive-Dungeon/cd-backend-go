@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cognitive-server/internal/agent"
 	"cognitive-server/internal/core"
 	"cognitive-server/internal/domain"
 	"log"
@@ -56,7 +57,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
-		log.Printf("Command received: %s\n", cmd.Action)
+		log.Printf("Command received: %s,%s\n", cmd.Token, cmd.Action)
 		gameInstance.ProcessCommand(cmd)
 	}
 }
@@ -70,6 +71,17 @@ func main() {
 	// ВАЖНО: Запускаем игровой цикл в фоне перед стартом сервера
 	log.Println("Starting Game Loop...")
 	gameInstance.Start()
+
+	// --- ЗАПУСК БОТОВ ---
+	// Пробегаем по всем сущностям. Если это NPC/ENEMY - создаем для него бота.
+	for i := range gameInstance.Entities {
+		e := &gameInstance.Entities[i]
+		if e.Type == domain.EntityTypeEnemy || e.Type == domain.EntityTypeNPC {
+			bot := agent.NewBot(e.ID, gameInstance)
+			go bot.Run() // Запускаем мозг в отдельной горутине
+			log.Printf("Bot started for %s (%s)", e.Name, e.ID)
+		}
+	}
 
 	http.HandleFunc("/ws", wsHandler)
 

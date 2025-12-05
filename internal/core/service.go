@@ -92,130 +92,175 @@ func (s *GameService) GetState() *domain.ServerResponse {
 // --- ГЛАВНЫЙ ЦИКЛ ---
 
 func (s *GameService) RunGameLoop() {
-	log.Println("[LOOP] Game Loop started")
-	const MaxLoops = 1000
-	loops := 0
+	log.Println("[LOOP] Arbiter Loop started")
 
 	for {
 		// 1. Кто ходит?
 		activeActor := s.getNextActor()
-
-		// Лог, чтобы видеть порядок ходов
-		log.Printf("[LOOP] Active: %s (Tick: %d)", activeActor.Name, activeActor.NextActionTick)
-
-		// 2. Обновляем время мира
 		s.World.GlobalTick = activeActor.NextActionTick
 
-		// 3. Ход Игрока
-		if activeActor.ID == s.Player.ID {
-			loops = 0 // Сбрасываем счетчик защиты, так как управление у человека
+		// 2. Уведомляем всех: "Сейчас ход ID=..."
+		s.publishTurn(activeActor.ID)
 
-			log.Println("[LOOP] Waiting for Player command...")
+		// 3. Ждем команду ИМЕННО от этого актера
+		timeout := time.After(5 * time.Second) // Таймаут на ход (чтобы игра не зависла)
+
+		commandProcessed := false
+
+		for !commandProcessed {
 			select {
 			case cmd := <-s.CommandChan:
-				log.Printf("[LOOP] Player Action: %s", cmd.Action)
-				s.executeCommand(cmd)
-			}
-		} else {
-			// 4. Ход NPC
-			loops++
-			if loops > MaxLoops {
-				log.Println("[LOOP] Infinite loop detected! Forcing break.")
-				time.Sleep(1 * time.Second) // Тормозим, чтобы не повесить CPU
-				loops = 0
-			}
-
-			// Проверяем приоритетные команды (например, INIT)
-			select {
-			case cmd := <-s.CommandChan:
-				if cmd.Action == "INIT" {
-					s.executeCommand(cmd)
+				// Хак для MVP: Если токен пустой, считаем что это Игрок (p1)
+				// В будущем тут будет проверка сессий
+				senderID := cmd.Token
+				if senderID == "" {
+					senderID = "p1"
 				}
-			default:
-				// Логика NPC
-				s.processNPC(activeActor)
 
-				// ОБЯЗАТЕЛЬНО: Отправляем обновление клиенту, чтобы он увидел ход врага
-				s.publishUpdate()
+				// Если команда от того, чей сейчас ход (или системная INIT)
+				if senderID == activeActor.ID || cmd.Action == "INIT" {
+					if cmd.Action == "INIT" {
+						s.executeCommand(cmd, s.Player) // INIT всегда от игрока пока
+					} else {
+						s.executeCommand(cmd, activeActor)
+						commandProcessed = true // Выходим из ожидания, переходим к следующему
+					}
+				} else {
+					log.Printf("[ARBITER] Ignored command from %s (it is %s's turn)", senderID, activeActor.Name)
+				}
+
+			case <-timeout:
+				log.Printf("[ARBITER] Timeout for %s. Forcing WAIT.", activeActor.Name)
+				activeActor.NextActionTick += domain.TimeCostWait
+				commandProcessed = true
 			}
 		}
+
+		// Рассылаем результат хода
+		s.publishUpdate()
 	}
 }
 
-func (s *GameService) executeCommand(cmd domain.ClientCommand) {
+// Метод для рассылки уведомления о ходе
+func (s *GameService) publishTurn(activeID string) {
+	// Можно оптимизировать и слать только ID, но пока шлем апдейт с флагом
+	s.publishUpdateWithActive(activeID)
+}
+
+func (s *GameService) publishUpdateWithActive(activeID string) {
+	// Копирование логов...
+	currentLogs := make([]domain.LogEntry, len(s.Logs))
+	copy(currentLogs, s.Logs)
+	s.Logs = []domain.LogEntry{}
+
+	response := domain.ServerResponse{
+		Type:           "UPDATE",
+		World:          s.World,
+		Player:         s.Player,
+		Entities:       s.Entities,
+		Logs:           currentLogs,
+		ActiveEntityID: activeID, // <--- Важное поле
+	}
+	s.Hub.Broadcast(response)
+}
+
+func (s *GameService) executeCommand(cmd domain.ClientCommand, actor *domain.Entity) {
 	switch cmd.Action {
 	case "INIT":
 		s.AddLog("Добро пожаловать в Cognitive Dungeon.", "INFO")
-		s.publishUpdate() // Сразу шлем ответ на INIT
 
 	case "MOVE":
-		var p domain.MovePayload
+		var p domain.DirectionPayload
 		if err := json.Unmarshal(cmd.Payload, &p); err == nil {
-			s.handlePlayerMove(p.Dx, p.Dy)
+			s.handleMove(actor, p.Dx, p.Dy)
+		}
+
+	case "ATTACK":
+		var p domain.EntityPayload
+		if err := json.Unmarshal(cmd.Payload, &p); err == nil {
+			s.handleAttack(actor, p.TargetID)
 		}
 
 	case "WAIT":
-		s.AddLog("Вы ждете...", "INFO")
-		s.Player.NextActionTick += domain.TimeCostWait
-		s.publishUpdate()
+		s.AddLog(fmt.Sprintf("%s пропускает ход.", actor.Name), "INFO")
+		actor.NextActionTick += domain.TimeCostWait
 
 	case "TALK":
-		// Заглушка для теста логов
-		s.AddLog("Вы что-то бормочете.", "SPEECH")
-		s.publishUpdate()
+		var p domain.EntityPayload
+		// Если payload пустой (крик в пустоту)
+		if err := json.Unmarshal(cmd.Payload, &p); err == nil && p.TargetID != "" {
+			// TODO: s.handleTalk(actor, p.TargetID) В будущем
+			s.AddLog(fmt.Sprintf("Вы говорите с %s", p.TargetID), "SPEECH")
+		} else {
+			s.AddLog("Вы бормочете в пустоту.", "SPEECH")
+		}
 	}
 }
 
 // --- LOGIC ---
 
 func (s *GameService) getNextActor() *domain.Entity {
+	// 1. Собираем всех ЖИВЫХ и АКТИВНЫХ
+	// Игрок всегда активен
 	activeEntities := []*domain.Entity{s.Player}
+
 	for i := range s.Entities {
-		if !s.Entities[i].IsDead {
-			activeEntities = append(activeEntities, &s.Entities[i])
+		e := &s.Entities[i]
+		// Фильтр: Мертвые и Пассивные объекты не участвуют в очереди
+		if !e.IsDead && (e.Type == domain.EntityTypeNPC || e.Type == domain.EntityTypeEnemy) {
+			activeEntities = append(activeEntities, e)
 		}
 	}
+
+	// 2. Сортируем: кто меньше ждал, тот и ходит
 	sort.Slice(activeEntities, func(i, j int) bool {
 		return activeEntities[i].NextActionTick < activeEntities[j].NextActionTick
 	})
+
 	return activeEntities[0]
 }
 
-func (s *GameService) handlePlayerMove(dx, dy int) {
-	res := systems.CalculateMove(s.Player, dx, dy, s.World, s.Entities)
+func (s *GameService) handleMove(actor *domain.Entity, dx, dy int) {
+	res := systems.CalculateMove(actor, dx, dy, s.World, s.Entities)
 
-	if res.BlockedBy != nil && res.BlockedBy.IsHostile {
-		logMsg := systems.ApplyAttack(s.Player, res.BlockedBy)
+	if res.BlockedBy != nil && res.BlockedBy.IsHostile != actor.IsHostile {
+		// Атака при столкновении
+		logMsg := systems.ApplyAttack(actor, res.BlockedBy)
 		s.AddLog(logMsg, "COMBAT")
-		s.Player.NextActionTick += domain.TimeCostAttackLight
+		actor.NextActionTick += domain.TimeCostAttackLight
 	} else if res.HasMoved {
-		s.Player.Pos.X = res.NewX
-		s.Player.Pos.Y = res.NewY
-		s.Player.NextActionTick += domain.TimeCostMove
-	} else if res.IsWall {
-		s.AddLog("Путь прегражден.", "ERROR")
+		actor.Pos.X = res.NewX
+		actor.Pos.Y = res.NewY
+		actor.NextActionTick += domain.TimeCostMove
+	} else {
+		// Если уперся в стену.
+		// Пишем ошибку только для игрока, чтобы не спамить логами тупых ботов
+		if actor.Type == domain.EntityTypePlayer {
+			s.AddLog("Путь прегражден.", "ERROR")
+		} else {
+			// Бота штрафуем, чтобы он не ддосил сервер попытками пройти сквозь стену
+			actor.NextActionTick += domain.TimeCostWait
+		}
 	}
-
-	// Важно: Мы НЕ вызываем publishUpdate здесь, так как он вызовется
-	// в executeCommand или цикл прокрутится дальше.
 }
 
-func (s *GameService) processNPC(npc *domain.Entity) {
-	action, target, dx, dy := systems.ComputeNPCAction(npc, s.Player, s.World, s.Entities)
+func (s *GameService) handleAttack(actor *domain.Entity, targetID string) {
+	// Найти цель по ID
+	var target *domain.Entity
+	for i := range s.Entities {
+		if s.Entities[i].ID == targetID {
+			target = &s.Entities[i]
+			break
+		}
+	}
+	if s.Player.ID == targetID {
+		target = s.Player
+	}
 
-	log.Printf("[NPC] %s decided to: %s", npc.Name, action)
-
-	if action == "ATTACK" && target != nil {
-		logMsg := systems.ApplyAttack(npc, target)
+	if target != nil {
+		logMsg := systems.ApplyAttack(actor, target)
 		s.AddLog(logMsg, "COMBAT")
-		npc.NextActionTick += domain.TimeCostAttackLight
-	} else if action == "MOVE" {
-		npc.Pos.X += dx
-		npc.Pos.Y += dy
-		npc.NextActionTick += domain.TimeCostMove
-	} else {
-		// WAIT
-		npc.NextActionTick += domain.TimeCostWait
+		actor.NextActionTick += domain.TimeCostAttackLight
 	}
 }
 
