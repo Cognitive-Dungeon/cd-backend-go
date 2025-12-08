@@ -102,7 +102,7 @@ func Generate(level int) (*domain.GameWorld, []domain.Entity, domain.Position) {
 			Pos:  domain.Position{X: cx, Y: cy},
 			Render: &domain.RenderComponent{
 				Symbol: "<",
-				Color:  "text-white", Label: "<",
+				Color:  "#FFFFFF", Label: "<",
 			},
 			Narrative: &domain.NarrativeComponent{
 				Description: "Старая каменная лестница, ведущая на поверхность.",
@@ -150,7 +150,7 @@ func Generate(level int) (*domain.GameWorld, []domain.Entity, domain.Position) {
 			if isOrc {
 				enemy.Name = "Свирепый Орк"
 				enemy.Render.Symbol = "O"
-				enemy.Render.Color = "text-red-600"
+				enemy.Render.Color = "#DC2626"
 				enemy.AI.Personality = "Furious"
 				enemy.Stats.HP *= 2
 				enemy.Stats.Strength += 2
@@ -158,7 +158,7 @@ func Generate(level int) (*domain.GameWorld, []domain.Entity, domain.Position) {
 			} else {
 				enemy.Name = "Хитрый Гоблин"
 				enemy.Render.Symbol = "g"
-				enemy.Render.Color = "text-green-500"
+				enemy.Render.Color = "#22C55E"
 				enemy.AI.Personality = "Cowardly"
 				enemy.Narrative.Description = "Мелкий пакостный гоблин, воровато оглядывается."
 			}
@@ -174,7 +174,7 @@ func Generate(level int) (*domain.GameWorld, []domain.Entity, domain.Position) {
 			Type:      domain.EntityTypeExit,
 			Name:      "Лестница вниз",
 			Pos:       domain.Position{X: lx, Y: ly},
-			Render:    &domain.RenderComponent{Symbol: ">", Color: "text-white", Label: ">"},
+			Render:    &domain.RenderComponent{Symbol: ">", Color: "#FFFFFF", Label: ">"},
 			Narrative: &domain.NarrativeComponent{Description: "Темный проход, ведущий вглубь подземелья."},
 		})
 	}

@@ -34,7 +34,7 @@ func NewService() *GameService {
 		Type: domain.EntityTypePlayer,
 		Pos:  startPos,
 
-		Render: &domain.RenderComponent{Symbol: "@", Color: "text-cyan-400"},
+		Render: &domain.RenderComponent{Symbol: "@", Color: "#22D3EE"},
 		Stats: &domain.StatsComponent{
 			HP: 100, MaxHP: 100, Stamina: 100, MaxStamina: 100, Gold: 50, Strength: 10,
 		},
@@ -195,11 +195,11 @@ func (s *GameService) BuildStateFor(observer *domain.Entity, activeID string) *a
 					X: x, Y: y, IsWall: tile.IsWall,
 					IsVisible:  isGod || visibleIdxs[idx],
 					IsExplored: true,
-					Symbol:     ".", Color: "#333",
+					Symbol:     ".", Color: "#333333",
 				}
 				if tile.IsWall {
 					tView.Symbol = "#"
-					tView.Color = "#666"
+					tView.Color = "#666666"
 				}
 				mapDTO = append(mapDTO, tView)
 			}
