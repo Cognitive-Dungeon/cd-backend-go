@@ -174,7 +174,12 @@ func Generate(level int) (*domain.GameWorld, []domain.Entity, domain.Position) {
 	}
 
 	return &domain.GameWorld{
-		Map: gameMap, Width: MapWidth, Height: MapHeight, Level: level,
+		Map:         gameMap,
+		Width:       MapWidth,
+		Height:      MapHeight,
+		Level:       level,
+		GlobalTick:  0,
+		SpatialHash: make(map[int][]*domain.Entity),
 	}, entities, startPos
 }
 

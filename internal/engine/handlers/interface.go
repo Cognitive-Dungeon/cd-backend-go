@@ -29,18 +29,3 @@ type HandlerFunc func(ctx Context, payload json.RawMessage) (Result, error)
 func EmptyResult() Result {
 	return Result{}
 }
-
-// --- УТИЛИТЫ ---
-
-// FindEntity - ищет сущность по ID среди всех доступных в контексте
-func (c Context) FindEntity(id string) *domain.Entity {
-	if id == "" {
-		return nil
-	}
-	for _, e := range c.Entities {
-		if e.ID == id {
-			return e
-		}
-	}
-	return nil
-}

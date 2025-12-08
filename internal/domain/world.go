@@ -22,4 +22,10 @@ type GameWorld struct {
 	Height     int      `json:"height"`
 	Level      int      `json:"level"`
 	GlobalTick int      `json:"globalTick"`
+
+	// SpatialHash: Индекс позиции -> Список сущностей
+	// Ключ: Y * Width + X
+	// json:"-" означает, что мы НЕ отправляем этот индекс клиенту (экономия трафика)
+	SpatialHash    map[int][]*Entity  `json:"-"`
+	EntityRegistry map[string]*Entity `json:"-"`
 }

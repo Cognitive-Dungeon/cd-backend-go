@@ -28,7 +28,7 @@ type GameService struct {
 
 func NewService() *GameService {
 	// Генерация мира
-	world, entities, startPos := dungeon.Generate(1)
+	world, rawEntities, startPos := dungeon.Generate(1)
 
 	// Создание игрока (ECS style)
 	player := &domain.Entity{
@@ -53,12 +53,30 @@ func NewService() *GameService {
 	s := &GameService{
 		World:       world,
 		Player:      player,
-		Entities:    entities,
+		Entities:    rawEntities,
 		Logs:        []api.LogEntry{},
 		CommandChan: make(chan domain.InternalCommand, 100),
 		Hub:         network.NewBroadcaster(),
 		handlers:    make(map[domain.ActionType]handlers.HandlerFunc),
 	}
+
+	// --- ИНИЦИАЛИЗАЦИЯ ИНДЕКСОВ ---
+
+	// Инициализируем карты
+	s.World.SpatialHash = make(map[int][]*domain.Entity)
+	s.World.EntityRegistry = make(map[string]*domain.Entity)
+
+	// Регистрируем Игрока
+	s.World.AddEntity(s.Player)      // Spatial
+	s.World.RegisterEntity(s.Player) // Registry
+
+	// Регистрируем NPC
+	for i := range s.Entities {
+		ptr := &s.Entities[i]
+		s.World.AddEntity(ptr)      // Spatial
+		s.World.RegisterEntity(ptr) // Registry
+	}
+	// ------------------------------
 
 	s.registerHandlers()
 	return s

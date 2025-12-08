@@ -39,7 +39,7 @@ func (b *Bot) Run() {
 func (b *Bot) makeMove(state api.ServerResponse) {
 	var me *domain.Entity
 
-	// 1. Ищем себя в списке сущностей
+	// 1. Ищем себя
 	for i := range state.Entities {
 		if state.Entities[i].ID == b.EntityID {
 			me = &state.Entities[i]
@@ -51,32 +51,33 @@ func (b *Bot) makeMove(state api.ServerResponse) {
 		return
 	}
 
-	// 2. Игрок передается в отдельном поле ServerResponse
 	player := state.Player
-
 	if player == nil {
 		b.sendWait()
 		return
 	}
 
-	// 3. Важный момент: для корректного расчета пути (AI) нужно,
-	// чтобы Игрок тоже считался препятствием.
-	// Создаем временный слайс для AI, куда добавляем игрока.
-	allEntities := make([]*domain.Entity, 0, len(state.Entities)+1)
+	// --- РЕКОНСТРУКЦИЯ ИНДЕКСОВ ---
+	state.World.SpatialHash = make(map[int][]*domain.Entity)
+	state.World.EntityRegistry = make(map[string]*domain.Entity)
 
 	// Добавляем игрока
-	allEntities = append(allEntities, player)
-
-	// Добавляем NPC (берем адреса)
-	for i := range state.Entities {
-		allEntities = append(allEntities, &state.Entities[i])
+	if state.Player != nil {
+		state.World.AddEntity(state.Player)
+		state.World.RegisterEntity(state.Player)
 	}
 
-	// 4. Вызов AI
-	// Передаем allEntities, чтобы бот не пытался пройти сквозь игрока
-	action, target, dx, dy := systems.ComputeNPCAction(me, player, state.World, allEntities)
+	// Добавляем NPC
+	for i := range state.Entities {
+		ptr := &state.Entities[i]
+		state.World.AddEntity(ptr)
+		state.World.RegisterEntity(ptr)
+	}
+	// -----------------------------
 
-	// Отправляем команду
+	// 4. Вызов AI
+	action, target, dx, dy := systems.ComputeNPCAction(me, player, state.World)
+
 	switch action {
 	case domain.ActionAttack:
 		if target != nil {

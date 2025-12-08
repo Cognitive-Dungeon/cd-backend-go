@@ -8,7 +8,7 @@ import (
 )
 
 func HandleAttack(ctx handlers.Context, p api.EntityPayload) (handlers.Result, error) {
-	target := ctx.FindEntity(p.TargetID)
+	target := ctx.World.GetEntity(p.TargetID)
 
 	if target == nil {
 		return handlers.Result{

@@ -12,8 +12,9 @@ func HandleMove(ctx handlers.Context, p api.DirectionPayload) (handlers.Result, 
 		return handlers.EmptyResult(), nil // Или ошибка, по желанию
 	}
 
-	res := systems.CalculateMove(ctx.Actor, p.Dx, p.Dy, ctx.World, ctx.Entities)
+	res := systems.CalculateMove(ctx.Actor, p.Dx, p.Dy, ctx.World)
 
+	// Если движение заблокировано враждебным мобом, атакуем его
 	if res.BlockedBy != nil {
 		actorHostile := ctx.Actor.AI.IsHostile
 		targetHostile := false
@@ -29,8 +30,11 @@ func HandleMove(ctx handlers.Context, p api.DirectionPayload) (handlers.Result, 
 	}
 
 	if res.HasMoved {
-		ctx.Actor.Pos.X = res.NewX
-		ctx.Actor.Pos.Y = res.NewY
+		err := ctx.World.UpdateEntityPos(ctx.Actor, res.NewX, res.NewY)
+		if err != nil {
+			return handlers.Result{Msg: "Ошибка перемещения", MsgType: "ERROR"}, nil
+		}
+
 		ctx.Actor.AI.Wait(domain.TimeCostMove)
 		return handlers.EmptyResult(), nil
 	}
