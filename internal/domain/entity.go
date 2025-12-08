@@ -1,5 +1,10 @@
 package domain
 
+import (
+	"crypto/rand"
+	"encoding/hex"
+)
+
 // --- КОМПОНЕНТЫ ---
 
 // RenderComponent - Визуализация (Клиент)
@@ -48,11 +53,22 @@ type MemoryComponent struct {
 
 // --- СУЩНОСТЬ ---
 
+// GenerateID создает простой уникальный ID (замена UUID для снижения зависимостей)
+func GenerateID() string {
+	b := make([]byte, 8) // 16 символов hex
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
 type Entity struct {
 	// Идентификация
 	ID   string `json:"id"`
 	Type string `json:"type"`
 	Name string `json:"name"`
+
+	// ControllerID - ID сессии/пользователя, который управляет этой сущностью.
+	// Если пусто - управляется AI.
+	ControllerID string `json:"controllerId,omitempty"`
 
 	Pos Position `json:"pos"`
 

@@ -1,8 +1,6 @@
 package main
 
 import (
-	"cognitive-server/internal/agent"
-	"cognitive-server/internal/domain"
 	"cognitive-server/internal/engine"
 	"cognitive-server/pkg/api"
 	"log"
@@ -23,42 +21,63 @@ var gameInstance = engine.NewService()
 func wsHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Println("Upgrade error:", err)
 		return
 	}
 	defer conn.Close()
 
-	log.Println("Client connected")
+	// 1. HANDSHAKE / LOGIN
+	// Читаем первое сообщение, ожидаем { "action": "LOGIN", "token": "entity_uuid" }
+	var loginCmd api.ClientCommand
+	if err := conn.ReadJSON(&loginCmd); err != nil {
+		log.Println("Handshake error:", err)
+		return
+	}
 
-	// 1. Подписка
-	clientChan := gameInstance.Hub.Register("p1")
-	defer gameInstance.Hub.Unregister("p1")
+	entityID := loginCmd.Token
+	// Валидация: существует ли такая сущность?
+	ent := gameInstance.World.GetEntity(entityID)
+	if ent == nil {
+		log.Println("Login failed: unknown entity", entityID)
+		conn.WriteJSON(map[string]string{"error": "Entity not found"})
+		return
+	}
 
-	// 2. Инициализация
-	// Это сообщение уйдет в движок, он сгенерирует ответ и
-	// пришлет его обратно в clientChan через broadcast.
-	gameInstance.ProcessCommand(api.ClientCommand{Action: "INIT"})
+	// Помечаем, что сущность управляется (опционально, для логики пропуска хода AI)
+	ent.ControllerID = "session_" + entityID[:4]
 
-	// 3. Запуск писателя (Server -> Client)
+	log.Printf("Client connected as %s (%s)", ent.Name, entityID)
+
+	// 2. Регистрация в Хабе
+	clientChan := gameInstance.Hub.Register(entityID)
+	defer func() {
+		gameInstance.Hub.Unregister(entityID)
+		ent.ControllerID = "" // Освобождаем сущность при дисконнекте
+		log.Printf("Client disconnected: %s", entityID)
+	}()
+
+	// 3. Отправляем начальное состояние
+	gameInstance.ProcessCommand(api.ClientCommand{Action: "INIT", Token: entityID})
+
+	// 4. Каналы (Write/Read)
+	// Writer
 	go func() {
 		for event := range clientChan {
 			if err := conn.WriteJSON(event); err != nil {
-				log.Println("Write error:", err)
 				return
 			}
 		}
 	}()
 
-	// 4. Запуск читателя (Client -> Server)
+	// Reader
 	for {
 		var cmd api.ClientCommand
-		err := conn.ReadJSON(&cmd)
-		if err != nil {
-			log.Println("Read error / Disconnect:", err)
+		if err := conn.ReadJSON(&cmd); err != nil {
 			break
 		}
 
-		log.Printf("Command received: %s,%s\n", cmd.Token, cmd.Action)
+		// ВАЖНО: Форсируем Token из контекста соединения (безопасность)
+		// Чтобы клиент не мог прислать action MOVE с чужим token
+		cmd.Token = entityID
 		gameInstance.ProcessCommand(cmd)
 	}
 }
@@ -72,17 +91,6 @@ func main() {
 	// ВАЖНО: Запускаем игровой цикл в фоне перед стартом сервера
 	log.Println("Starting Game Loop...")
 	gameInstance.Start()
-
-	// --- ЗАПУСК БОТОВ ---
-	// Пробегаем по всем сущностям. Если это NPC/ENEMY - создаем для него бота.
-	for i := range gameInstance.Entities {
-		e := &gameInstance.Entities[i]
-		if e.Type == domain.EntityTypeEnemy || e.Type == domain.EntityTypeNPC {
-			bot := agent.NewBot(e.ID, gameInstance)
-			go bot.Run() // Запускаем мозг в отдельной горутине
-			log.Printf("Bot started for %s (%s)", e.Name, e.ID)
-		}
-	}
 
 	http.HandleFunc("/ws", wsHandler)
 
