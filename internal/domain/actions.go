@@ -1,0 +1,52 @@
+package domain
+
+import "strings"
+
+// ActionType - Внутренний числовой идентификатор действия
+type ActionType uint8
+
+const (
+	ActionUnknown ActionType = iota
+	ActionInit
+	ActionMove
+	ActionAttack
+	ActionWait
+	ActionTalk
+	// В будущем: ActionTrade, ActionUseItem...
+)
+
+// Маппинг для конвертации JSON -> Domain
+var stringToCmd = map[string]ActionType{
+	"INIT":   ActionInit,
+	"MOVE":   ActionMove,
+	"ATTACK": ActionAttack,
+	"WAIT":   ActionWait,
+	"TALK":   ActionTalk,
+}
+
+// Маппинг для логов Domain -> String
+var cmdToString = map[ActionType]string{
+	ActionInit:   "INIT",
+	ActionMove:   "MOVE",
+	ActionAttack: "ATTACK",
+	ActionWait:   "WAIT",
+	ActionTalk:   "TALK",
+}
+
+// ParseAction конвертирует строку из JSON в ActionType
+func ParseAction(s string) ActionType {
+	// Делаем нечувствительным к регистру для надежности
+	upper := strings.ToUpper(s)
+	if val, ok := stringToCmd[upper]; ok {
+		return val
+	}
+	return ActionUnknown
+}
+
+// String реализует интерфейс Stringer (для fmt.Printf)
+func (a ActionType) String() string {
+	if val, ok := cmdToString[a]; ok {
+		return val
+	}
+	return "UNKNOWN"
+}

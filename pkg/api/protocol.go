@@ -1,6 +1,9 @@
-package domain
+package api
 
-import "encoding/json"
+import (
+	"cognitive-server/internal/domain"
+	"encoding/json"
+)
 
 // LogEntry - запись в чате/логе
 type LogEntry struct {
@@ -41,10 +44,10 @@ type PositionPayload struct {
 
 // ServerResponse - исходящее сообщение (Снапшот)
 type ServerResponse struct {
-	Type           string     `json:"type"` // INIT, UPDATE, TURN
-	World          *GameWorld `json:"world,omitempty"`
-	Player         *Entity    `json:"player,omitempty"` // Для игрока-человека
-	Entities       []Entity   `json:"entities,omitempty"`
-	Logs           []LogEntry `json:"logs,omitempty"`
-	ActiveEntityID string     `json:"activeEntityId,omitempty"`
+	Type           string            `json:"type"` // INIT, UPDATE, TURN
+	World          *domain.GameWorld `json:"world,omitempty"`
+	Player         *domain.Entity    `json:"player,omitempty"` // Для игрока-человека
+	Entities       []domain.Entity   `json:"entities,omitempty"`
+	Logs           []LogEntry        `json:"logs,omitempty"`
+	ActiveEntityID string            `json:"activeEntityId,omitempty"`
 }

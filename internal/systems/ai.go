@@ -7,40 +7,40 @@ import (
 
 // ComputeNPCAction решает, что делать NPC.
 // Возвращает (команда, цель_атаки_если_есть, dx, dy)
-func ComputeNPCAction(npc *domain.Entity, player *domain.Entity, w *domain.GameWorld, ents []domain.Entity) (action string, target *domain.Entity, dx, dy int) {
+func ComputeNPCAction(npc *domain.Entity, player *domain.Entity, w *domain.GameWorld) (action domain.ActionType, target *domain.Entity, dx, dy int) {
 	// 1. Проверка наличия компонентов
 	// Если нет мозгов (AI) или тела (Stats) - ничего не делаем
 	if npc.AI == nil || npc.Stats == nil {
-		return "WAIT", nil, 0, 0
+		return domain.ActionWait, nil, 0, 0
 	}
 
 	// 2. Если мертв или не враждебен
 	if npc.Stats.IsDead || !npc.AI.IsHostile {
-		return "WAIT", nil, 0, 0
+		return domain.ActionWait, nil, 0, 0
 	}
 
 	dist := npc.Pos.DistanceTo(player.Pos)
 
 	// 3. Логика дистанции
 	if dist > domain.AggroRadius {
-		return "WAIT", nil, 0, 0
+		return domain.ActionWait, nil, 0, 0
 	}
 
 	if dist <= 1.5 {
-		return "ATTACK", player, 0, 0
+		return domain.ActionAttack, player, 0, 0
 	}
 
-	moveDx, moveDy := calculateSmartMove(npc, player, w, ents)
+	moveDx, moveDy := calculateSmartMove(npc, player, w)
 	if moveDx == 0 && moveDy == 0 {
-		return "WAIT", nil, 0, 0
+		return domain.ActionWait, nil, 0, 0
 	}
 
-	return "MOVE", nil, moveDx, moveDy
+	return domain.ActionMove, nil, moveDx, moveDy
 }
 
 // Внутренние утилиты (приватные для пакета systems)
 
-func calculateSmartMove(npc, target *domain.Entity, w *domain.GameWorld, ents []domain.Entity) (int, int) {
+func calculateSmartMove(npc, target *domain.Entity, w *domain.GameWorld) (int, int) {
 	dxRaw := target.Pos.X - npc.Pos.X
 	dyRaw := target.Pos.Y - npc.Pos.Y
 
@@ -48,7 +48,7 @@ func calculateSmartMove(npc, target *domain.Entity, w *domain.GameWorld, ents []
 	stepY := sign(dyRaw)
 
 	// Попытка 1: Идеальный путь
-	res := CalculateMove(npc, stepX, stepY, w, ents)
+	res := CalculateMove(npc, stepX, stepY, w)
 	if res.HasMoved {
 		return stepX, stepY
 	}
@@ -57,17 +57,17 @@ func calculateSmartMove(npc, target *domain.Entity, w *domain.GameWorld, ents []
 	tryXFirst := math.Abs(float64(dxRaw)) > math.Abs(float64(dyRaw))
 
 	if tryXFirst {
-		if stepX != 0 && checkMove(npc, stepX, 0, w, ents) {
+		if stepX != 0 && checkMove(npc, stepX, 0, w) {
 			return stepX, 0
 		}
-		if stepY != 0 && checkMove(npc, 0, stepY, w, ents) {
+		if stepY != 0 && checkMove(npc, 0, stepY, w) {
 			return 0, stepY
 		}
 	} else {
-		if stepY != 0 && checkMove(npc, 0, stepY, w, ents) {
+		if stepY != 0 && checkMove(npc, 0, stepY, w) {
 			return 0, stepY
 		}
-		if stepX != 0 && checkMove(npc, stepX, 0, w, ents) {
+		if stepX != 0 && checkMove(npc, stepX, 0, w) {
 			return stepX, 0
 		}
 	}
@@ -75,8 +75,8 @@ func calculateSmartMove(npc, target *domain.Entity, w *domain.GameWorld, ents []
 	return 0, 0 // Тупик
 }
 
-func checkMove(e *domain.Entity, dx, dy int, w *domain.GameWorld, ents []domain.Entity) bool {
-	res := CalculateMove(e, dx, dy, w, ents)
+func checkMove(e *domain.Entity, dx, dy int, w *domain.GameWorld) bool {
+	res := CalculateMove(e, dx, dy, w)
 	return res.HasMoved
 }
 

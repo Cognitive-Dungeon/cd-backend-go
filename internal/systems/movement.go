@@ -13,7 +13,7 @@ type MovementResult struct {
 }
 
 // CalculateMove вычисляет новую позицию. Не меняет состояние мира!
-func CalculateMove(e *domain.Entity, dx, dy int, w *domain.GameWorld, entities []domain.Entity) MovementResult {
+func CalculateMove(e *domain.Entity, dx, dy int, w *domain.GameWorld) MovementResult {
 	// ИСПОЛЬЗУЕМ НОВЫЙ МЕТОД Shift
 	// Он возвращает новую структуру Position, не меняя текущую
 	targetPos := e.Pos.Shift(dx, dy)
@@ -33,25 +33,17 @@ func CalculateMove(e *domain.Entity, dx, dy int, w *domain.GameWorld, entities [
 	}
 
 	// 3. Проверка сущностей
-	for i := range entities {
-		other := &entities[i]
+	entitiesAtTarget := w.GetEntitiesAt(targetPos.X, targetPos.Y)
+
+	for _, other := range entitiesAtTarget {
 		if other.ID == e.ID {
 			continue
-		}
+		} // Игнор себя
 
-		// Игнорируем самого себя
-		if other.ID == e.ID {
-			continue
-		}
-
-		if other.Pos.X == targetPos.X && other.Pos.Y == targetPos.Y {
-			// Логика коллизии:
-			// Блокируем, только если у сущности есть Stats (тело) и она жива.
-			// Предметы и выходы (Stats == nil) проходимы.
-			if other.Stats != nil && !other.Stats.IsDead {
-				res.BlockedBy = other
-				return res
-			}
+		// Логика коллизии (блокируем только живых и твердых)
+		if other.Stats != nil && !other.Stats.IsDead {
+			res.BlockedBy = other
+			return res
 		}
 	}
 
