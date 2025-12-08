@@ -26,7 +26,20 @@ func ComputeNPCAction(npc *domain.Entity, player *domain.Entity, w *domain.GameW
 		return domain.ActionWait, nil, 0, 0
 	}
 
+	// Проверка видимости
+	canSee := HasLineOfSight(w, npc.Pos, player.Pos)
+
+	// Если далеко или НЕ ВИДНО -> просто ждем (или патрулируем, но пока Wait)
+	// Раньше тут была только проверка дистанции
+	if dist > domain.AggroRadius || !canSee {
+		return domain.ActionWait, nil, 0, 0
+	}
+
 	if dist <= 1.5 {
+		// Если рядом, но стена мешает (угловой случай)
+		if !canSee {
+			return domain.ActionWait, nil, 0, 0
+		}
 		return domain.ActionAttack, player, 0, 0
 	}
 
