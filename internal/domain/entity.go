@@ -34,6 +34,18 @@ type NarrativeComponent struct {
 	Description string `json:"description"` // "Грязный гоблин с ржавым ножом"
 }
 
+// VisionComponent - настройки зрения
+type VisionComponent struct {
+	Radius     int  `json:"radius"`
+	Omniscient bool `json:"omniscient"` // Всеведенье
+}
+
+// MemoryComponent - туман войны
+type MemoryComponent struct {
+	// Храним индексы тайлов, которые мы уже видели
+	ExploredIDs map[int]bool `json:"exploredIds"`
+}
+
 // --- СУЩНОСТЬ ---
 
 type Entity struct {
@@ -49,4 +61,6 @@ type Entity struct {
 	Stats     *StatsComponent     `json:"stats,omitempty"`
 	AI        *AIComponent        `json:"ai,omitempty"`
 	Narrative *NarrativeComponent `json:"narrative,omitempty"`
+	Vision    *VisionComponent    `json:"vision,omitempty"`
+	Memory    *MemoryComponent    `json:"memory,omitempty"`
 }

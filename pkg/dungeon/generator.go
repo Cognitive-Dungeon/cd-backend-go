@@ -43,7 +43,6 @@ func Generate(level int) (*domain.GameWorld, []domain.Entity, domain.Position) {
 		for x := 0; x < MapWidth; x++ {
 			row[x] = domain.Tile{
 				X: x, Y: y, IsWall: true, Env: "stone",
-				IsVisible: false, IsExplored: false,
 			}
 		}
 		gameMap[y] = row
@@ -139,6 +138,13 @@ func Generate(level int) (*domain.GameWorld, []domain.Entity, domain.Position) {
 				},
 				Render:    &domain.RenderComponent{},    // Заполнится ниже
 				Narrative: &domain.NarrativeComponent{}, // Заполнится ниже
+				Vision: &domain.VisionComponent{
+					Radius:     domain.VisionRadius, // Или 8, или 10
+					Omniscient: false,
+				},
+				Memory: &domain.MemoryComponent{ // Память тоже нужна, чтобы бот "помнил" карту
+					ExploredIDs: make(map[int]bool),
+				},
 			}
 
 			if isOrc {

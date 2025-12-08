@@ -1,7 +1,6 @@
 package api
 
 import (
-	"cognitive-server/internal/domain"
 	"encoding/json"
 )
 
@@ -42,12 +41,67 @@ type PositionPayload struct {
 	Y int `json:"y"`
 }
 
-// ServerResponse - исходящее сообщение (Снапшот)
+// --- DTO для Визуализации (View Layer) ---
+
+// TileView - это то, как клиент видит клетку.
+type TileView struct {
+	X int `json:"x"`
+	Y int `json:"y"`
+
+	// Визуал
+	Symbol string `json:"symbol"`
+	Color  string `json:"color"`
+
+	// Флаги для рендера
+	IsWall     bool `json:"isWall"`
+	IsVisible  bool `json:"isVisible"`
+	IsExplored bool `json:"isExplored"`
+}
+
+// GridMeta - Общие размеры карты которые клиент должен быть готов отрисовать
+type GridMeta struct {
+	Width  int `json:"w"`
+	Height int `json:"h"`
+}
+
+type StatsView struct {
+	HP         int  `json:"hp"`
+	MaxHP      int  `json:"maxHp"`
+	Stamina    int  `json:"stamina,omitempty"` // Врагу знать не обязательно
+	MaxStamina int  `json:"maxStamina,omitempty"`
+	Gold       int  `json:"gold,omitempty"` // Врагу знать не обязательно
+	Strength   int  `json:"strength,omitempty"`
+	IsDead     bool `json:"isDead"`
+}
+
+// EntityView - Единое представление Entity
+type EntityView struct {
+	ID   string `json:"id"`
+	Type string `json:"type"`
+	Name string `json:"name"`
+
+	Pos struct {
+		X int `json:"x"`
+		Y int `json:"y"`
+	} `json:"pos"`
+
+	Render struct {
+		Symbol string `json:"symbol"`
+		Color  string `json:"color"`
+	} `json:"render"`
+
+	// Stats присутствует, только если это "Я" или если есть право видеть статы (например, труп)
+	Stats *StatsView `json:"stats,omitempty"`
+}
+
+// ServerResponse - Снапшот состояния для конкретного клиента
 type ServerResponse struct {
-	Type           string            `json:"type"` // INIT, UPDATE, TURN
-	World          *domain.GameWorld `json:"world,omitempty"`
-	Player         *domain.Entity    `json:"player,omitempty"` // Для игрока-человека
-	Entities       []domain.Entity   `json:"entities,omitempty"`
-	Logs           []LogEntry        `json:"logs,omitempty"`
-	ActiveEntityID string            `json:"activeEntityId,omitempty"`
+	Type           string       `json:"type"`
+	Tick           int          `json:"tick"`
+	ActiveEntityID string       `json:"activeEntityId,omitempty"`
+	MyEntityID     string       `json:"myEntityId,omitempty"`
+	Grid           *GridMeta    `json:"grid,omitempty"`
+	Map            []TileView   `json:"map,omitempty"`
+	Entities       []EntityView `json:"entities,omitempty"`
+	Logs           []LogEntry   `json:"logs,omitempty"`
 }

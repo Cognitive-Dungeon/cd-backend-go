@@ -31,8 +31,8 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("Client connected")
 
 	// 1. Подписка
-	clientChan := gameInstance.Hub.Subscribe()
-	defer gameInstance.Hub.Unsubscribe(clientChan)
+	clientChan := gameInstance.Hub.Register("p1")
+	defer gameInstance.Hub.Unregister("p1")
 
 	// 2. Инициализация
 	// Это сообщение уйдет в движок, он сгенерирует ответ и

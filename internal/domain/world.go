@@ -6,12 +6,10 @@ type Position struct {
 }
 
 type Tile struct {
-	X          int    `json:"x"`
-	Y          int    `json:"y"`
-	IsWall     bool   `json:"isWall"`
-	Env        string `json:"env"` // floor, stone, grass
-	IsVisible  bool   `json:"isVisible"`
-	IsExplored bool   `json:"isExplored"`
+	X      int    `json:"x"`
+	Y      int    `json:"y"`
+	IsWall bool   `json:"isWall"`
+	Env    string `json:"env"` // floor, stone, grass
 
 	// В будущем сюда добавятся ссылки на предметы на полу
 }

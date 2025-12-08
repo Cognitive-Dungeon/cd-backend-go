@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Cognitive Debugger v3</title>
+    <title>Cognitive Debugger v5</title>
     <style>
         :root {
             --bg: #0d1117;
@@ -12,6 +12,7 @@
             --accent: #58a6ff;
             --danger: #da3633;
             --success: #238636;
+            --warning: #d29922;
         }
         body {
             background: var(--bg); color: var(--text);
@@ -20,7 +21,7 @@
             display: flex; gap: 20px; height: 95vh; box-sizing: border-box;
         }
 
-        /* Panels */
+        /* Layout */
         .panel {
             background: var(--panel); border: 1px solid var(--border);
             border-radius: 6px; padding: 15px; display: flex; flex-direction: column;
@@ -28,12 +29,13 @@
         #left-panel { flex: 0 0 auto; }
         #right-panel { flex: 1; min-width: 300px; gap: 10px; }
 
-        /* Map */
-        #map-container {
+        /* Map Container */
+        #map-wrapper {
             position: relative;
             border: 2px solid #000;
             display: inline-block;
             background: #000;
+            margin-top: 10px;
         }
         #game-map { display: grid; }
 
@@ -41,121 +43,170 @@
             width: 20px; height: 20px;
             display: flex; align-items: center; justify-content: center;
             font-size: 16px; cursor: crosshair; user-select: none;
+            /* Default hidden state */
+            color: #222; background: #000;
         }
-        .tile:hover { background: #333; }
-        .wall { background: #333; color: #555; }
-        .floor { background: #111; color: #222; }
+
+        /* Visibility States */
+        .tile.visible { font-weight: bold; }
+        .tile.explored { opacity: 0.5; }
 
         /* Entities */
-        .entity { cursor: pointer; z-index: 10; font-weight: bold; }
-        .player { color: #58a6ff; text-shadow: 0 0 5px #58a6ff; }
-        .enemy { color: #ff7b72; }
-        .npc { color: #d29922; }
+        .entity { z-index: 10; cursor: pointer; }
+        .player { color: var(--accent) !important; text-shadow: 0 0 5px var(--accent); font-weight: bold; }
+        .enemy { color: var(--danger) !important; font-weight: bold; }
+        .npc { color: var(--warning) !important; }
+        .corpse { color: #555 !important; font-weight: normal; }
 
-        /* Selection Ring */
+        /* Selection */
         .selected {
             box-shadow: inset 0 0 0 2px var(--danger);
             background: rgba(218, 54, 51, 0.2) !important;
         }
 
-        /* Controls */
-        .control-group { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
-        .d-pad { display: grid; grid-template-columns: repeat(3, 40px); gap: 5px; }
-
-        button {
-            background: #21262d; color: var(--text); border: 1px solid var(--border);
-            padding: 8px 12px; cursor: pointer; border-radius: 6px; font-family: inherit;
-        }
-        button:hover { background: #30363d; }
-        button:active { background: #1f2428; transform: translateY(1px); }
-        button.primary { background: #238636; border-color: rgba(240,246,252,0.1); color: #fff; }
-        button.danger { background: #da3633; border-color: rgba(240,246,252,0.1); color: #fff; }
-
         /* Logs */
         #logs {
-            flex: 1; overflow-y: auto; background: #000;
-            border: 1px solid var(--border); padding: 10px; font-size: 12px;
+            flex: 1; overflow-y: auto; background: #050505;
+            border: 1px solid var(--border); padding: 8px; font-size: 12px;
         }
-        .log-line { margin-bottom: 4px; border-bottom: 1px solid #111; padding-bottom: 2px; }
-        .t-COMBAT { color: #ff7b72; }
+        .log-line { margin-bottom: 4px; border-bottom: 1px solid #1a1a1a; padding-bottom: 2px; }
+        .t-COMBAT { color: var(--danger); }
         .t-INFO { color: #8b949e; }
-        .t-SPEECH { color: #f2cc60; font-style: italic; }
+        .t-SPEECH { color: var(--warning); font-style: italic; }
+        .t-ERROR { color: #ff0000; font-weight: bold; }
+
+        /* Controls */
+        .control-group { display: flex; gap: 10px; margin-bottom: 10px; }
+        .d-pad { display: grid; grid-template-columns: repeat(3, 40px); gap: 5px; }
+        button {
+            background: #21262d; color: var(--text); border: 1px solid var(--border);
+            padding: 8px; cursor: pointer; border-radius: 4px; font-family: inherit; font-weight: bold;
+        }
+        button:hover { background: #30363d; border-color: #8b949e; }
+        button:active { background: #1f2428; transform: translateY(1px); }
+
+        .action-column { flex: 1; display: flex; flex-direction: column; gap: 5px; }
 
         /* HUD */
-        #hud { margin-bottom: 10px; font-size: 13px; }
-        .active-turn { border-color: var(--success); box-shadow: 0 0 10px var(--success); }
-        .stat-val { color: var(--accent); font-weight: bold; }
+        #hud { display: flex; justify-content: space-between; font-size: 13px; }
+        .stat-label { color: #777; }
+        .active-turn { border-color: var(--success); box-shadow: 0 0 15px rgba(35, 134, 54, 0.3); }
+
+        #target-info { font-size: 12px; margin-top: 5px; color: #555; height: 1.2em; }
     </style>
 </head>
 <body>
 
 <div id="left-panel" class="panel">
     <div id="hud">
-        Tick: <span id="tick" class="stat-val">0</span> |
-        Pos: <span id="pos" class="stat-val">0,0</span> |
-        Target: <span id="target-info" style="color: var(--danger)">None</span>
+        <div><span class="stat-label">Tick:</span> <span id="tick">0</span></div>
+        <div><span class="stat-label">Pos:</span> <span id="pos">0,0</span></div>
     </div>
-    <div id="map-container">
+
+    <div id="map-wrapper">
         <div id="game-map">Connecting...</div>
     </div>
+
+    <div id="target-info">Select target...</div>
 </div>
 
 <div id="right-panel" class="panel">
     <div class="control-group">
         <div class="d-pad">
-            <div></div>
-            <button onclick="sendDir(0, -1)">W</button>
-            <div></div>
-            <button onclick="sendDir(-1, 0)">A</button>
-            <button onclick="sendWait()">Wait</button>
-            <button onclick="sendDir(1, 0)">D</button>
-            <div></div>
-            <button onclick="sendDir(0, 1)">S</button>
-            <div></div>
+            <div></div><button onclick="sendDir(0, -1)">W</button><div></div>
+            <button onclick="sendDir(-1, 0)">A</button><button onclick="sendWait()">Wait</button><button onclick="sendDir(1, 0)">D</button>
+            <div></div><button onclick="sendDir(0, 1)">S</button><div></div>
         </div>
-        <div style="display: flex; flex-direction: column; gap: 5px; width: 100%">
-            <button class="danger" onclick="sendAction('ATTACK')">⚔️ ATTACK (Target)</button>
-            <button class="primary" onclick="sendAction('TALK')">💬 TALK (Target)</button>
-            <button onclick="sendAction('INIT')">🔄 RESET</button>
+        <div class="action-column">
+            <button style="color:var(--danger)" onclick="sendAction('ATTACK')">⚔️ ATTACK</button>
+            <button style="color:var(--warning)" onclick="sendAction('TALK')">💬 TALK</button>
+            <button onclick="sendAction('INIT')">🔄 RESET / INIT</button>
         </div>
     </div>
 
-    <div style="font-size: 11px; color: #666">
-        Controls: WASD to Move, SPACE to Wait, Click entity to Target.
-    </div>
-
-    <div id="logs"></div>
+    <div id="logs">Waiting for server logs...</div>
 </div>
 
 <script>
     const ws = new WebSocket("ws://localhost:8080/ws");
 
-    // State
+    // Client State
     let myId = "";
     let selectedTarget = null;
     let gridInitialized = false;
+
+    // Caches to avoid DOM thrashing
     let entitiesCache = [];
+    let playerPos = {x:0, y:0};
 
     // UI Refs
     const mapEl = document.getElementById("game-map");
     const leftPanel = document.getElementById("left-panel");
+    const logsEl = document.getElementById("logs");
     const targetLabel = document.getElementById("target-info");
+
+    ws.onopen = () => {
+        logsEl.innerHTML = "<div style='color:green'>Connected to WebSocket</div>";
+    };
+
+    ws.onclose = () => {
+        logsEl.innerHTML += "<div style='color:red'>Disconnected</div>";
+    };
 
     ws.onmessage = (evt) => {
         const msg = JSON.parse(evt.data);
 
         if (msg.type === "INIT" || msg.type === "UPDATE") {
-            if (msg.player) myId = msg.player.id;
 
-            // Render
-            if (msg.world) renderMap(msg.world);
-            if (msg.entities) {
-                entitiesCache = [...msg.entities];
-                if (msg.player) entitiesCache.push(msg.player); // Add player to visuals
-                drawEntities(entitiesCache);
+            // 1. Identify Self
+            if (msg.myEntityId) {
+                myId = msg.myEntityId;
             }
-            if (msg.player) updateStats(msg.player, msg.world?.globalTick);
-            if (msg.logs) renderLogs(msg.logs);
+
+            // 2. Setup Grid (Once) via GridMeta
+            if (msg.grid && !gridInitialized) {
+                initGrid(msg.grid.w, msg.grid.h);
+            }
+
+            // 3. Render Tiles (Map Updates)
+            if (msg.map) {
+                renderTiles(msg.map);
+            }
+
+            // 4. Render Entities
+            // The server sends a list of visible entities. We must redraw them.
+            if (msg.entities) {
+                entitiesCache = msg.entities; // Save for selection logic
+
+                // Clear previous entity positions (simple clear via class reset)
+                // In a real app we would diff, but here we redraw map + entities
+                // A better approach for debug client:
+                // We rely on renderTiles to set base state, then draw entities on top.
+                // Since msg.map might be partial, we might need to clear old entities manually?
+                // For MVP Debug: We just draw new ones on top. Artifacts might appear if entities move without map update,
+                // but our server sends map update on move.
+
+                // Better approach: Clear all "entity" classes from the grid first
+                document.querySelectorAll('.entity').forEach(el => {
+                    el.className = el.className.replace(/entity|player|enemy|npc|corpse|selected/g, '').trim();
+                    // Restore tile symbol if it was there?
+                    // Ideally we'd store tile symbol in data-attr, but let's just rely on msg.map for now.
+                    // Actually, let's just redraw entities on top of whatever is there.
+                });
+
+                drawEntities(msg.entities);
+            }
+
+            // 5. Update HUD
+            // Find player in entities list or separate field if exists (currently in entities)
+            const me = entitiesCache.find(e => e.id === myId);
+            if (me && me.pos) {
+                playerPos = me.pos;
+                document.getElementById("pos").innerText = `${me.pos.x},${me.pos.y}`;
+            }
+            if (msg.tick !== undefined) {
+                document.getElementById("tick").innerText = msg.tick;
+            }
 
             // Turn Indicator
             if (msg.activeEntityId && msg.activeEntityId === myId) {
@@ -163,16 +214,16 @@
             } else {
                 leftPanel.classList.remove("active-turn");
             }
+
+            // 6. Logs
+            if (msg.logs) renderLogs(msg.logs);
         }
     };
 
     // --- Controls ---
 
     function sendDir(dx, dy) {
-        ws.send(JSON.stringify({
-            action: "MOVE",
-            payload: { dx, dy } // DirectionPayload
-        }));
+        ws.send(JSON.stringify({ action: "MOVE", payload: { dx, dy } }));
     }
 
     function sendWait() {
@@ -180,26 +231,33 @@
     }
 
     function sendAction(action) {
+        if (action === 'INIT') {
+            ws.send(JSON.stringify({ action: "INIT", payload: {} }));
+            return;
+        }
         if (!selectedTarget) {
-            alert("Select a target on the map first!");
+            alert("Select a target by clicking on it first!");
             return;
         }
         ws.send(JSON.stringify({
             action: action,
-            payload: { targetId: selectedTarget } // EntityPayload
+            payload: { targetId: selectedTarget }
         }));
     }
 
-    // Keyboard
+    // Keyboard bindings
     document.addEventListener("keydown", (e) => {
-        if (e.key === "w") sendDir(0, -1);
-        if (e.key === "s") sendDir(0, 1);
-        if (e.key === "a") sendDir(-1, 0);
-        if (e.key === "d") sendDir(1, 0);
-        if (e.key === " ") sendWait();
+        if (e.target.tagName === "TEXTAREA") return;
+        switch(e.key.toLowerCase()) {
+            case "w": sendDir(0, -1); break;
+            case "s": sendDir(0, 1); break;
+            case "a": sendDir(-1, 0); break;
+            case "d": sendDir(1, 0); break;
+            case " ": sendWait(); break;
+        }
     });
 
-    // --- Core Rendering ---
+    // --- Rendering ---
 
     function initGrid(w, h) {
         mapEl.innerHTML = '';
@@ -209,83 +267,75 @@
         for(let y=0; y<h; y++) {
             for(let x=0; x<w; x++) {
                 const div = document.createElement("div");
-                div.id = `t-${x}-${y}`;
+                div.id = `c-${x}-${y}`; // Cell ID
                 div.className = "tile";
-                div.onclick = () => selectTile(x, y); // Click to select
+                div.onclick = () => selectTile(x, y);
                 mapEl.appendChild(div);
             }
         }
         gridInitialized = true;
     }
 
-    function renderMap(world) {
-        if (!gridInitialized) initGrid(world.width, world.height);
+    function renderTiles(tiles) {
+        tiles.forEach(t => {
+            const el = document.getElementById(`c-${t.x}-${t.y}`);
+            if (!el) return;
 
-        world.map.forEach(row => {
-            row.forEach(tile => {
-                const el = document.getElementById(`t-${tile.x}-${tile.y}`);
-                if (!el) return;
+            // Apply visual from server
+            el.innerText = t.symbol;
+            el.style.color = t.color;
 
-                // Reset
-                el.className = "tile";
-                el.innerText = "";
-                el.style.backgroundColor = "";
-
-                if (tile.isWall) {
-                    el.classList.add("wall");
-                    el.innerText = "#";
-                } else {
-                    el.classList.add("floor");
-                    el.innerText = ".";
-                }
-            });
+            // Apply states
+            el.className = "tile"; // reset
+            if (t.isVisible) el.classList.add("visible");
+            else if (t.isExplored) el.classList.add("explored");
         });
     }
 
     function drawEntities(entities) {
         entities.forEach(e => {
-            // Убедись, что ID ячеек совпадают с теми, что в renderMap (t-x-y или c-x-y)
-            // В последней версии было t-${x}-${y}
-            const el = document.getElementById(`t-${e.pos.x}-${e.pos.y}`);
+            const el = document.getElementById(`c-${e.pos.x}-${e.pos.y}`);
             if (!el) return;
 
-            // 1. Достаем Символ из RenderComponent
+            // Only draw if tile is visible (client-side check for safety)
+            if (!el.classList.contains("visible")) return;
+
+            // Render Component logic
             if (e.render) {
                 el.innerText = e.render.symbol;
+                el.style.color = e.render.color;
             } else {
-                el.innerText = "?"; // Если компонента нет
+                el.innerText = "?";
             }
 
-            el.className = "tile entity"; // Сброс классов
+            el.classList.add("entity");
 
-            // 2. Красим по типам
-            if (e.type === "PLAYER") el.classList.add("player");
+            // Type classes
+            if (e.id === myId) el.classList.add("player");
             else if (e.type === "ENEMY") el.classList.add("enemy");
             else if (e.type === "NPC") el.classList.add("npc");
 
-            // 3. Проверка на смерть (теперь внутри Stats)
+            // Stats Logic
             if (e.stats && e.stats.isDead) {
-                el.classList.remove("enemy", "npc", "player");
                 el.classList.add("corpse");
-                el.style.color = "#555";
+                // Remove other classes to make it look dead
+                el.classList.remove("enemy", "npc");
             }
 
-            // Выделение цели
+            // Selection
             if (e.id === selectedTarget) {
                 el.classList.add("selected");
             }
         });
     }
 
-    // --- Selection Logic ---
-
     function selectTile(x, y) {
-        // Find entity at this pos
-        const ent = entitiesCache.find(e => e.pos.x === x && e.pos.y === y && !e.isDead && e.id !== myId);
+        // Find an entity at this position (excluding self)
+        const ent = entitiesCache.find(e => e.pos.x === x && e.pos.y === y && e.id !== myId);
 
         if (ent) {
             selectedTarget = ent.id;
-            targetLabel.innerText = `${ent.name} (${ent.id})`;
+            targetLabel.innerText = `${ent.name || 'Unknown'} [${ent.id}]`;
             targetLabel.style.color = "#fff";
         } else {
             selectedTarget = null;
@@ -293,21 +343,17 @@
             targetLabel.style.color = "#555";
         }
 
-        // Redraw to show selection ring
+        // Redraw entities to show selection ring
+        // (We need to clear entity classes first to avoid duplication, handled in ws.onmessage)
+        // For simplicity here we just re-run drawEntities over existing map state
         drawEntities(entitiesCache);
     }
 
-    function updateStats(p, tick) {
-        document.getElementById("tick").innerText = tick;
-        document.getElementById("pos").innerText = `${p.pos.x},${p.pos.y}`;
-    }
-
-    const logsEl = document.getElementById("logs");
     function renderLogs(logs) {
         logs.forEach(l => {
             const row = document.createElement("div");
             row.className = `log-line t-${l.type}`;
-            const time = new Date(l.timestamp).toLocaleTimeString();
+            const time = new Date(l.timestamp).toLocaleTimeString([], {hour12:false});
             row.innerText = `[${time}] ${l.text}`;
             logsEl.appendChild(row);
         });
