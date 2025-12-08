@@ -76,11 +76,11 @@ func (b *Bot) makeMove(state api.ServerResponse) {
 
 	// Отправляем команду
 	switch action {
-	case "ATTACK":
+	case domain.ActionAttack:
 		if target != nil {
 			b.sendAttack(target.ID)
 		}
-	case "MOVE":
+	case domain.ActionMove:
 		b.sendMove(dx, dy)
 	default:
 		b.sendWait()
@@ -90,7 +90,7 @@ func (b *Bot) makeMove(state api.ServerResponse) {
 func (b *Bot) sendMove(dx, dy int) {
 	payload, _ := json.Marshal(api.DirectionPayload{Dx: dx, Dy: dy})
 	cmd := api.ClientCommand{
-		Action:  "MOVE",
+		Action:  domain.ActionMove.String(),
 		Payload: payload,
 		Token:   b.EntityID, // Важно: сообщаем движку, кто мы
 	}
@@ -101,7 +101,7 @@ func (b *Bot) sendAttack(targetID string) {
 	payload, _ := json.Marshal(api.EntityPayload{TargetID: targetID})
 
 	cmd := api.ClientCommand{
-		Action:  "ATTACK",
+		Action:  domain.ActionAttack.String(),
 		Payload: payload,
 		Token:   b.EntityID,
 	}
@@ -110,7 +110,7 @@ func (b *Bot) sendAttack(targetID string) {
 
 func (b *Bot) sendWait() {
 	cmd := api.ClientCommand{
-		Action: "WAIT",
+		Action: domain.ActionWait.String(),
 		Token:  b.EntityID,
 	}
 	b.Service.ProcessCommand(cmd)

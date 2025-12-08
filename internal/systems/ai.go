@@ -7,35 +7,35 @@ import (
 
 // ComputeNPCAction решает, что делать NPC.
 // Возвращает (команда, цель_атаки_если_есть, dx, dy)
-func ComputeNPCAction(npc *domain.Entity, player *domain.Entity, w *domain.GameWorld, ents []domain.Entity) (action string, target *domain.Entity, dx, dy int) {
+func ComputeNPCAction(npc *domain.Entity, player *domain.Entity, w *domain.GameWorld, ents []domain.Entity) (action domain.ActionType, target *domain.Entity, dx, dy int) {
 	// 1. Проверка наличия компонентов
 	// Если нет мозгов (AI) или тела (Stats) - ничего не делаем
 	if npc.AI == nil || npc.Stats == nil {
-		return "WAIT", nil, 0, 0
+		return domain.ActionWait, nil, 0, 0
 	}
 
 	// 2. Если мертв или не враждебен
 	if npc.Stats.IsDead || !npc.AI.IsHostile {
-		return "WAIT", nil, 0, 0
+		return domain.ActionWait, nil, 0, 0
 	}
 
 	dist := npc.Pos.DistanceTo(player.Pos)
 
 	// 3. Логика дистанции
 	if dist > domain.AggroRadius {
-		return "WAIT", nil, 0, 0
+		return domain.ActionWait, nil, 0, 0
 	}
 
 	if dist <= 1.5 {
-		return "ATTACK", player, 0, 0
+		return domain.ActionAttack, player, 0, 0
 	}
 
 	moveDx, moveDy := calculateSmartMove(npc, player, w, ents)
 	if moveDx == 0 && moveDy == 0 {
-		return "WAIT", nil, 0, 0
+		return domain.ActionWait, nil, 0, 0
 	}
 
-	return "MOVE", nil, moveDx, moveDy
+	return domain.ActionMove, nil, moveDx, moveDy
 }
 
 // Внутренние утилиты (приватные для пакета systems)
