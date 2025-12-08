@@ -1,8 +1,10 @@
-package core
+package engine
 
 import (
 	"cognitive-server/internal/domain"
+	"cognitive-server/internal/network"
 	"cognitive-server/internal/systems"
+	"cognitive-server/pkg/api"
 	"cognitive-server/pkg/dungeon"
 	"encoding/json"
 	"fmt"
@@ -15,10 +17,10 @@ type GameService struct {
 	World    *domain.GameWorld
 	Player   *domain.Entity
 	Entities []domain.Entity
-	Logs     []domain.LogEntry
+	Logs     []api.LogEntry
 
-	CommandChan chan domain.ClientCommand
-	Hub         *Broadcaster
+	CommandChan chan api.ClientCommand
+	Hub         *network.Broadcaster
 }
 
 func NewService() *GameService {
@@ -47,9 +49,9 @@ func NewService() *GameService {
 		World:       world,
 		Player:      player,
 		Entities:    entities,
-		Logs:        []domain.LogEntry{},
-		CommandChan: make(chan domain.ClientCommand, 100),
-		Hub:         NewBroadcaster(),
+		Logs:        []api.LogEntry{},
+		CommandChan: make(chan api.ClientCommand, 100),
+		Hub:         network.NewBroadcaster(),
 	}
 }
 
@@ -57,7 +59,7 @@ func (s *GameService) Start() {
 	go s.RunGameLoop()
 }
 
-func (s *GameService) ProcessCommand(cmd domain.ClientCommand) {
+func (s *GameService) ProcessCommand(cmd api.ClientCommand) {
 	select {
 	case s.CommandChan <- cmd:
 	default:
@@ -67,11 +69,11 @@ func (s *GameService) ProcessCommand(cmd domain.ClientCommand) {
 
 func (s *GameService) publishUpdate() {
 	// Копируем логи
-	currentLogs := make([]domain.LogEntry, len(s.Logs))
+	currentLogs := make([]api.LogEntry, len(s.Logs))
 	copy(currentLogs, s.Logs)
-	s.Logs = []domain.LogEntry{}
+	s.Logs = []api.LogEntry{}
 
-	response := domain.ServerResponse{
+	response := api.ServerResponse{
 		Type:     "UPDATE",
 		World:    s.World,
 		Player:   s.Player,
@@ -83,12 +85,12 @@ func (s *GameService) publishUpdate() {
 	s.Hub.Broadcast(response)
 }
 
-func (s *GameService) GetState() *domain.ServerResponse {
-	currentLogs := make([]domain.LogEntry, len(s.Logs))
+func (s *GameService) GetState() *api.ServerResponse {
+	currentLogs := make([]api.LogEntry, len(s.Logs))
 	copy(currentLogs, s.Logs)
-	s.Logs = []domain.LogEntry{}
+	s.Logs = []api.LogEntry{}
 
-	return &domain.ServerResponse{
+	return &api.ServerResponse{
 		Type:     "UPDATE",
 		World:    s.World,
 		Player:   s.Player,
@@ -157,11 +159,11 @@ func (s *GameService) publishTurn(activeID string) {
 
 func (s *GameService) publishUpdateWithActive(activeID string) {
 	// Копирование логов...
-	currentLogs := make([]domain.LogEntry, len(s.Logs))
+	currentLogs := make([]api.LogEntry, len(s.Logs))
 	copy(currentLogs, s.Logs)
-	s.Logs = []domain.LogEntry{}
+	s.Logs = []api.LogEntry{}
 
-	response := domain.ServerResponse{
+	response := api.ServerResponse{
 		Type:           "UPDATE",
 		World:          s.World,
 		Player:         s.Player,
@@ -172,19 +174,19 @@ func (s *GameService) publishUpdateWithActive(activeID string) {
 	s.Hub.Broadcast(response)
 }
 
-func (s *GameService) executeCommand(cmd domain.ClientCommand, actor *domain.Entity) {
+func (s *GameService) executeCommand(cmd api.ClientCommand, actor *domain.Entity) {
 	switch cmd.Action {
 	case "INIT":
 		s.AddLog("Добро пожаловать в Cognitive Dungeon.", "INFO")
 
 	case "MOVE":
-		var p domain.DirectionPayload
+		var p api.DirectionPayload
 		if err := json.Unmarshal(cmd.Payload, &p); err == nil {
 			s.handleMove(actor, p.Dx, p.Dy)
 		}
 
 	case "ATTACK":
-		var p domain.EntityPayload
+		var p api.EntityPayload
 		if err := json.Unmarshal(cmd.Payload, &p); err == nil {
 			s.handleAttack(actor, p.TargetID)
 		}
@@ -198,7 +200,7 @@ func (s *GameService) executeCommand(cmd domain.ClientCommand, actor *domain.Ent
 		}
 
 	case "TALK":
-		var p domain.EntityPayload
+		var p api.EntityPayload
 		// Если payload пустой (крик в пустоту)
 		if err := json.Unmarshal(cmd.Payload, &p); err == nil && p.TargetID != "" {
 			// TODO: s.handleTalk(actor, p.TargetID) В будущем
@@ -287,7 +289,7 @@ func (s *GameService) handleAttack(actor *domain.Entity, targetID string) {
 }
 
 func (s *GameService) AddLog(text, logType string) {
-	s.Logs = append(s.Logs, domain.LogEntry{
+	s.Logs = append(s.Logs, api.LogEntry{
 		ID:        fmt.Sprintf("%d", time.Now().UnixNano()),
 		Text:      text,
 		Type:      logType,

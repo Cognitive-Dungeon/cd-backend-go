@@ -1,33 +1,33 @@
-package core
+package network
 
 import (
-	"cognitive-server/internal/domain"
+	"cognitive-server/pkg/api"
 	"sync"
 )
 
 // Broadcaster занимается только рассылкой сообщений подписчикам
 type Broadcaster struct {
 	mu          sync.RWMutex
-	subscribers map[chan domain.ServerResponse]bool
+	subscribers map[chan api.ServerResponse]bool
 }
 
 func NewBroadcaster() *Broadcaster {
 	return &Broadcaster{
-		subscribers: make(map[chan domain.ServerResponse]bool),
+		subscribers: make(map[chan api.ServerResponse]bool),
 	}
 }
 
 // Subscribe создает канал для нового клиента
-func (b *Broadcaster) Subscribe() chan domain.ServerResponse {
+func (b *Broadcaster) Subscribe() chan api.ServerResponse {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	ch := make(chan domain.ServerResponse, 100)
+	ch := make(chan api.ServerResponse, 100)
 	b.subscribers[ch] = true
 	return ch
 }
 
 // Unsubscribe удаляет клиента
-func (b *Broadcaster) Unsubscribe(ch chan domain.ServerResponse) {
+func (b *Broadcaster) Unsubscribe(ch chan api.ServerResponse) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if _, ok := b.subscribers[ch]; ok {
@@ -37,7 +37,7 @@ func (b *Broadcaster) Unsubscribe(ch chan domain.ServerResponse) {
 }
 
 // Broadcast отправляет сообщение всем
-func (b *Broadcaster) Broadcast(msg domain.ServerResponse) {
+func (b *Broadcaster) Broadcast(msg api.ServerResponse) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	for ch := range b.subscribers {

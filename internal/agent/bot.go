@@ -1,9 +1,10 @@
 package agent
 
 import (
-	"cognitive-server/internal/core"
 	"cognitive-server/internal/domain"
+	"cognitive-server/internal/engine"
 	"cognitive-server/internal/systems"
+	"cognitive-server/pkg/api"
 	"encoding/json"
 	"time"
 )
@@ -11,11 +12,11 @@ import (
 // Bot представляет собой "Игрока-компьютера"
 type Bot struct {
 	EntityID string
-	Service  *core.GameService // Ссылка на движок (вместо WebSocket соединения)
-	Inbox    chan domain.ServerResponse
+	Service  *engine.GameService // Ссылка на движок (вместо WebSocket соединения)
+	Inbox    chan api.ServerResponse
 }
 
-func NewBot(entityID string, service *core.GameService) *Bot {
+func NewBot(entityID string, service *engine.GameService) *Bot {
 	return &Bot{
 		EntityID: entityID,
 		Service:  service,
@@ -38,7 +39,7 @@ func (b *Bot) Run() {
 	}
 }
 
-func (b *Bot) makeMove(state domain.ServerResponse) {
+func (b *Bot) makeMove(state api.ServerResponse) {
 	var me *domain.Entity
 
 	// 1. Ищем себя в списке сущностей
@@ -87,8 +88,8 @@ func (b *Bot) makeMove(state domain.ServerResponse) {
 }
 
 func (b *Bot) sendMove(dx, dy int) {
-	payload, _ := json.Marshal(domain.DirectionPayload{Dx: dx, Dy: dy})
-	cmd := domain.ClientCommand{
+	payload, _ := json.Marshal(api.DirectionPayload{Dx: dx, Dy: dy})
+	cmd := api.ClientCommand{
 		Action:  "MOVE",
 		Payload: payload,
 		Token:   b.EntityID, // Важно: сообщаем движку, кто мы
@@ -97,9 +98,9 @@ func (b *Bot) sendMove(dx, dy int) {
 }
 
 func (b *Bot) sendAttack(targetID string) {
-	payload, _ := json.Marshal(domain.EntityPayload{TargetID: targetID})
+	payload, _ := json.Marshal(api.EntityPayload{TargetID: targetID})
 
-	cmd := domain.ClientCommand{
+	cmd := api.ClientCommand{
 		Action:  "ATTACK",
 		Payload: payload,
 		Token:   b.EntityID,
@@ -108,7 +109,7 @@ func (b *Bot) sendAttack(targetID string) {
 }
 
 func (b *Bot) sendWait() {
-	cmd := domain.ClientCommand{
+	cmd := api.ClientCommand{
 		Action: "WAIT",
 		Token:  b.EntityID,
 	}

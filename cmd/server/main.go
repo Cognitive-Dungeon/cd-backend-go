@@ -2,8 +2,9 @@ package main
 
 import (
 	"cognitive-server/internal/agent"
-	"cognitive-server/internal/core"
 	"cognitive-server/internal/domain"
+	"cognitive-server/internal/engine"
+	"cognitive-server/pkg/api"
 	"log"
 	"net/http"
 	"os"
@@ -17,7 +18,7 @@ var upgrader = websocket.Upgrader{
 }
 
 // Инициализируем игровой сервис (Арбитр)
-var gameInstance = core.NewService()
+var gameInstance = engine.NewService()
 
 func wsHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
@@ -36,7 +37,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	// 2. Инициализация
 	// Это сообщение уйдет в движок, он сгенерирует ответ и
 	// пришлет его обратно в clientChan через broadcast.
-	gameInstance.ProcessCommand(domain.ClientCommand{Action: "INIT"})
+	gameInstance.ProcessCommand(api.ClientCommand{Action: "INIT"})
 
 	// 3. Запуск писателя (Server -> Client)
 	go func() {
@@ -50,7 +51,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 4. Запуск читателя (Client -> Server)
 	for {
-		var cmd domain.ClientCommand
+		var cmd api.ClientCommand
 		err := conn.ReadJSON(&cmd)
 		if err != nil {
 			log.Println("Read error / Disconnect:", err)
