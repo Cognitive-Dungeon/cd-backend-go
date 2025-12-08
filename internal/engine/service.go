@@ -13,14 +13,19 @@ import (
 	"time"
 )
 
+// Определение типа функции-обработчика
+type CommandHandler func(service *GameService, actor *domain.Entity, payload json.RawMessage)
+
 type GameService struct {
 	World    *domain.GameWorld
 	Player   *domain.Entity
 	Entities []domain.Entity
 	Logs     []api.LogEntry
 
-	CommandChan chan api.ClientCommand
+	CommandChan chan domain.InternalCommand
 	Hub         *network.Broadcaster
+
+	handlers map[domain.ActionType]CommandHandler
 }
 
 func NewService() *GameService {
@@ -45,23 +50,50 @@ func NewService() *GameService {
 		},
 	}
 
-	return &GameService{
+	s := &GameService{
 		World:       world,
 		Player:      player,
 		Entities:    entities,
 		Logs:        []api.LogEntry{},
-		CommandChan: make(chan api.ClientCommand, 100),
+		CommandChan: make(chan domain.InternalCommand, 100),
 		Hub:         network.NewBroadcaster(),
+		handlers:    make(map[domain.ActionType]CommandHandler),
 	}
+	s.registerHandlers()
+	return s
+}
+
+// registerHandlers заполняет карту функций
+func (s *GameService) registerHandlers() {
+	s.handlers[domain.ActionInit] = handleInit
+	s.handlers[domain.ActionMove] = handleMoveCmd
+	s.handlers[domain.ActionAttack] = handleAttackCmd
+	s.handlers[domain.ActionWait] = handleWaitCmd
+	s.handlers[domain.ActionTalk] = handleTalkCmd
 }
 
 func (s *GameService) Start() {
 	go s.RunGameLoop()
 }
 
-func (s *GameService) ProcessCommand(cmd api.ClientCommand) {
+// ProcessCommand - это "Шлюз" (Gateway).
+// Он принимает грязный внешний JSON (api.ClientCommand) и превращает в чистый InternalCommand.
+func (s *GameService) ProcessCommand(externalCmd api.ClientCommand) {
+	actionType := domain.ParseAction(externalCmd.Action)
+
+	if actionType == domain.ActionUnknown {
+		log.Printf("[WARN] Unknown action received: %s", externalCmd.Action)
+		return
+	}
+
+	internalCmd := domain.InternalCommand{
+		Action:  actionType,
+		Token:   externalCmd.Token,
+		Payload: externalCmd.Payload,
+	}
+
 	select {
-	case s.CommandChan <- cmd:
+	case s.CommandChan <- internalCmd:
 	default:
 		log.Println("[WARN] Command queue full")
 	}
@@ -128,15 +160,16 @@ func (s *GameService) RunGameLoop() {
 				}
 
 				// Если команда от того, чей сейчас ход (или системная INIT)
-				if senderID == activeActor.ID || cmd.Action == "INIT" {
-					if cmd.Action == "INIT" {
-						s.executeCommand(cmd, s.Player) // INIT всегда от игрока пока
+				if senderID == activeActor.ID || cmd.Action == domain.ActionInit {
+					if cmd.Action == domain.ActionInit {
+						// INIT обрабатываем от имени игрока
+						s.executeCommand(cmd, s.Player)
 					} else {
 						s.executeCommand(cmd, activeActor)
-						commandProcessed = true // Выходим из ожидания, переходим к следующему
+						commandProcessed = true
 					}
 				} else {
-					log.Printf("[ARBITER] Ignored command from %s (it is %s's turn)", senderID, activeActor.Name)
+					log.Printf("[ARBITER] Ignored command from %s (current turn: %s)", senderID, activeActor.Name)
 				}
 
 			case <-timeout:
@@ -174,40 +207,52 @@ func (s *GameService) publishUpdateWithActive(activeID string) {
 	s.Hub.Broadcast(response)
 }
 
-func (s *GameService) executeCommand(cmd api.ClientCommand, actor *domain.Entity) {
-	switch cmd.Action {
-	case "INIT":
-		s.AddLog("Добро пожаловать в Cognitive Dungeon.", "INFO")
+func (s *GameService) executeCommand(cmd domain.InternalCommand, actor *domain.Entity) {
+	handler, ok := s.handlers[cmd.Action]
+	if !ok {
+		log.Printf("[ERROR] No handler registered for action type: %v", cmd.Action)
+		return
+	}
 
-	case "MOVE":
-		var p api.DirectionPayload
-		if err := json.Unmarshal(cmd.Payload, &p); err == nil {
-			s.handleMove(actor, p.Dx, p.Dy)
-		}
+	// Вызов функции-обработчика
+	handler(s, actor, cmd.Payload)
+}
 
-	case "ATTACK":
-		var p api.EntityPayload
-		if err := json.Unmarshal(cmd.Payload, &p); err == nil {
-			s.handleAttack(actor, p.TargetID)
-		}
+// --- ФУНКЦИИ-ОБРАБОТЧИКИ (Бывший switch case) ---
 
-	case "WAIT":
-		if actor.Type == domain.EntityTypePlayer {
-			s.AddLog(fmt.Sprintf("%s пропускает ход.", actor.Name), "INFO")
-		}
-		if actor.AI != nil {
-			actor.AI.Wait(domain.TimeCostWait)
-		}
+func handleInit(s *GameService, actor *domain.Entity, _ json.RawMessage) {
+	s.AddLog("Добро пожаловать в Cognitive Dungeon.", "INFO")
+}
 
-	case "TALK":
-		var p api.EntityPayload
-		// Если payload пустой (крик в пустоту)
-		if err := json.Unmarshal(cmd.Payload, &p); err == nil && p.TargetID != "" {
-			// TODO: s.handleTalk(actor, p.TargetID) В будущем
-			s.AddLog(fmt.Sprintf("Вы говорите с %s", p.TargetID), "SPEECH")
-		} else {
-			s.AddLog("Вы бормочете в пустоту.", "SPEECH")
-		}
+func handleMoveCmd(s *GameService, actor *domain.Entity, payload json.RawMessage) {
+	var p api.DirectionPayload
+	if err := json.Unmarshal(payload, &p); err == nil {
+		s.handleMove(actor, p.Dx, p.Dy)
+	}
+}
+
+func handleAttackCmd(s *GameService, actor *domain.Entity, payload json.RawMessage) {
+	var p api.EntityPayload
+	if err := json.Unmarshal(payload, &p); err == nil {
+		s.handleAttack(actor, p.TargetID)
+	}
+}
+
+func handleWaitCmd(s *GameService, actor *domain.Entity, _ json.RawMessage) {
+	if actor.Type == domain.EntityTypePlayer {
+		s.AddLog(fmt.Sprintf("%s пропускает ход.", actor.Name), "INFO")
+	}
+	if actor.AI != nil {
+		actor.AI.Wait(domain.TimeCostWait)
+	}
+}
+
+func handleTalkCmd(s *GameService, actor *domain.Entity, payload json.RawMessage) {
+	var p api.EntityPayload
+	if err := json.Unmarshal(payload, &p); err == nil && p.TargetID != "" {
+		s.AddLog(fmt.Sprintf("Вы говорите с %s", p.TargetID), "SPEECH")
+	} else {
+		s.AddLog("Вы бормочете в пустоту.", "SPEECH")
 	}
 }
 
