@@ -121,6 +121,13 @@ func (s *GameService) RunGameLoop() {
 	log.Println("[LOOP] Game Loop started")
 
 	for {
+		// Если в хабе нет ни одного подписчика (ни игроков, ни ботов),
+		// ставим симуляцию на паузу, чтобы не тратить ресурсы и не "прокручивать" время.
+		if s.Hub.SubscriberCount() == 0 {
+			time.Sleep(100 * time.Millisecond) // Небольшая задержка, чтобы не загружать CPU
+			continue
+		}
+
 		// 1. Кто ходит следующим?
 		activeActor := s.getNextActor()
 
@@ -129,6 +136,8 @@ func (s *GameService) RunGameLoop() {
 			time.Sleep(1 * time.Second)
 			continue
 		}
+
+		log.Printf("[LOOP] Next actor: %s (%s) | NextActionTick: %d", activeActor.Name, activeActor.ID, activeActor.AI.NextActionTick)
 
 		// Обновляем глобальное время
 		s.World.GlobalTick = activeActor.AI.NextActionTick

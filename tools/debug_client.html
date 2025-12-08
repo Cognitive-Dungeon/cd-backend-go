@@ -2,79 +2,47 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Cognitive Debugger v6 (Agent)</title>
+    <title>Cognitive Debugger v7 (Agent)</title>
     <style>
         :root {
-            --bg: #0d1117;
-            --panel: #161b22;
-            --border: #30363d;
-            --text: #c9d1d9;
-            --accent: #58a6ff;
-            --danger: #da3633;
-            --success: #238636;
-            --warning: #d29922;
+            --bg: #0d1117; --panel: #161b22; --border: #30363d; --text: #c9d1d9;
+            --accent: #58a6ff; --danger: #da3633; --success: #238636; --warning: #d29922;
         }
         body {
-            background: var(--bg); color: var(--text);
-            font-family: 'Consolas', monospace;
-            margin: 0; padding: 0;
-            display: flex; height: 100vh; overflow: hidden;
+            background: var(--bg); color: var(--text); font-family: 'Consolas', monospace;
+            margin: 0; padding: 0; display: flex; height: 100vh; overflow: hidden;
         }
-
-        /* Login Overlay */
         #login-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(13, 17, 23, 0.95);
-            z-index: 9999;
-            display: flex; flex-direction: column;
-            justify-content: center; align-items: center;
+            background: rgba(13, 17, 23, 0.95); z-index: 9999;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
         }
         #login-box {
             background: var(--panel); border: 1px solid var(--border);
-            padding: 30px; border-radius: 8px; text-align: center;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            padding: 30px; border-radius: 8px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
         input[type="text"] {
-            background: #0d1117; border: 1px solid #30363d; color: white;
-            padding: 10px; font-size: 16px; width: 200px; margin-bottom: 10px;
-            border-radius: 4px;
+            background: #0d1117; border: 1px solid #30363d; color: white; padding: 10px;
+            font-size: 16px; width: 200px; margin-bottom: 10px; border-radius: 4px;
         }
         .btn-login {
-            background: var(--success); color: white; border: none;
-            padding: 10px 20px; font-size: 16px; cursor: pointer; border-radius: 4px;
-            font-weight: bold; width: 100%;
+            background: var(--success); color: white; border: none; padding: 10px 20px;
+            font-size: 16px; cursor: pointer; border-radius: 4px; font-weight: bold; width: 100%;
         }
         .btn-login:hover { background: #2ea043; }
-
-        /* Main Layout */
-        .container {
-            display: flex; gap: 20px; padding: 20px; width: 100%; height: 100%; box-sizing: border-box;
-        }
-        .panel {
-            background: var(--panel); border: 1px solid var(--border);
-            border-radius: 6px; padding: 15px; display: flex; flex-direction: column;
-        }
+        .container { display: flex; gap: 20px; padding: 20px; width: 100%; height: 100%; box-sizing: border-box; }
+        .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 15px; display: flex; flex-direction: column; }
         #left-panel { flex: 0 0 auto; overflow: hidden; }
-        #right-panel { flex: 1; min-width: 300px; gap: 10px; overflow: hidden; }
-
-        /* Map */
-        #map-wrapper {
-            position: relative; border: 2px solid #000;
-            display: inline-block; background: #000; margin-top: 10px;
-            overflow: auto; max-height: 80vh;
-        }
+        #right-panel { flex: 1; min-width: 400px; gap: 15px; overflow: hidden; }
+        .panel-header { font-size: 12px; font-weight: bold; margin-bottom: 10px; color: #8b949e; text-transform: uppercase; }
+        #map-wrapper { position: relative; border: 2px solid #000; display: inline-block; background: #000; margin-top: 10px; overflow: auto; max-height: 80vh; }
         #game-map { display: grid; }
-
         .tile {
-            width: 20px; height: 20px;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 16px; cursor: crosshair; user-select: none;
-            color: #222; background: #000;
+            width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;
+            font-size: 16px; cursor: crosshair; user-select: none; color: #222; background: #000;
         }
         .tile.visible { font-weight: bold; }
         .tile.explored { opacity: 0.5; }
-
-        /* Entities */
         .entity { z-index: 10; cursor: pointer; font-weight: bold; text-shadow: 0 0 2px #000; }
         .player { text-shadow: 0 0 5px var(--accent); }
         .enemy { text-shadow: 0 0 5px var(--danger); }
@@ -84,31 +52,18 @@
             box-shadow: inset 0 0 0 2px var(--accent);
             background: rgba(88, 166, 255, 0.2) !important;
         }
-
-        /* Inspector */
-        .inspector-box {
-            background: #0d1117; border: 1px solid var(--border);
-            padding: 10px; font-size: 11px; overflow: auto;
-            height: 150px; flex-shrink: 0; color: var(--accent);
+        #inspector-content {
+            background: #0d1117; border: 1px solid var(--border); padding: 10px;
+            font-size: 11px; overflow: auto; height: 180px; flex-shrink: 0; color: var(--accent);
         }
-
-        /* Logs */
-        #logs {
-            flex: 1; overflow-y: auto; background: #050505;
-            border: 1px solid var(--border); padding: 8px; font-size: 12px;
-        }
+        #logs { flex: 1; overflow-y: auto; background: #050505; border: 1px solid var(--border); padding: 8px; font-size: 12px; }
         .log-line { margin-bottom: 4px; border-bottom: 1px solid #1a1a1a; padding-bottom: 2px; }
-        .t-COMBAT { color: var(--danger); }
-        .t-INFO { color: #8b949e; }
-        .t-SPEECH { color: var(--warning); font-style: italic; }
-        .t-ERROR { color: #ff0000; font-weight: bold; }
-
-        /* HUD & Controls */
+        .t-COMBAT { color: var(--danger); } .t-INFO { color: #8b949e; }
+        .t-SPEECH { color: var(--warning); font-style: italic; } .t-ERROR { color: #ff0000; font-weight: bold; }
         #hud { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; }
-        .stat-label { color: #777; }
-        .active-turn { border: 1px solid var(--success); box-shadow: 0 0 15px rgba(35, 134, 54, 0.2); }
-
-        .control-group { display: flex; gap: 10px; margin-bottom: 10px; }
+        .stat-label { color: #8b949e; }
+        .active-turn { border: 1px solid var(--success); box-shadow: 0 0 15px rgba(35, 134, 54, 0.5); }
+        .control-group { display: flex; gap: 10px; }
         .d-pad { display: grid; grid-template-columns: repeat(3, 40px); gap: 5px; }
         button {
             background: #21262d; color: var(--text); border: 1px solid var(--border);
@@ -121,7 +76,6 @@
 </head>
 <body>
 
-<!-- Login Overlay -->
 <div id="login-overlay">
     <div id="login-box">
         <h2 style="margin-top:0">Cognitive Debugger</h2>
@@ -133,53 +87,78 @@
 </div>
 
 <div class="container">
-    <!-- Left Panel: Map & Status -->
     <div id="left-panel" class="panel">
         <div id="hud">
             <div><span class="stat-label">Tick:</span> <span id="tick">0</span></div>
-            <div><span class="stat-label">Me:</span> <span id="my-id-display">...</span></div>
+            <div><span class="stat-label">Agent:</span> <span id="my-id-display">...</span></div>
         </div>
-
         <div id="map-wrapper">
             <div id="game-map"></div>
         </div>
-        <div id="target-info" style="margin-top: 5px; font-size: 12px; color: #777;">Click map to select...</div>
+        <div id="target-info" style="margin-top: 10px; font-size: 12px; color: #777; height: 1em;">Click map to select...</div>
     </div>
 
-    <!-- Right Panel: Controls, Inspector, Logs -->
     <div id="right-panel" class="panel">
-        <!-- Inspector -->
-        <div style="font-size:12px; font-weight:bold; margin-bottom:5px">Entity Inspector</div>
-        <pre id="inspector-content" class="inspector-box">Select an entity to view live state...</pre>
-
-        <!-- Controls -->
-        <div class="control-group">
-            <div class="d-pad">
-                <div></div><button onclick="sendDir(0, -1)">W</button><div></div>
-                <button onclick="sendDir(-1, 0)">A</button><button onclick="sendWait()">Wait</button><button onclick="sendDir(1, 0)">D</button>
-                <div></div><button onclick="sendDir(0, 1)">S</button><div></div>
-            </div>
-            <div class="action-column">
-                <button style="color:var(--danger)" onclick="sendAction('ATTACK')">⚔️ ATTACK TARGET</button>
-                <button style="color:var(--warning)" onclick="sendAction('TALK')">💬 TALK</button>
-                <button onclick="sendAction('INIT')">🔄 RESYNC / INIT</button>
+        <div>
+            <div class="panel-header">Controls</div>
+            <div class="control-group">
+                <div class="d-pad">
+                    <div></div><button onclick="sendDir(0, -1)">W</button><div></div>
+                    <button onclick="sendDir(-1, 0)">A</button><button onclick="sendWait()">Wait</button><button onclick="sendDir(1, 0)">D</button>
+                    <div></div><button onclick="sendDir(0, 1)">S</button><div></div>
+                </div>
+                <div class="action-column">
+                    <button style="color:var(--danger)" onclick="sendAction('ATTACK')">⚔️ ATTACK TARGET</button>
+                    <button style="color:var(--warning)" onclick="sendAction('TALK')">💬 TALK TO TARGET</button>
+                    <button onclick="sendAction('INIT')">🔄 RESYNC STATE</button>
+                </div>
             </div>
         </div>
 
-        <!-- Logs -->
-        <div id="logs">Logs will appear here...</div>
+        <div>
+            <div class="panel-header">Entity Inspector</div>
+            <pre id="inspector-content" class="inspector-box">Select an entity on the map to view its live state...</pre>
+        </div>
+
+        <div style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
+            <div class="panel-header">Game Logs</div>
+            <div id="logs">Logs will appear here...</div>
+        </div>
     </div>
 </div>
 
 <script>
+    // This is a simple vanilla JS client, but its logic mirrors React's flow.
+    //
+    // 1. STATE MANAGEMENT:
+    //    - `myId`, `selectedTarget`, `entitiesCache` are our component's "state".
+    //    - We store the last known list of entities in `entitiesCache` to be able to
+    //      inspect them even between server updates.
+    //
+    // 2. API COMMUNICATION (like `useEffect` with a fetch):
+    //    - The `ws.onmessage` is the entry point for new data from the server.
+    //    - When a message arrives, it calls `handleUpdate(msg)`, passing the data
+    //      down as "props".
+    //
+    // 3. RENDERING (like a `render()` function):
+    //    - `handleUpdate` is the main "re-render" function.
+    //    - It takes the new data and calls specialized functions (`renderTiles`, `drawEntities`)
+    //      to update the DOM. This is like React updating the virtual DOM and then
+    //      patching the real DOM based on what changed.
+    //
+    // 4. USER EVENTS (like `onClick`):
+    //    - Functions like `sendDir()`, `sendAction()`, and `selectTile()` handle user
+    //      input. They either modify local state (`selectTile` updates `selectedTarget`)
+    //      or send commands to the server (`sendDir`).
+
     let ws;
+    // --- STATE ---
     let myId = "";
     let selectedTarget = null;
+    let entitiesCache = []; // Cache of all entities from the last update
     let gridInitialized = false;
 
-    // Cache for state
-    let entitiesCache = [];
-
+    // --- DOM ELEMENT CACHE ---
     const mapEl = document.getElementById("game-map");
     const logsEl = document.getElementById("logs");
     const inspectorEl = document.getElementById("inspector-content");
@@ -189,34 +168,27 @@
         const token = document.getElementById("login-token").value.trim();
         if (!token) return alert("Please enter an Entity ID");
 
-        // 1. Open WS
         ws = new WebSocket("ws://localhost:8080/ws");
 
         ws.onopen = () => {
-            console.log("WS Open");
-            // 2. Send Handshake / Login
-            ws.send(JSON.stringify({
-                action: "LOGIN",
-                token: token,
-                payload: {}
-            }));
-
-            // Hide overlay
+            // First message after connect is always the LOGIN handshake
+            ws.send(JSON.stringify({ action: "LOGIN", token: token }));
             document.getElementById("login-overlay").style.display = "none";
-            document.getElementById("logs").innerHTML = "<div style='color:green'>Connected as " + token + "</div>";
+            logsEl.innerHTML = `<div style='color:var(--success)'>Connected. Attempting to possess '${token}'...</div>`;
         };
 
         ws.onclose = () => {
             document.getElementById("login-overlay").style.display = "flex";
-            document.getElementById("logs").innerHTML += "<div style='color:red'>Disconnected</div>";
+            logsEl.innerHTML += "<div style='color:var(--danger)'>Connection Closed.</div>";
             gridInitialized = false;
         };
 
         ws.onerror = (err) => {
             console.error("WS Error", err);
-            alert("Connection error. Check console.");
+            alert("Connection error. Is the Go server running? Check console.");
         };
 
+        // This is the main listener for data from the server
         ws.onmessage = (evt) => {
             const msg = JSON.parse(evt.data);
 
@@ -226,47 +198,41 @@
                 return;
             }
 
-            if (msg.type === "UPDATE" || msg.type === "INIT") {
+            if (msg.type === "UPDATE") {
                 handleUpdate(msg);
             }
         };
     }
 
+    // Main "render" function, called on every server update.
     function handleUpdate(msg) {
-        // 1. Identity
         if (msg.myEntityId) {
             myId = msg.myEntityId;
             document.getElementById("my-id-display").innerText = myId;
         }
 
-        // 2. Grid Setup (First time)
         if (msg.grid && !gridInitialized) {
             initGrid(msg.grid.w, msg.grid.h);
         }
 
-        // 3. Render Map
         if (msg.map) {
             renderTiles(msg.map);
         }
 
-        // 4. Render Entities
         if (msg.entities) {
-            entitiesCache = msg.entities;
-            drawEntities(msg.entities);
-            updateInspector(); // Refresh inspector data if target selected
+            entitiesCache = msg.entities; // Update state cache
+            drawEntities(entitiesCache);
+            updateInspector(); // Refresh inspector if target is still visible
         }
 
-        // 5. Logs
         if (msg.logs) {
             renderLogs(msg.logs);
         }
 
-        // 6. Global Info
         if (msg.tick !== undefined) {
             document.getElementById("tick").innerText = msg.tick;
         }
 
-        // Turn Indication
         const leftPanel = document.getElementById("left-panel");
         if (msg.activeEntityId === myId) {
             leftPanel.classList.add("active-turn");
@@ -275,13 +241,11 @@
         }
     }
 
-    // --- Rendering ---
+    // --- Rendering Sub-routines ---
 
     function initGrid(w, h) {
         mapEl.innerHTML = '';
         mapEl.style.gridTemplateColumns = `repeat(${w}, 20px)`;
-        // mapEl.style.gridTemplateRows = `repeat(${h}, 20px)`;
-
         for(let y=0; y<h; y++) {
             for(let x=0; x<w; x++) {
                 const div = document.createElement("div");
@@ -301,86 +265,67 @@
 
             el.innerText = t.symbol;
             el.style.color = t.color;
-
-            // Reset classes
-            el.className = "tile";
+            el.className = "tile"; // Reset classes
             if (t.isVisible) el.classList.add("visible");
             else if (t.isExplored) el.classList.add("explored");
         });
     }
 
     function drawEntities(entities) {
-        // First, clean up OLD entity classes from the grid
-        // (A bit brute force, but safe for debug client)
         document.querySelectorAll('.entity').forEach(el => {
             el.classList.remove('entity', 'player', 'enemy', 'npc', 'corpse', 'selected');
-            // Revert to map tile symbol/color if we saved it?
-            // Simplified: The map loop usually runs with entities, or entities are drawn on top.
-            // In this version, we don't clear innerText, we overwrite it below.
-            // If an entity moves, the map update usually restores the floor tile.
         });
 
         entities.forEach(e => {
             const el = document.getElementById(`c-${e.pos.x}-${e.pos.y}`);
             if (!el) return;
 
-            // Visuals
-            if (e.render) {
-                el.innerText = e.render.symbol;
-                el.style.color = e.render.color;
-            } else {
-                el.innerText = "?";
-            }
-
+            el.innerText = e.render?.symbol || "?";
+            el.style.color = e.render?.color || "#fff";
             el.classList.add("entity");
 
-            // Type Styles
             if (e.id === myId) el.classList.add("player");
             else if (e.type === "ENEMY") el.classList.add("enemy");
             else if (e.type === "NPC") el.classList.add("npc");
 
-            // Status
-            if (e.stats && e.stats.isDead) {
+            if (e.stats?.isDead) {
                 el.classList.add("corpse");
                 el.classList.remove("enemy", "npc");
             }
 
-            // Selection
             if (e.id === selectedTarget) {
                 el.classList.add("selected");
             }
         });
     }
 
+    // --- User Actions & State Updates ---
+
     function selectTile(x, y) {
-        // Find entity at x,y (prefer living ones, exclude self if needed, or include self)
         const ent = entitiesCache.find(e => e.pos.x === x && e.pos.y === y);
+        selectedTarget = ent ? ent.id : null;
 
         if (ent) {
-            selectedTarget = ent.id;
-            targetLabel.innerText = `${ent.name} [${ent.id}]`;
+            targetLabel.innerText = `Target: ${ent.name} [${ent.id}]`;
             targetLabel.style.color = "#fff";
         } else {
-            selectedTarget = null;
-            targetLabel.innerText = `Tile ${x},${y} (Empty)`;
+            targetLabel.innerText = "Target: None";
             targetLabel.style.color = "#777";
         }
-
-        // Redraw to update selection ring
-        drawEntities(entitiesCache);
+        drawEntities(entitiesCache); // Redraw to show selection highlight
         updateInspector();
     }
 
     function updateInspector() {
         if (!selectedTarget) {
-            inspectorEl.innerText = "Select an entity...";
+            inspectorEl.innerText = "Select an entity on the map...";
             return;
         }
         const ent = entitiesCache.find(e => e.id === selectedTarget);
         if (ent) {
             inspectorEl.innerText = JSON.stringify(ent, null, 2);
         } else {
-            inspectorEl.innerText = "Entity lost from view.";
+            inspectorEl.innerText = `Entity ${selectedTarget} lost from view.`;
         }
     }
 
@@ -388,64 +333,52 @@
         logs.forEach(l => {
             const row = document.createElement("div");
             row.className = `log-line t-${l.type}`;
-            const time = new Date(l.timestamp).toLocaleTimeString([], {hour12:false, hour:"2-digit", minute:"2-digit", second:"2-digit"});
-            row.innerText = `[${time}] ${l.text}`;
+            const time = new Date(l.timestamp).toLocaleTimeString([], {hour12: false});
+            row.innerHTML = `<span style="color:#555">[${time}]</span> ${l.text}`;
             logsEl.appendChild(row);
         });
         logsEl.scrollTop = logsEl.scrollHeight;
     }
 
-    // --- Controls ---
+    // --- Command Senders ---
 
-    function sendDir(dx, dy) {
-        if(!ws) return;
-        ws.send(JSON.stringify({
-            action: "MOVE",
-            token: myId, // Server enforces session, but we send for completeness
-            payload: { dx, dy }
-        }));
+    function sendCommand(action, payload = {}) {
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            console.error("WebSocket is not connected.");
+            return;
+        }
+        ws.send(JSON.stringify({ action, payload }));
     }
 
-    function sendWait() {
-        if(!ws) return;
-        ws.send(JSON.stringify({
-            action: "WAIT",
-            token: myId,
-            payload: {}
-        }));
-    }
-
+    function sendDir(dx, dy) { sendCommand("MOVE", { dx, dy }); }
+    function sendWait() { sendCommand("WAIT"); }
     function sendAction(action) {
-        if(!ws) return;
         if (action === 'INIT') {
-            ws.send(JSON.stringify({ action: "INIT", token: myId, payload: {} }));
+            sendCommand("INIT");
             return;
         }
         if (!selectedTarget) {
             alert("Select a target on the map first!");
             return;
         }
-        ws.send(JSON.stringify({
-            action: action,
-            token: myId,
-            payload: { targetId: selectedTarget }
-        }));
+        sendCommand(action, { targetId: selectedTarget });
     }
 
-    // Keys
+    // Keyboard shortcuts
     document.addEventListener("keydown", (e) => {
-        if (e.target.tagName === "INPUT") return;
-        if (!ws) return;
+        if (e.target.tagName === "INPUT" || !myId) return;
 
+        let actionTaken = true;
         switch(e.key.toLowerCase()) {
-            case "w": sendDir(0, -1); break;
-            case "s": sendDir(0, 1); break;
-            case "a": sendDir(-1, 0); break;
-            case "d": sendDir(1, 0); break;
-            case " ": sendWait(); break;
+            case "w": case "arrowup": sendDir(0, -1); break;
+            case "s": case "arrowdown": sendDir(0, 1); break;
+            case "a": case "arrowleft": sendDir(-1, 0); break;
+            case "d": case "arrowright": sendDir(1, 0); break;
+            case " ": case "wait": sendWait(); break;
+            default: actionTaken = false; break;
         }
+        if(actionTaken) e.preventDefault();
     });
-
 </script>
 
 </body>

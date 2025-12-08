@@ -79,3 +79,10 @@ func (b *Broadcaster) HasSubscriber(entityID string) bool {
 	_, ok := b.subscribers[entityID]
 	return ok
 }
+
+// SubscriberCount возвращает количество активных подписчиков.
+func (b *Broadcaster) SubscriberCount() int {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return len(b.subscribers)
+}
