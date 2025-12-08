@@ -7,7 +7,7 @@ import (
 
 // ComputeNPCAction решает, что делать NPC.
 // Возвращает (команда, цель_атаки_если_есть, dx, dy)
-func ComputeNPCAction(npc *domain.Entity, player *domain.Entity, w *domain.GameWorld, ents []domain.Entity) (action domain.ActionType, target *domain.Entity, dx, dy int) {
+func ComputeNPCAction(npc *domain.Entity, player *domain.Entity, w *domain.GameWorld, ents []*domain.Entity) (action domain.ActionType, target *domain.Entity, dx, dy int) {
 	// 1. Проверка наличия компонентов
 	// Если нет мозгов (AI) или тела (Stats) - ничего не делаем
 	if npc.AI == nil || npc.Stats == nil {
@@ -40,7 +40,7 @@ func ComputeNPCAction(npc *domain.Entity, player *domain.Entity, w *domain.GameW
 
 // Внутренние утилиты (приватные для пакета systems)
 
-func calculateSmartMove(npc, target *domain.Entity, w *domain.GameWorld, ents []domain.Entity) (int, int) {
+func calculateSmartMove(npc, target *domain.Entity, w *domain.GameWorld, ents []*domain.Entity) (int, int) {
 	dxRaw := target.Pos.X - npc.Pos.X
 	dyRaw := target.Pos.Y - npc.Pos.Y
 
@@ -75,7 +75,7 @@ func calculateSmartMove(npc, target *domain.Entity, w *domain.GameWorld, ents []
 	return 0, 0 // Тупик
 }
 
-func checkMove(e *domain.Entity, dx, dy int, w *domain.GameWorld, ents []domain.Entity) bool {
+func checkMove(e *domain.Entity, dx, dy int, w *domain.GameWorld, ents []*domain.Entity) bool {
 	res := CalculateMove(e, dx, dy, w, ents)
 	return res.HasMoved
 }

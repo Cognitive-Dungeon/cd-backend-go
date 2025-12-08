@@ -2,34 +2,35 @@ package engine
 
 import (
 	"cognitive-server/internal/domain"
-	"cognitive-server/internal/network"
-	"cognitive-server/internal/systems"
+	"cognitive-server/internal/engine/handlers"
+	"cognitive-server/internal/engine/handlers/actions" // Импорт конкретных реализаций
+	"cognitive-server/internal/network"                 // Хаб теперь здесь
 	"cognitive-server/pkg/api"
 	"cognitive-server/pkg/dungeon"
-	"encoding/json"
 	"fmt"
 	"log"
 	"sort"
 	"time"
 )
 
-// Определение типа функции-обработчика
-type CommandHandler func(service *GameService, actor *domain.Entity, payload json.RawMessage)
-
 type GameService struct {
 	World    *domain.GameWorld
 	Player   *domain.Entity
-	Entities []domain.Entity
+	Entities []domain.Entity // Храним по значению
 	Logs     []api.LogEntry
 
 	CommandChan chan domain.InternalCommand
 	Hub         *network.Broadcaster
 
-	handlers map[domain.ActionType]CommandHandler
+	// Реестр обработчиков: ActionType -> Функция
+	handlers map[domain.ActionType]handlers.HandlerFunc
 }
 
 func NewService() *GameService {
+	// Генерация мира
 	world, entities, startPos := dungeon.Generate(1)
+
+	// Создание игрока (ECS style)
 	player := &domain.Entity{
 		ID:   "p1",
 		Name: "Герой",
@@ -40,7 +41,6 @@ func NewService() *GameService {
 		Stats: &domain.StatsComponent{
 			HP: 100, MaxHP: 100, Stamina: 100, MaxStamina: 100, Gold: 50, Strength: 10,
 		},
-		// Игроку нужен AI компонент ТОЛЬКО для хранения тиков времени
 		AI: &domain.AIComponent{
 			NextActionTick: 0,
 			IsHostile:      false,
@@ -57,27 +57,30 @@ func NewService() *GameService {
 		Logs:        []api.LogEntry{},
 		CommandChan: make(chan domain.InternalCommand, 100),
 		Hub:         network.NewBroadcaster(),
-		handlers:    make(map[domain.ActionType]CommandHandler),
+		handlers:    make(map[domain.ActionType]handlers.HandlerFunc),
 	}
+
 	s.registerHandlers()
 	return s
 }
 
-// registerHandlers заполняет карту функций
+// registerHandlers связывает Enum действий с функциями-хендлерами
 func (s *GameService) registerHandlers() {
-	s.handlers[domain.ActionInit] = handleInit
-	s.handlers[domain.ActionMove] = handleMoveCmd
-	s.handlers[domain.ActionAttack] = handleAttackCmd
-	s.handlers[domain.ActionWait] = handleWaitCmd
-	s.handlers[domain.ActionTalk] = handleTalkCmd
+	// Команды с данными
+	s.handlers[domain.ActionMove] = handlers.WithPayload(actions.HandleMove)
+	s.handlers[domain.ActionAttack] = handlers.WithPayload(actions.HandleAttack)
+	s.handlers[domain.ActionTalk] = handlers.WithPayload(actions.HandleTalk)
+
+	// Команды без данных
+	s.handlers[domain.ActionInit] = handlers.WithEmptyPayload(actions.HandleInit)
+	s.handlers[domain.ActionWait] = handlers.WithEmptyPayload(actions.HandleWait)
 }
 
 func (s *GameService) Start() {
 	go s.RunGameLoop()
 }
 
-// ProcessCommand - это "Шлюз" (Gateway).
-// Он принимает грязный внешний JSON (api.ClientCommand) и превращает в чистый InternalCommand.
+// ProcessCommand конвертирует внешний JSON во внутреннюю команду
 func (s *GameService) ProcessCommand(externalCmd api.ClientCommand) {
 	actionType := domain.ParseAction(externalCmd.Action)
 
@@ -99,22 +102,155 @@ func (s *GameService) ProcessCommand(externalCmd api.ClientCommand) {
 	}
 }
 
-func (s *GameService) publishUpdate() {
-	// Копируем логи
+// executeCommand находит нужный хендлер и запускает его
+func (s *GameService) executeCommand(cmd domain.InternalCommand, actor *domain.Entity) {
+	handler, ok := s.handlers[cmd.Action]
+	if !ok {
+		log.Printf("[ERROR] No handler registered for action type: %v", cmd.Action)
+		return
+	}
+
+	// 1. Собираем единый список всех сущностей (Игрок + NPC)
+	// Это решает проблему "Где искать цель?"
+	allEntities := make([]*domain.Entity, 0, len(s.Entities)+1)
+	allEntities = append(allEntities, s.Player)
+	for i := range s.Entities {
+		allEntities = append(allEntities, &s.Entities[i])
+	}
+
+	// 2. Создаем контекст
+	ctx := handlers.Context{
+		World:    s.World,
+		Entities: allEntities, // Передаем список указателей
+		Actor:    actor,       // Кто совершает действие
+	}
+
+	// 3. Вызываем хендлер
+	result, err := handler(ctx, cmd.Payload)
+
+	if err != nil {
+		log.Printf("[ERROR] Logic error in %v: %v", cmd.Action, err)
+		return
+	}
+
+	// 4. Логируем результат, если есть сообщение
+	if result.Msg != "" {
+		// Дефолтный тип лога INFO, если хендлер не указал иной
+		msgType := result.MsgType
+		if msgType == "" {
+			msgType = "INFO"
+		}
+		s.AddLog(result.Msg, msgType)
+	}
+}
+
+// --- ГЛАВНЫЙ ЦИКЛ (ARBITER LOOP) ---
+
+func (s *GameService) RunGameLoop() {
+	log.Println("[LOOP] Arbiter Loop started")
+
+	for {
+		// 1. Определяем, чей ход
+		activeActor := s.getNextActor()
+		s.World.GlobalTick = activeActor.AI.NextActionTick
+
+		// 2. Уведомляем клиентов
+		s.publishTurn(activeActor.ID)
+
+		// 3. Ждем команду
+		timeout := time.After(5 * time.Second)
+		commandProcessed := false
+
+		for !commandProcessed {
+			select {
+			case cmd := <-s.CommandChan:
+				senderID := cmd.Token
+				// Хак для MVP: пустой токен = Игрок
+				if senderID == "" {
+					senderID = s.Player.ID
+				}
+
+				// Разрешаем команду, если это ход актера ИЛИ это системная команда INIT
+				isTurn := senderID == activeActor.ID
+				isSystem := cmd.Action == domain.ActionInit
+
+				if isTurn || isSystem {
+					if isSystem {
+						// INIT всегда выполняется от имени игрока (или системно)
+						s.executeCommand(cmd, s.Player)
+					} else {
+						s.executeCommand(cmd, activeActor)
+						commandProcessed = true // Ход сделан, выходим из ожидания
+					}
+				} else {
+					log.Printf("[ARBITER] Ignored command from %s (current turn: %s)", senderID, activeActor.Name)
+				}
+
+			case <-timeout:
+				log.Printf("[ARBITER] Timeout for %s. Forcing WAIT.", activeActor.Name)
+				activeActor.AI.Wait(domain.TimeCostWait)
+				commandProcessed = true
+			}
+		}
+
+		// 4. Рассылаем состояние после хода
+		s.publishUpdate()
+	}
+}
+
+// --- УТИЛИТЫ ---
+
+func (s *GameService) getNextActor() *domain.Entity {
+	// Собираем кандидатов на ход (только живые и с AI)
+	var activeEntities []*domain.Entity
+
+	// Игрок
+	if s.Player.AI != nil && s.Player.Stats != nil && !s.Player.Stats.IsDead {
+		activeEntities = append(activeEntities, s.Player)
+	}
+
+	// NPC
+	for i := range s.Entities {
+		e := &s.Entities[i]
+		if e.AI != nil && e.Stats != nil && !e.Stats.IsDead {
+			activeEntities = append(activeEntities, e)
+		}
+	}
+
+	// Сортировка (Priority Queue)
+	sort.Slice(activeEntities, func(i, j int) bool {
+		return activeEntities[i].AI.NextActionTick < activeEntities[j].AI.NextActionTick
+	})
+
+	if len(activeEntities) == 0 {
+		// Критическая ситуация: все умерли или нет AI. Возвращаем игрока, чтобы цикл не падал.
+		return s.Player
+	}
+
+	return activeEntities[0]
+}
+
+func (s *GameService) publishTurn(activeID string) {
 	currentLogs := make([]api.LogEntry, len(s.Logs))
 	copy(currentLogs, s.Logs)
 	s.Logs = []api.LogEntry{}
 
 	response := api.ServerResponse{
-		Type:     "UPDATE",
-		World:    s.World,
-		Player:   s.Player,
-		Entities: s.Entities,
-		Logs:     currentLogs,
+		Type:           "UPDATE",
+		World:          s.World,
+		Player:         s.Player,
+		Entities:       s.Entities,
+		Logs:           currentLogs,
+		ActiveEntityID: activeID,
 	}
-
-	log.Printf("[BROADCAST] Sending update. Logs count: %d", len(currentLogs))
 	s.Hub.Broadcast(response)
+}
+
+func (s *GameService) publishUpdate() {
+	// То же самое, но ActiveEntityID может быть пустым или старым
+	// Для простоты используем ту же логику сборки пакета
+	// Можно передавать "" в publishTurn, но лучше иметь явный метод
+	s.publishTurn("")
 }
 
 func (s *GameService) GetState() *api.ServerResponse {
@@ -128,208 +264,6 @@ func (s *GameService) GetState() *api.ServerResponse {
 		Player:   s.Player,
 		Entities: s.Entities,
 		Logs:     currentLogs,
-	}
-}
-
-// --- ГЛАВНЫЙ ЦИКЛ ---
-
-func (s *GameService) RunGameLoop() {
-	log.Println("[LOOP] Arbiter Loop started")
-
-	for {
-		// 1. Кто ходит?
-		activeActor := s.getNextActor()
-		s.World.GlobalTick = activeActor.AI.NextActionTick
-
-		// 2. Уведомляем всех: "Сейчас ход ID=..."
-		s.publishTurn(activeActor.ID)
-
-		// 3. Ждем команду ИМЕННО от этого актера
-		timeout := time.After(5 * time.Second) // Таймаут на ход (чтобы игра не зависла)
-
-		commandProcessed := false
-
-		for !commandProcessed {
-			select {
-			case cmd := <-s.CommandChan:
-				// Хак для MVP: Если токен пустой, считаем что это Игрок (p1)
-				// В будущем тут будет проверка сессий
-				senderID := cmd.Token
-				if senderID == "" {
-					senderID = "p1"
-				}
-
-				// Если команда от того, чей сейчас ход (или системная INIT)
-				if senderID == activeActor.ID || cmd.Action == domain.ActionInit {
-					if cmd.Action == domain.ActionInit {
-						// INIT обрабатываем от имени игрока
-						s.executeCommand(cmd, s.Player)
-					} else {
-						s.executeCommand(cmd, activeActor)
-						commandProcessed = true
-					}
-				} else {
-					log.Printf("[ARBITER] Ignored command from %s (current turn: %s)", senderID, activeActor.Name)
-				}
-
-			case <-timeout:
-				log.Printf("[ARBITER] Timeout for %s. Forcing WAIT.", activeActor.Name)
-				activeActor.AI.Wait(domain.TimeCostWait)
-				commandProcessed = true
-			}
-		}
-
-		// Рассылаем результат хода
-		s.publishUpdate()
-	}
-}
-
-// Метод для рассылки уведомления о ходе
-func (s *GameService) publishTurn(activeID string) {
-	// Можно оптимизировать и слать только ID, но пока шлем апдейт с флагом
-	s.publishUpdateWithActive(activeID)
-}
-
-func (s *GameService) publishUpdateWithActive(activeID string) {
-	// Копирование логов...
-	currentLogs := make([]api.LogEntry, len(s.Logs))
-	copy(currentLogs, s.Logs)
-	s.Logs = []api.LogEntry{}
-
-	response := api.ServerResponse{
-		Type:           "UPDATE",
-		World:          s.World,
-		Player:         s.Player,
-		Entities:       s.Entities,
-		Logs:           currentLogs,
-		ActiveEntityID: activeID, // <--- Важное поле
-	}
-	s.Hub.Broadcast(response)
-}
-
-func (s *GameService) executeCommand(cmd domain.InternalCommand, actor *domain.Entity) {
-	handler, ok := s.handlers[cmd.Action]
-	if !ok {
-		log.Printf("[ERROR] No handler registered for action type: %v", cmd.Action)
-		return
-	}
-
-	// Вызов функции-обработчика
-	handler(s, actor, cmd.Payload)
-}
-
-// --- ФУНКЦИИ-ОБРАБОТЧИКИ (Бывший switch case) ---
-
-func handleInit(s *GameService, actor *domain.Entity, _ json.RawMessage) {
-	s.AddLog("Добро пожаловать в Cognitive Dungeon.", "INFO")
-}
-
-func handleMoveCmd(s *GameService, actor *domain.Entity, payload json.RawMessage) {
-	var p api.DirectionPayload
-	if err := json.Unmarshal(payload, &p); err == nil {
-		s.handleMove(actor, p.Dx, p.Dy)
-	}
-}
-
-func handleAttackCmd(s *GameService, actor *domain.Entity, payload json.RawMessage) {
-	var p api.EntityPayload
-	if err := json.Unmarshal(payload, &p); err == nil {
-		s.handleAttack(actor, p.TargetID)
-	}
-}
-
-func handleWaitCmd(s *GameService, actor *domain.Entity, _ json.RawMessage) {
-	if actor.Type == domain.EntityTypePlayer {
-		s.AddLog(fmt.Sprintf("%s пропускает ход.", actor.Name), "INFO")
-	}
-	if actor.AI != nil {
-		actor.AI.Wait(domain.TimeCostWait)
-	}
-}
-
-func handleTalkCmd(s *GameService, actor *domain.Entity, payload json.RawMessage) {
-	var p api.EntityPayload
-	if err := json.Unmarshal(payload, &p); err == nil && p.TargetID != "" {
-		s.AddLog(fmt.Sprintf("Вы говорите с %s", p.TargetID), "SPEECH")
-	} else {
-		s.AddLog("Вы бормочете в пустоту.", "SPEECH")
-	}
-}
-
-// --- LOGIC ---
-
-func (s *GameService) getNextActor() *domain.Entity {
-	activeEntities := []*domain.Entity{s.Player}
-	for i := range s.Entities {
-		e := &s.Entities[i]
-		// Берем только тех, у кого есть AI и кто жив
-		if e.AI != nil && e.Stats != nil && !e.Stats.IsDead {
-			activeEntities = append(activeEntities, e)
-		}
-	}
-
-	sort.Slice(activeEntities, func(i, j int) bool {
-		// !!! Доступ через .AI
-		return activeEntities[i].AI.NextActionTick < activeEntities[j].AI.NextActionTick
-	})
-	return activeEntities[0]
-}
-
-func (s *GameService) handleMove(actor *domain.Entity, dx, dy int) {
-	// Проверка наличия AI для тиков (у игрока он есть)
-	if actor.AI == nil {
-		return
-	}
-
-	res := systems.CalculateMove(actor, dx, dy, s.World, s.Entities)
-
-	if res.BlockedBy != nil {
-		// Атака? Проверяем враждебность через AI
-		// Если у кого-то нет AI (манекен), считаем его не враждебным (false)
-		actorHostile := actor.AI.IsHostile
-		targetHostile := false
-		if res.BlockedBy.AI != nil {
-			targetHostile = res.BlockedBy.AI.IsHostile
-		}
-
-		if actorHostile != targetHostile {
-			logMsg := systems.ApplyAttack(actor, res.BlockedBy)
-			s.AddLog(logMsg, "COMBAT")
-			actor.AI.Wait(domain.TimeCostAttackLight)
-			return
-		}
-	}
-
-	if res.HasMoved {
-		actor.Pos.X = res.NewX
-		actor.Pos.Y = res.NewY
-		actor.AI.Wait(domain.TimeCostMove)
-	} else if res.IsWall {
-		if actor.Type == domain.EntityTypePlayer {
-			s.AddLog("Путь прегражден.", "ERROR")
-		} else {
-			actor.AI.Wait(domain.TimeCostWait)
-		}
-	}
-}
-
-func (s *GameService) handleAttack(actor *domain.Entity, targetID string) {
-	// Найти цель по ID
-	var target *domain.Entity
-	for i := range s.Entities {
-		if s.Entities[i].ID == targetID {
-			target = &s.Entities[i]
-			break
-		}
-	}
-	if s.Player.ID == targetID {
-		target = s.Player
-	}
-
-	if target != nil {
-		logMsg := systems.ApplyAttack(actor, target)
-		s.AddLog(logMsg, "COMBAT")
-		actor.AI.Wait(domain.TimeCostAttackLight)
 	}
 }
 

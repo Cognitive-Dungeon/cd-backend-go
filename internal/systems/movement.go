@@ -13,7 +13,7 @@ type MovementResult struct {
 }
 
 // CalculateMove вычисляет новую позицию. Не меняет состояние мира!
-func CalculateMove(e *domain.Entity, dx, dy int, w *domain.GameWorld, entities []domain.Entity) MovementResult {
+func CalculateMove(e *domain.Entity, dx, dy int, w *domain.GameWorld, entities []*domain.Entity) MovementResult {
 	// ИСПОЛЬЗУЕМ НОВЫЙ МЕТОД Shift
 	// Он возвращает новую структуру Position, не меняя текущую
 	targetPos := e.Pos.Shift(dx, dy)
@@ -33,12 +33,7 @@ func CalculateMove(e *domain.Entity, dx, dy int, w *domain.GameWorld, entities [
 	}
 
 	// 3. Проверка сущностей
-	for i := range entities {
-		other := &entities[i]
-		if other.ID == e.ID {
-			continue
-		}
-
+	for _, other := range entities {
 		// Игнорируем самого себя
 		if other.ID == e.ID {
 			continue

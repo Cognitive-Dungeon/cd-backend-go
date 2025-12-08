@@ -6,7 +6,6 @@ import (
 	"cognitive-server/internal/systems"
 	"cognitive-server/pkg/api"
 	"encoding/json"
-	"time"
 )
 
 // Bot представляет собой "Игрока-компьютера"
@@ -32,8 +31,6 @@ func (b *Bot) Run() {
 		// Мы реагируем только если сервер сказал "Твой ход" (или пришел UPDATE с нашим ID)
 		// В текущей реализации мы смотрим на поле ActiveEntityID
 		if event.ActiveEntityID == b.EntityID {
-			// Имитация "думания" (чтобы не было мгновенно)
-			time.Sleep(200 * time.Millisecond)
 			b.makeMove(event)
 		}
 	}
@@ -65,9 +62,14 @@ func (b *Bot) makeMove(state api.ServerResponse) {
 	// 3. Важный момент: для корректного расчета пути (AI) нужно,
 	// чтобы Игрок тоже считался препятствием.
 	// Создаем временный слайс для AI, куда добавляем игрока.
-	allEntities := append([]domain.Entity{}, state.Entities...)
-	if player != nil {
-		allEntities = append(allEntities, *player)
+	allEntities := make([]*domain.Entity, 0, len(state.Entities)+1)
+
+	// Добавляем игрока
+	allEntities = append(allEntities, player)
+
+	// Добавляем NPC (берем адреса)
+	for i := range state.Entities {
+		allEntities = append(allEntities, &state.Entities[i])
 	}
 
 	// 4. Вызов AI
