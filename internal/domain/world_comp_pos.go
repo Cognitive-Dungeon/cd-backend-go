@@ -7,6 +7,13 @@ func (p Position) DistanceTo(other Position) float64 {
 	return math.Sqrt(math.Pow(float64(p.X-other.X), 2) + math.Pow(float64(p.Y-other.Y), 2))
 }
 
+// DistanceSquaredTo возвращает квадрат расстояния (int) для сравнения без корней
+func (p Position) DistanceSquaredTo(other Position) int {
+	dx := p.X - other.X
+	dy := p.Y - other.Y
+	return dx*dx + dy*dy
+}
+
 // IsAdjacent возвращает true, если цель в соседней клетке (включая диагональ)
 func (p Position) IsAdjacent(other Position) bool {
 	dx := p.X - other.X

@@ -8,8 +8,8 @@ import (
 	"cognitive-server/internal/network"
 	"cognitive-server/pkg/api"
 	"cognitive-server/pkg/logger"
+	"container/heap"
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -39,6 +39,9 @@ type GameService struct {
 	actionHandlers map[domain.ActionType]handlers.HandlerFunc
 	eventHandlers  map[domain.EventType]handlers.HandlerFunc
 
+	turnQueue     TurnQueue            // Очередь ходов (MinHeap)
+	entityItemMap map[string]*TurnItem // Быстрый доступ к элементам очереди по ID сущности
+
 	loopState LoopState
 }
 
@@ -54,11 +57,32 @@ func NewService() *GameService {
 		Hub:            network.NewBroadcaster(),
 		actionHandlers: make(map[domain.ActionType]handlers.HandlerFunc),
 		eventHandlers:  make(map[domain.EventType]handlers.HandlerFunc),
+		turnQueue:      make(TurnQueue, 0),
+		entityItemMap:  make(map[string]*TurnItem),
 		loopState:      LoopStateRunning,
 	}
 
 	s.registerHandlers()
+	s.initTurnQueue()
+
 	return s
+}
+
+func (s *GameService) initTurnQueue() {
+	s.turnQueue = make(TurnQueue, 0)
+	s.entityItemMap = make(map[string]*TurnItem)
+
+	for _, e := range s.Entities {
+		if e.AI != nil && e.Stats != nil && !e.Stats.IsDead {
+			item := &TurnItem{
+				Value:    e,
+				Priority: e.AI.NextActionTick,
+			}
+			heap.Push(&s.turnQueue, item)
+			s.entityItemMap[e.ID] = item
+		}
+	}
+	logger.Log.WithField("queue_size", s.turnQueue.Len()).Info("TurnQueue initialized.")
 }
 
 // GetEntity ищет сущность по ID во всех загруженных мирах.
@@ -142,13 +166,15 @@ func (s *GameService) RunGameLoop() {
 		}
 
 		// 1. Кто ходит следующим?
-		activeActor := s.getNextActor()
+		activeItem := s.peekNextActorItem()
 
 		// Если никого нет (пустой мир или все мертвы), ждем и повторяем
-		if activeActor == nil {
+		if activeItem == nil {
 			time.Sleep(1 * time.Second)
 			continue
 		}
+
+		activeActor := activeItem.Value
 
 		// Обновляем глобальное время
 		s.GlobalTick = activeActor.AI.NextActionTick
@@ -174,45 +200,49 @@ func (s *GameService) RunGameLoop() {
 		if !isHumanControlled {
 			// --- ХОД ИИ ---
 			s.processAITurn(activeActor)
-			continue
+		} else {
+			// --- ХОД ИГРОКА ---
+			timeout := time.After(60 * time.Second) // Тайм-аут на ход игрока
+			commandProcessed := false
+
+			for !commandProcessed {
+				select {
+				case cmd := <-s.CommandChan:
+					// Проверяем:
+					// 1. Команду прислал тот, чей сейчас ход (cmd.Token == activeActor.ID)
+					// 2. ИЛИ это системная команда (INIT), которую можно слать всегда
+					isTurn := cmd.Token == activeActor.ID
+					isSystem := cmd.Action == domain.ActionInit
+
+					if isTurn || isSystem {
+						if isSystem {
+							// Init просто возвращает стейт, не тратит ход
+							s.executeCommand(cmd, activeActor)
+						} else {
+							// Игровое действие
+							s.executeCommand(cmd, activeActor)
+							commandProcessed = true
+						}
+					} else {
+						// Если команду прислал кто-то другой не в свой ход
+						// Можно отправить ошибку этому клиенту, но пока просто игнорируем
+						// log.Printf("Out of turn command from %s", cmd.Token)
+					}
+
+				case <-timeout:
+					logger.Log.WithFields(logrus.Fields{
+						"actor_id":   activeActor.ID,
+						"actor_name": activeActor.Name,
+					}).Warn("Player turn timed out. Forcing WAIT action.")
+					activeActor.AI.Wait(domain.TimeCostWait)
+					commandProcessed = true
+				}
+			}
 		}
 
-		// --- ХОД ИГРОКА ---
-		timeout := time.After(60 * time.Second) // Тайм-аут на ход игрока
-		commandProcessed := false
-
-		for !commandProcessed {
-			select {
-			case cmd := <-s.CommandChan:
-				// Проверяем:
-				// 1. Команду прислал тот, чей сейчас ход (cmd.Token == activeActor.ID)
-				// 2. ИЛИ это системная команда (INIT), которую можно слать всегда
-				isTurn := cmd.Token == activeActor.ID
-				isSystem := cmd.Action == domain.ActionInit
-
-				if isTurn || isSystem {
-					if isSystem {
-						// Init просто возвращает стейт, не тратит ход
-						s.executeCommand(cmd, activeActor)
-					} else {
-						// Игровое действие
-						s.executeCommand(cmd, activeActor)
-						commandProcessed = true
-					}
-				} else {
-					// Если команду прислал кто-то другой не в свой ход
-					// Можно отправить ошибку этому клиенту, но пока просто игнорируем
-					// log.Printf("Out of turn command from %s", cmd.Token)
-				}
-
-			case <-timeout:
-				logger.Log.WithFields(logrus.Fields{
-					"actor_id":   activeActor.ID,
-					"actor_name": activeActor.Name,
-				}).Warn("Player turn timed out. Forcing WAIT action.")
-				activeActor.AI.Wait(domain.TimeCostWait)
-				commandProcessed = true
-			}
+		// В конце хода обновляем приоритет в очереди
+		if item, ok := s.entityItemMap[activeActor.ID]; ok {
+			s.turnQueue.Update(item, activeActor.AI.NextActionTick)
 		}
 	}
 }
@@ -257,26 +287,13 @@ func (s *GameService) executeCommand(cmd domain.InternalCommand, actor *domain.E
 	}
 }
 
-// getNextActor возвращает сущность, чей ход наступил (с наименьшим NextActionTick)
-func (s *GameService) getNextActor() *domain.Entity {
-	// Фильтруем кандидатов: должны иметь AI (даже игроки) и быть живыми
-	candidates := make([]*domain.Entity, 0)
-	for _, e := range s.Entities {
-		if e.AI != nil && e.Stats != nil && !e.Stats.IsDead {
-			candidates = append(candidates, e)
-		}
-	}
-
-	if len(candidates) == 0 {
+// peekNextActorItem смотрит (но не удаляет) следующего актора
+func (s *GameService) peekNextActorItem() *TurnItem {
+	if s.turnQueue.Len() == 0 {
 		return nil
 	}
-
-	// Сортируем: сначала те, у кого меньше тиков
-	sort.Slice(candidates, func(i, j int) bool {
-		return candidates[i].AI.NextActionTick < candidates[j].AI.NextActionTick
-	})
-
-	return candidates[0]
+	// В MinHeap [0] всегда минимальный элемент
+	return s.turnQueue[0]
 }
 
 func (s *GameService) AddLog(text, logType string) {

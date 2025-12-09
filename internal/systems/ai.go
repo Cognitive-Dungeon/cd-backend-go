@@ -3,8 +3,9 @@ package systems
 import (
 	"cognitive-server/internal/domain"
 	"cognitive-server/pkg/logger"
-	"github.com/sirupsen/logrus"
 	"math"
+
+	"github.com/sirupsen/logrus"
 )
 
 // ComputeNPCAction решает, что делать NPC.
@@ -27,12 +28,12 @@ func ComputeNPCAction(npc *domain.Entity, player *domain.Entity, w *domain.GameW
 		return domain.ActionWait, nil, 0, 0
 	}
 
-	dist := npc.Pos.DistanceTo(player.Pos)
+	distSq := npc.Pos.DistanceSquaredTo(player.Pos)
 	canSee := HasLineOfSight(w, npc.Pos, player.Pos)
 
 	aiLogger.WithFields(logrus.Fields{
-		"distance_to_target": dist,
-		"has_line_of_sight":  canSee,
+		"distance_sq_to_target": distSq,
+		"has_line_of_sight":     canSee,
 	}).Debug("Perception check complete")
 
 	// --- ШАГ 3: Логика принятия решений ---
@@ -44,13 +45,14 @@ func ComputeNPCAction(npc *domain.Entity, player *domain.Entity, w *domain.GameW
 	}
 
 	// 3.2. В радиусе атаки -> Атаковать
-	if dist <= 1.5 {
+	// 1.5 * 1.5 = 2.25. (1,1) -> distSq = 2. (1,0) -> distSq = 1.
+	if distSq <= 2 {
 		aiLogger.Debug("Decision: Target in melee range. Action: ATTACK")
 		return domain.ActionAttack, player, 0, 0
 	}
 
 	// 3.3. Видим, но слишком далеко -> Ждать
-	if dist > domain.AggroRadius {
+	if distSq > domain.AggroRadius*domain.AggroRadius {
 		aiLogger.WithField("aggro_radius", domain.AggroRadius).Debug("Decision: Target is outside aggro radius. Action: WAIT")
 		return domain.ActionWait, nil, 0, 0
 	}
