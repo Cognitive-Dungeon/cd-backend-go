@@ -17,7 +17,7 @@ func HandleTalk(ctx handlers.Context, p api.EntityPayload) (handlers.Result, err
 	}
 
 	// 1. Поиск собеседника
-	target := ctx.World.GetEntity(p.TargetID)
+	target := ctx.Finder.GetEntity(p.TargetID)
 
 	if target == nil {
 		return handlers.Result{

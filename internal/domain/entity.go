@@ -3,6 +3,7 @@ package domain
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 )
 
 // --- КОМПОНЕНТЫ ---
@@ -51,6 +52,13 @@ type MemoryComponent struct {
 	ExploredIDs map[int]bool `json:"exploredIds"`
 }
 
+// TriggerComponent описывает, что происходит при взаимодействии с сущностью.
+type TriggerComponent struct {
+	// OnInteract содержит JSON-объект события, которое сработает при команде INTERACT.
+	// Например: {"event": "LEVEL_TRANSITION", "targetLevel": 1, "targetPosId": "exit_up"}
+	OnInteract json.RawMessage `json:"onInteract,omitempty"`
+}
+
 // --- СУЩНОСТЬ ---
 
 // GenerateID создает простой уникальный ID (замена UUID для снижения зависимостей)
@@ -70,7 +78,8 @@ type Entity struct {
 	// Если пусто - управляется AI.
 	ControllerID string `json:"controllerId,omitempty"`
 
-	Pos Position `json:"pos"`
+	Pos   Position `json:"pos"`
+	Level int      `json:"level"` // Указывает на каком уровне находится сущность
 
 	// Компоненты (Если nil - значит свойство отсутствует)
 	Render    *RenderComponent    `json:"render,omitempty"`
@@ -79,4 +88,5 @@ type Entity struct {
 	Narrative *NarrativeComponent `json:"narrative,omitempty"`
 	Vision    *VisionComponent    `json:"vision,omitempty"`
 	Memory    *MemoryComponent    `json:"memory,omitempty"`
+	Trigger   *TriggerComponent   `json:"trigger,omitempty"`
 }

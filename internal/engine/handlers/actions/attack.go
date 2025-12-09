@@ -9,7 +9,7 @@ import (
 
 func HandleAttack(ctx handlers.Context, p api.EntityPayload) (handlers.Result, error) {
 	// 1. Поиск цели
-	target := ctx.World.GetEntity(p.TargetID)
+	target := ctx.Finder.GetEntity(p.TargetID)
 
 	if target == nil {
 		return handlers.Result{Msg: "Цель не найдена.", MsgType: "ERROR"}, nil

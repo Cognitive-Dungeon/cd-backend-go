@@ -12,25 +12,28 @@ const (
 	ActionAttack
 	ActionWait
 	ActionTalk
+	ActionInteract
 	// В будущем: ActionTrade, ActionUseItem...
 )
 
 // Маппинг для конвертации JSON -> Domain
 var stringToCmd = map[string]ActionType{
-	"INIT":   ActionInit,
-	"MOVE":   ActionMove,
-	"ATTACK": ActionAttack,
-	"WAIT":   ActionWait,
-	"TALK":   ActionTalk,
+	"INIT":     ActionInit,
+	"MOVE":     ActionMove,
+	"ATTACK":   ActionAttack,
+	"WAIT":     ActionWait,
+	"TALK":     ActionTalk,
+	"INTERACT": ActionInteract,
 }
 
 // Маппинг для логов Domain -> String
 var cmdToString = map[ActionType]string{
-	ActionInit:   "INIT",
-	ActionMove:   "MOVE",
-	ActionAttack: "ATTACK",
-	ActionWait:   "WAIT",
-	ActionTalk:   "TALK",
+	ActionInit:     "INIT",
+	ActionMove:     "MOVE",
+	ActionAttack:   "ATTACK",
+	ActionWait:     "WAIT",
+	ActionTalk:     "TALK",
+	ActionInteract: "INTERACT",
 }
 
 // ParseAction конвертирует строку из JSON в ActionType

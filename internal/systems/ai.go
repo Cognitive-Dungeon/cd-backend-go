@@ -2,52 +2,56 @@ package systems
 
 import (
 	"cognitive-server/internal/domain"
+	"log"
 	"math"
 )
 
 // ComputeNPCAction решает, что делать NPC.
 // Возвращает (команда, цель_атаки_если_есть, dx, dy)
 func ComputeNPCAction(npc *domain.Entity, player *domain.Entity, w *domain.GameWorld) (action domain.ActionType, target *domain.Entity, dx, dy int) {
-	// 1. Проверка наличия компонентов
-	// Если нет мозгов (AI) или тела (Stats) - ничего не делаем
-	if npc.AI == nil || npc.Stats == nil {
-		return domain.ActionWait, nil, 0, 0
-	}
+	// --- ОТЛАДКА: НАЧАЛО ПРОВЕРКИ ---
+	log.Printf("[AI DEBUG | %s] Turn Start. Target: %s at (%d,%d)", npc.Name, player.Name, player.Pos.X, player.Pos.Y)
 
-	// 2. Если мертв или не враждебен
-	if npc.Stats.IsDead || !npc.AI.IsHostile {
+	if npc.AI == nil || npc.Stats == nil || npc.Stats.IsDead || !npc.AI.IsHostile {
+		log.Printf("[AI DEBUG | %s] Invalid state (dead, not hostile, etc). Action: WAIT", npc.Name)
 		return domain.ActionWait, nil, 0, 0
 	}
 
 	dist := npc.Pos.DistanceTo(player.Pos)
-
-	// 3. Логика дистанции
-	if dist > domain.AggroRadius {
-		return domain.ActionWait, nil, 0, 0
-	}
+	log.Printf("[AI DEBUG | %s] Distance to target: %.2f", npc.Name, dist)
 
 	// Проверка видимости
 	canSee := HasLineOfSight(w, npc.Pos, player.Pos)
+	log.Printf("[AI DEBUG | %s] HasLineOfSight to target: %t", npc.Name, canSee)
 
-	// Если далеко или НЕ ВИДНО -> просто ждем (или патрулируем, но пока Wait)
-	// Раньше тут была только проверка дистанции
-	if dist > domain.AggroRadius || !canSee {
+	// Если не видим цель, не делаем ничего.
+	if !canSee {
+		log.Printf("[AI DEBUG | %s] Target not visible. Action: WAIT", npc.Name)
 		return domain.ActionWait, nil, 0, 0
 	}
 
+	// Если в радиусе атаки (включая диагонали)
 	if dist <= 1.5 {
-		// Если рядом, но стена мешает (угловой случай)
-		if !canSee {
-			return domain.ActionWait, nil, 0, 0
-		}
+		log.Printf("[AI DEBUG | %s] Target in attack range. Action: ATTACK", npc.Name)
 		return domain.ActionAttack, player, 0, 0
 	}
 
-	moveDx, moveDy := calculateSmartMove(npc, player, w)
-	if moveDx == 0 && moveDy == 0 {
+	// Если видим, но цель слишком далеко (за пределами агро-радиуса)
+	if dist > domain.AggroRadius {
+		log.Printf("[AI DEBUG | %s] Target visible but out of aggro range (%.2f > %d). Action: WAIT", npc.Name, dist, domain.AggroRadius)
 		return domain.ActionWait, nil, 0, 0
 	}
 
+	// Если мы здесь, значит, цель видима и находится в радиусе преследования.
+	log.Printf("[AI DEBUG | %s] Target in pursuit range. Calculating move...", npc.Name)
+	moveDx, moveDy := calculateSmartMove(npc, player, w)
+
+	if moveDx == 0 && moveDy == 0 {
+		log.Printf("[AI DEBUG | %s] Path is blocked or destination reached. Action: WAIT", npc.Name)
+		return domain.ActionWait, nil, 0, 0
+	}
+
+	log.Printf("[AI DEBUG | %s] Path found. Action: MOVE (dx:%d, dy:%d)", npc.Name, moveDx, moveDy)
 	return domain.ActionMove, nil, moveDx, moveDy
 }
 

@@ -15,29 +15,6 @@ func (w *GameWorld) GetEntitiesAt(x, y int) []*Entity {
 	return w.SpatialHash[idx]
 }
 
-// GetEntity ищет сущность по ID
-func (w *GameWorld) GetEntity(id string) *Entity {
-	if w.EntityRegistry == nil {
-		return nil
-	}
-	return w.EntityRegistry[id]
-}
-
-// RegisterEntity добавляет сущность в реестр
-func (w *GameWorld) RegisterEntity(e *Entity) {
-	if w.EntityRegistry == nil {
-		w.EntityRegistry = make(map[string]*Entity)
-	}
-	w.EntityRegistry[e.ID] = e
-}
-
-// UnregisterEntity удаляет сущность из реестра
-func (w *GameWorld) UnregisterEntity(id string) {
-	if w.EntityRegistry != nil {
-		delete(w.EntityRegistry, id)
-	}
-}
-
 // AddEntity добавляет сущность в индекс
 func (w *GameWorld) AddEntity(e *Entity) {
 	idx := w.GetIndex(e.Pos.X, e.Pos.Y)

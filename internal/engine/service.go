@@ -11,15 +11,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"sort"
 	"time"
 )
 
 type GameService struct {
-	World *domain.GameWorld
+	// Worlds хранит все загруженные/сгенерированные уровни
+	Worlds map[int]*domain.GameWorld
+
+	GlobalTick int
 
 	// Entities хранит указатели на ВСЕ сущности (Игроки, NPC, Монстры)
-	Entities []*domain.Entity
+	Entities       []*domain.Entity
+	EntityRegistry map[string]*domain.Entity
 
 	Logs []api.LogEntry
 
@@ -30,24 +35,28 @@ type GameService struct {
 }
 
 func NewService() *GameService {
-	// 1. Генерация уровня
-	world, generatedEntities, startPos := dungeon.Generate(1)
-
-	// 2. Инициализация индексов мира
-	world.SpatialHash = make(map[int][]*domain.Entity)
-	world.EntityRegistry = make(map[string]*domain.Entity)
-
-	// 3. Создаем список всех сущностей
-	// Используем pointers, чтобы изменения сохранялись
+	worlds := make(map[int]*domain.GameWorld)
 	var allEntities []*domain.Entity
+	entityRegistry := make(map[string]*domain.Entity)
 
-	// --- Создание Героя (в будущем это может быть динамическим подключением) ---
-	// Мы создаем его здесь, чтобы он попал в общую кучу сущностей
+	// Создаем генератор случайных чисел
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	// Генерируем поверхность (уровень 0)
+	surfaceWorld, surfaceEntities, startPos := dungeon.GenerateSurface()
+	worlds[0] = surfaceWorld
+
+	// Генерируем первый уровень подземелья (уровень 1)
+	dungeonWorld1, dungeonEntities1, _ := dungeon.Generate(1, rng)
+	worlds[1] = dungeonWorld1
+
+	// --- Создание Героя ---
 	player := &domain.Entity{
-		ID:   "hero_1", // Известный ID для удобства отладки
-		Name: "Герой",
-		Type: domain.EntityTypePlayer,
-		Pos:  startPos,
+		ID:    "hero_1",
+		Name:  "Герой",
+		Type:  domain.EntityTypePlayer,
+		Pos:   startPos,
+		Level: 0,
 
 		Render: &domain.RenderComponent{Symbol: "@", Color: "#22D3EE", Label: "A"},
 		Stats: &domain.StatsComponent{
@@ -61,35 +70,49 @@ func NewService() *GameService {
 	allEntities = append(allEntities, player)
 
 	// --- Добавление сгенерированных сущностей (враги, предметы) ---
-	for i := range generatedEntities {
-		// Берем адрес, так как generatedEntities - это slice значений
-		e := &generatedEntities[i]
-		allEntities = append(allEntities, e)
+	for i := range surfaceEntities {
+		allEntities = append(allEntities, &surfaceEntities[i])
+	}
+	for i := range dungeonEntities1 {
+		allEntities = append(allEntities, &dungeonEntities1[i])
+	}
+
+	s := &GameService{
+		Worlds:         worlds,
+		Entities:       allEntities,
+		EntityRegistry: entityRegistry,
+		GlobalTick:     0,
+		Logs:           []api.LogEntry{},
+		CommandChan:    make(chan domain.InternalCommand, 100),
+		Hub:            network.NewBroadcaster(),
+		handlers:       make(map[domain.ActionType]handlers.HandlerFunc),
 	}
 
 	// 4. Регистрация всех сущностей в мире
 	for _, e := range allEntities {
-		world.AddEntity(e)      // В SpatialHash
-		world.RegisterEntity(e) // В Registry (по ID)
-	}
+		// Добавляем в глобальный реестр
+		s.EntityRegistry[e.ID] = e
 
-	s := &GameService{
-		World:       world,
-		Entities:    allEntities,
-		Logs:        []api.LogEntry{},
-		CommandChan: make(chan domain.InternalCommand, 100),
-		Hub:         network.NewBroadcaster(),
-		handlers:    make(map[domain.ActionType]handlers.HandlerFunc),
+		// Добавляем в SpatialHash нужного мира
+		if world, ok := s.Worlds[e.Level]; ok {
+			world.AddEntity(e)
+		}
 	}
 
 	s.registerHandlers()
 	return s
 }
 
+// GetEntity ищет сущность по ID во всех загруженных мирах.
+func (s *GameService) GetEntity(id string) *domain.Entity {
+	return s.EntityRegistry[id]
+}
+
 func (s *GameService) registerHandlers() {
 	s.handlers[domain.ActionMove] = handlers.WithPayload(actions.HandleMove)
 	s.handlers[domain.ActionAttack] = handlers.WithPayload(actions.HandleAttack)
 	s.handlers[domain.ActionTalk] = handlers.WithPayload(actions.HandleTalk)
+	s.handlers[domain.ActionInteract] = handlers.WithPayload(actions.HandleInteract)
 	s.handlers[domain.ActionInit] = handlers.WithEmptyPayload(actions.HandleInit)
 	s.handlers[domain.ActionWait] = handlers.WithEmptyPayload(actions.HandleWait)
 }
@@ -140,7 +163,7 @@ func (s *GameService) RunGameLoop() {
 		log.Printf("[LOOP] Next actor: %s (%s) | NextActionTick: %d", activeActor.Name, activeActor.ID, activeActor.AI.NextActionTick)
 
 		// Обновляем глобальное время
-		s.World.GlobalTick = activeActor.AI.NextActionTick
+		s.GlobalTick = activeActor.AI.NextActionTick
 
 		// 2. Рассылаем обновление всем клиентам
 		// Передаем activeActor.ID, чтобы клиенты знали, чей ход (подсветка интерфейса)
@@ -197,10 +220,6 @@ func (s *GameService) RunGameLoop() {
 
 // processAITurn обрабатывает логику NPC
 func (s *GameService) processAITurn(npc *domain.Entity) {
-	// 1. Ищем цель (ближайшего игрока/врага)
-	// В будущем здесь будет сложная система фракций.
-	// Пока: Если я Монстр -> ищу Игрока. Если я NPC -> стою.
-
 	if !npc.AI.IsHostile {
 		npc.AI.Wait(domain.TimeCostWait)
 		return
@@ -209,12 +228,13 @@ func (s *GameService) processAITurn(npc *domain.Entity) {
 	var target *domain.Entity
 	minDist := 999.0
 
+	// 1. Ищем ближайшую цель на ТОМ ЖЕ УРОВНЕ
 	for _, other := range s.Entities {
-		if other.ID == npc.ID {
-			continue
+		if other.Level != npc.Level {
+			continue // Игнорируем сущностей на других уровнях
 		}
-		if other.Stats != nil && other.Stats.IsDead {
-			continue
+		if other.ID == npc.ID || (other.Stats != nil && other.Stats.IsDead) {
+			continue // Игнорируем себя и мертвых
 		}
 
 		// Агрессия на Игроков
@@ -227,16 +247,24 @@ func (s *GameService) processAITurn(npc *domain.Entity) {
 		}
 	}
 
-	// Если целей нет
+	// 2. Если целей на этом уровне нет, ждем
 	if target == nil {
+		npc.AI.Wait(domain.TimeCostWait)
+		return // ВАЖНО: Выходим, если нет цели. Не вызываем AI.
+	}
+
+	// 3. Получаем мир, в котором находится NPC
+	npcWorld, ok := s.Worlds[npc.Level]
+	if !ok {
+		log.Printf("[ERROR] NPC %s is on a non-existent level %d. Waiting.", npc.ID, npc.Level)
 		npc.AI.Wait(domain.TimeCostWait)
 		return
 	}
 
-	// 2. Вычисляем действие через AI систему
-	action, _, dx, dy := systems.ComputeNPCAction(npc, target, s.World)
+	// 4. Вычисляем действие
+	action, _, dx, dy := systems.ComputeNPCAction(npc, target, npcWorld)
 
-	// 3. Конвертируем решение AI во внутреннюю команду
+	// 5. Конвертируем решение AI во внутреннюю команду
 	switch action {
 	case domain.ActionAttack:
 		payload, _ := json.Marshal(api.EntityPayload{TargetID: target.ID})
@@ -267,13 +295,25 @@ func (s *GameService) executeCommand(cmd domain.InternalCommand, actor *domain.E
 		return
 	}
 
+	actorWorld, ok := s.Worlds[actor.Level]
+	if !ok {
+		log.Printf("[ERROR] Actor %s is on a non-existent level %d", actor.ID, actor.Level)
+		return
+	}
+
 	ctx := handlers.Context{
-		World:    s.World,
+		Finder:   s,
+		World:    actorWorld,
 		Entities: s.Entities, // Передаем весь список
 		Actor:    actor,
 	}
 
 	result, _ := handler(ctx, cmd.Payload)
+
+	// --- Обработка события, если оно есть ---
+	if result.Event != nil {
+		s.processEvent(actor, result.Event)
+	}
 
 	// Логирование результата
 	if result.Msg != "" {
@@ -282,6 +322,86 @@ func (s *GameService) executeCommand(cmd domain.InternalCommand, actor *domain.E
 			msgType = "INFO"
 		}
 		s.AddLog(result.Msg, msgType)
+	}
+}
+
+func (s *GameService) processEvent(actor *domain.Entity, eventData json.RawMessage) {
+	var genericEvent struct {
+		Event string `json:"event"`
+	}
+	if err := json.Unmarshal(eventData, &genericEvent); err != nil {
+		log.Printf("Error parsing event: %v", err)
+		return
+	}
+
+	switch genericEvent.Event {
+	case "LEVEL_TRANSITION":
+		s.handleLevelTransition(actor, eventData)
+	// Здесь в будущем могут быть другие события: "SPAWN_MONSTER", "OPEN_DOOR", etc.
+	default:
+		log.Printf("Unknown event type: %s", genericEvent.Event)
+	}
+}
+
+// --- НОВАЯ ФУНКЦИЯ: Логика перехода между уровнями ---
+func (s *GameService) handleLevelTransition(actor *domain.Entity, eventData json.RawMessage) {
+	var transitionEvent struct {
+		TargetLevel int    `json:"targetLevel"`
+		TargetPosId string `json:"targetPosId"`
+	}
+	if err := json.Unmarshal(eventData, &transitionEvent); err != nil {
+		log.Printf("Error parsing LEVEL_TRANSITION event: %v", err)
+		return
+	}
+
+	oldLevel := actor.Level
+	newLevel := transitionEvent.TargetLevel
+
+	// 1. Находим старый и новый миры
+	oldWorld, okOld := s.Worlds[oldLevel]
+	newWorld, okNew := s.Worlds[newLevel]
+
+	if !okOld {
+		log.Printf("Actor %s tried to transition from a non-existent level %d", actor.ID, oldLevel)
+		return
+	}
+
+	// Если нового мира нет - генерируем его на лету
+	if !okNew {
+		log.Printf("Generating new level on the fly: %d", newLevel)
+		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		generatedWorld, newEntities, _ := dungeon.Generate(newLevel, rng)
+		s.Worlds[newLevel] = generatedWorld
+		newWorld = generatedWorld
+		// Регистрируем новых сущностей
+		for i := range newEntities {
+			e := &newEntities[i]
+			s.Entities = append(s.Entities, e)
+			newWorld.AddEntity(e)
+		}
+	}
+
+	// 2. Находим целевую позицию в новом мире
+	var targetPos domain.Position
+	targetEntity := s.GetEntity(transitionEvent.TargetPosId)
+	if targetEntity != nil {
+		targetPos = targetEntity.Pos
+	} else {
+		log.Printf("Could not find target position entity %s on level %d. Placing at default.", transitionEvent.TargetPosId, newLevel)
+		targetPos = domain.Position{X: newWorld.Width / 2, Y: newWorld.Height / 2} // Запасной вариант
+	}
+
+	// 3. Перемещаем актора
+	oldWorld.RemoveEntity(actor) // Удаляем из старого мира
+	actor.Level = newLevel       // Меняем уровень
+	actor.Pos = targetPos        // Меняем позицию
+	newWorld.AddEntity(actor)    // Добавляем в новый мир
+
+	// 4. Логирование
+	if newLevel > oldLevel {
+		s.AddLog(fmt.Sprintf("%s спускается глубже...", actor.Name), "INFO")
+	} else {
+		s.AddLog(fmt.Sprintf("%s поднимается наверх...", actor.Name), "INFO")
 	}
 }
 
@@ -302,12 +422,17 @@ func (s *GameService) publishUpdate(activeID string) {
 
 // BuildStateFor создает персональный слепок мира для observer
 func (s *GameService) BuildStateFor(observer *domain.Entity, activeID string) *api.ServerResponse {
+	observerWorld, ok := s.Worlds[observer.Level]
+	if !ok {
+		return &api.ServerResponse{Type: "ERROR", Logs: []api.LogEntry{{Text: "You are in the void."}}}
+	}
+
 	// 1. Расчет FOV (Поля зрения)
 	var visibleIdxs map[int]bool
 	isGod := false
 
 	if observer.Vision != nil {
-		visibleIdxs = systems.ComputeVisibleTiles(s.World, observer.Pos, observer.Vision)
+		visibleIdxs = systems.ComputeVisibleTiles(observerWorld, observer.Pos, observer.Vision)
 		if visibleIdxs == nil { // nil возвращается для Omniscient (всевидящих)
 			isGod = true
 		}
@@ -322,10 +447,10 @@ func (s *GameService) BuildStateFor(observer *domain.Entity, activeID string) *a
 
 	// 2. Формирование карты (Map DTO)
 	var mapDTO []api.TileView
-	// Оптимизация: можно отправлять только изменения, но пока шлем всю видимую карту
-	for y := 0; y < s.World.Height; y++ {
-		for x := 0; x < s.World.Width; x++ {
-			idx := s.World.GetIndex(x, y)
+	// TODO: Оптимизация: можно отправлять только изменения, но пока шлем всю видимую карту
+	for y := 0; y < observerWorld.Height; y++ {
+		for x := 0; x < observerWorld.Width; x++ {
+			idx := observerWorld.GetIndex(x, y)
 
 			// Проверяем, знает ли наблюдатель об этой клетке
 			isExplored := isGod
@@ -335,7 +460,7 @@ func (s *GameService) BuildStateFor(observer *domain.Entity, activeID string) *a
 
 			// Если клетка исследована, добавляем её в ответ
 			if isExplored {
-				tile := s.World.Map[y][x]
+				tile := observerWorld.Map[y][x]
 				isVisible := isGod || visibleIdxs[idx]
 
 				tView := api.TileView{
@@ -357,6 +482,11 @@ func (s *GameService) BuildStateFor(observer *domain.Entity, activeID string) *a
 	var viewEntities []api.EntityView
 
 	for _, e := range s.Entities {
+		// --- ВАЖНО: Показываем только сущностей на том же уровне ---
+		if e.Level != observer.Level {
+			continue
+		}
+
 		// Себя видим всегда
 		if e.ID == observer.ID {
 			viewEntities = append(viewEntities, s.toEntityView(e, observer))
@@ -364,7 +494,7 @@ func (s *GameService) BuildStateFor(observer *domain.Entity, activeID string) *a
 		}
 
 		// Остальных - если они в зоне видимости
-		idx := s.World.GetIndex(e.Pos.X, e.Pos.Y)
+		idx := observerWorld.GetIndex(e.Pos.X, e.Pos.Y)
 		if isGod || visibleIdxs[idx] {
 			viewEntities = append(viewEntities, s.toEntityView(e, observer))
 		}
@@ -376,10 +506,10 @@ func (s *GameService) BuildStateFor(observer *domain.Entity, activeID string) *a
 
 	return &api.ServerResponse{
 		Type:           "UPDATE",
-		Tick:           s.World.GlobalTick,
+		Tick:           s.GlobalTick,
 		MyEntityID:     observer.ID,
 		ActiveEntityID: activeID,
-		Grid:           &api.GridMeta{Width: s.World.Width, Height: s.World.Height},
+		Grid:           &api.GridMeta{Width: observerWorld.Width, Height: observerWorld.Height},
 		Map:            mapDTO,
 		Entities:       viewEntities,
 		Logs:           logsCopy,

@@ -15,15 +15,13 @@ type Tile struct {
 }
 
 type GameWorld struct {
-	Map        [][]Tile `json:"map"`
-	Width      int      `json:"width"`
-	Height     int      `json:"height"`
-	Level      int      `json:"level"`
-	GlobalTick int      `json:"globalTick"`
+	Map    [][]Tile `json:"map"`
+	Width  int      `json:"width"`
+	Height int      `json:"height"`
+	Level  int      `json:"level"`
 
 	// SpatialHash: Индекс позиции -> Список сущностей
 	// Ключ: Y * Width + X
 	// json:"-" означает, что мы НЕ отправляем этот индекс клиенту (экономия трафика)
-	SpatialHash    map[int][]*Entity  `json:"-"`
-	EntityRegistry map[string]*Entity `json:"-"`
+	SpatialHash map[int][]*Entity `json:"-"`
 }

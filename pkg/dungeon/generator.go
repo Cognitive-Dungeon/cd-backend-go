@@ -2,6 +2,7 @@ package dungeon
 
 import (
 	"cognitive-server/internal/domain"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"time"
@@ -31,7 +32,7 @@ func (r Rect) Intersects(other Rect) bool {
 }
 
 // Generate создает новый уровень
-func Generate(level int) (*domain.GameWorld, []domain.Entity, domain.Position) {
+func Generate(level int, r *rand.Rand) (*domain.GameWorld, []domain.Entity, domain.Position) {
 	// Инициализируем рандом (важно, иначе карта будет одинаковой)
 	// В Go 1.20+ глобальный сид рандомен, но для надежности можно так:
 	rand.Seed(time.Now().UnixNano())
@@ -95,11 +96,17 @@ func Generate(level int) (*domain.GameWorld, []domain.Entity, domain.Position) {
 		startPos = domain.Position{X: cx, Y: cy}
 
 		// Лестница ВВЕРХ там же
+		eventUp, _ := json.Marshal(map[string]interface{}{
+			"event":       "LEVEL_TRANSITION",
+			"targetLevel": level - 1,
+			"targetPosId": fmt.Sprintf("exit_down_from_%d", level-1), // ID лестницы, куда мы придем
+		})
 		entities = append(entities, domain.Entity{
-			ID:   "exit_up",
-			Type: domain.EntityTypeExit,
-			Name: "Лестница вверх",
-			Pos:  domain.Position{X: cx, Y: cy},
+			ID:    fmt.Sprintf("exit_up_from_%d", level),
+			Type:  domain.EntityTypeExit,
+			Name:  "Лестница вверх",
+			Pos:   domain.Position{X: cx, Y: cy},
+			Level: level,
 			Render: &domain.RenderComponent{
 				Symbol: "<",
 				Color:  "#FFFFFF", Label: "<",
@@ -107,6 +114,7 @@ func Generate(level int) (*domain.GameWorld, []domain.Entity, domain.Position) {
 			Narrative: &domain.NarrativeComponent{
 				Description: "Старая каменная лестница, ведущая на поверхность.",
 			},
+			Trigger: &domain.TriggerComponent{OnInteract: eventUp},
 		})
 	}
 
@@ -115,36 +123,30 @@ func Generate(level int) (*domain.GameWorld, []domain.Entity, domain.Position) {
 		room := rooms[i]
 		cx, cy := room.Center()
 
-		// Шанс спавна врага
-		if rand.Float32() > 0.3 {
-			isOrc := rand.Float32() > 0.7 || level > 3
+		if r.Float32() > 0.3 {
+			isOrc := r.Float32() > 0.7 || level > 3
 
-			// Заготовка врага
 			enemy := domain.Entity{
-				ID:   fmt.Sprintf("e_%d", i),
-				Type: domain.EntityTypeEnemy,
-				Pos:  domain.Position{X: cx + randRange(-1, 1), Y: cy + randRange(-1, 1)},
+				ID:    domain.GenerateID(),
+				Type:  domain.EntityTypeEnemy,
+				Pos:   domain.Position{X: cx + randRange(-1, 1), Y: cy + randRange(-1, 1)},
+				Level: level,
 
-				// Компоненты
 				Stats: &domain.StatsComponent{
-					HP: 15 + level*2, MaxHP: 15 + level*2,
+					HP:       15 + level*2,
+					MaxHP:    15 + level*2,
 					Strength: 2 + level/2,
-					Gold:     randRange(1, 10), // Золото в карманах
+					Gold:     randRange(1, 10),
 				},
 				AI: &domain.AIComponent{
 					IsHostile:      true,
 					NextActionTick: 0,
 					State:          "IDLE",
 				},
-				Render:    &domain.RenderComponent{},    // Заполнится ниже
-				Narrative: &domain.NarrativeComponent{}, // Заполнится ниже
-				Vision: &domain.VisionComponent{
-					Radius:     domain.VisionRadius, // Или 8, или 10
-					Omniscient: false,
-				},
-				Memory: &domain.MemoryComponent{ // Память тоже нужна, чтобы бот "помнил" карту
-					ExploredIDs: make(map[int]bool),
-				},
+				Render:    &domain.RenderComponent{},
+				Narrative: &domain.NarrativeComponent{},
+				Vision:    &domain.VisionComponent{Radius: domain.VisionRadius},
+				Memory:    &domain.MemoryComponent{ExploredIDs: make(map[int]bool)},
 			}
 
 			if isOrc {
@@ -154,6 +156,8 @@ func Generate(level int) (*domain.GameWorld, []domain.Entity, domain.Position) {
 				enemy.AI.Personality = "Furious"
 				enemy.Stats.HP *= 2
 				enemy.Stats.Strength += 2
+				enemy.Stats.MaxHP = enemy.Stats.HP
+
 				enemy.Narrative.Description = "Огромный зеленокожий орк с тяжелой дубиной."
 			} else {
 				enemy.Name = "Хитрый Гоблин"
@@ -169,13 +173,20 @@ func Generate(level int) (*domain.GameWorld, []domain.Entity, domain.Position) {
 	// 5. Лестница ВНИЗ (в последней комнате)
 	if len(rooms) > 0 {
 		lx, ly := rooms[len(rooms)-1].Center()
+		eventDown, _ := json.Marshal(map[string]interface{}{
+			"event":       "LEVEL_TRANSITION",
+			"targetLevel": level + 1,
+			"targetPosId": fmt.Sprintf("exit_up_from_%d", level+1),
+		})
 		entities = append(entities, domain.Entity{
-			ID:        "exit_down",
+			ID:        fmt.Sprintf("exit_down_from_%d", level),
 			Type:      domain.EntityTypeExit,
 			Name:      "Лестница вниз",
 			Pos:       domain.Position{X: lx, Y: ly},
+			Level:     level,
 			Render:    &domain.RenderComponent{Symbol: ">", Color: "#FFFFFF", Label: ">"},
 			Narrative: &domain.NarrativeComponent{Description: "Темный проход, ведущий вглубь подземелья."},
+			Trigger:   &domain.TriggerComponent{OnInteract: eventDown},
 		})
 	}
 
@@ -184,7 +195,6 @@ func Generate(level int) (*domain.GameWorld, []domain.Entity, domain.Position) {
 		Width:       MapWidth,
 		Height:      MapHeight,
 		Level:       level,
-		GlobalTick:  0,
 		SpatialHash: make(map[int][]*domain.Entity),
 	}, entities, startPos
 }

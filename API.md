@@ -67,7 +67,16 @@
     -   `targetId` (string): ID сущности, с которой нужно поговорить.
 -   **Пример:**
     ```json
-    { "action": "TALK", "payload": { "targetId": "npc_ blacksmith" } }
+    { "action": "TALK", "payload": { "targetId": "npc_blacksmith" } }
+    ```
+
+#### `INTERACT`
+-   **Описание:** Универсальное взаимодействие с объектом в мире (например, лестницей, рычагом, сундуком). Игрок должен находиться на той же клетке, что и объект.
+-   **Payload:** `EntityPayload`
+    -   `targetId` (string): ID сущности-объекта, с которой нужно взаимодействовать.
+-   **Пример (использование лестницы):**
+    ```json
+    { "action": "INTERACT", "payload": { "targetId": "exit_down_from_0" } }
     ```
 
 #### `WAIT`
