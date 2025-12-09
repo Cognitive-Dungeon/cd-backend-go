@@ -2,56 +2,73 @@ package systems
 
 import (
 	"cognitive-server/internal/domain"
-	"log"
+	"cognitive-server/pkg/logger"
+	"github.com/sirupsen/logrus"
 	"math"
 )
 
 // ComputeNPCAction решает, что делать NPC.
 // Возвращает (команда, цель_атаки_если_есть, dx, dy)
 func ComputeNPCAction(npc *domain.Entity, player *domain.Entity, w *domain.GameWorld) (action domain.ActionType, target *domain.Entity, dx, dy int) {
-	// --- ОТЛАДКА: НАЧАЛО ПРОВЕРКИ ---
-	log.Printf("[AI DEBUG | %s] Turn Start. Target: %s at (%d,%d)", npc.Name, player.Name, player.Pos.X, player.Pos.Y)
+	aiLogger := logger.Log.WithFields(logrus.Fields{
+		"component":  "ai_system",
+		"npc_id":     npc.ID,
+		"npc_name":   npc.Name,
+		"npc_pos":    npc.Pos,
+		"target_id":  player.ID,
+		"target_pos": player.Pos,
+	})
 
+	aiLogger.Debug("--- AI Turn Start ---")
+
+	// --- ШАГ 2: aПроверка базовых условий ---
 	if npc.AI == nil || npc.Stats == nil || npc.Stats.IsDead || !npc.AI.IsHostile {
-		log.Printf("[AI DEBUG | %s] Invalid state (dead, not hostile, etc). Action: WAIT", npc.Name)
+		aiLogger.Debug("Pre-computation check failed (dead, not hostile, etc). Action: WAIT")
 		return domain.ActionWait, nil, 0, 0
 	}
 
 	dist := npc.Pos.DistanceTo(player.Pos)
-	log.Printf("[AI DEBUG | %s] Distance to target: %.2f", npc.Name, dist)
-
-	// Проверка видимости
 	canSee := HasLineOfSight(w, npc.Pos, player.Pos)
-	log.Printf("[AI DEBUG | %s] HasLineOfSight to target: %t", npc.Name, canSee)
 
-	// Если не видим цель, не делаем ничего.
+	aiLogger.WithFields(logrus.Fields{
+		"distance_to_target": dist,
+		"has_line_of_sight":  canSee,
+	}).Debug("Perception check complete")
+
+	// --- ШАГ 3: Логика принятия решений ---
+
+	// 3.1. Не видим цель -> Ждать
 	if !canSee {
-		log.Printf("[AI DEBUG | %s] Target not visible. Action: WAIT", npc.Name)
+		aiLogger.Debug("Decision: Target not visible. Action: WAIT")
 		return domain.ActionWait, nil, 0, 0
 	}
 
-	// Если в радиусе атаки (включая диагонали)
+	// 3.2. В радиусе атаки -> Атаковать
 	if dist <= 1.5 {
-		log.Printf("[AI DEBUG | %s] Target in attack range. Action: ATTACK", npc.Name)
+		aiLogger.Debug("Decision: Target in melee range. Action: ATTACK")
 		return domain.ActionAttack, player, 0, 0
 	}
 
-	// Если видим, но цель слишком далеко (за пределами агро-радиуса)
+	// 3.3. Видим, но слишком далеко -> Ждать
 	if dist > domain.AggroRadius {
-		log.Printf("[AI DEBUG | %s] Target visible but out of aggro range (%.2f > %d). Action: WAIT", npc.Name, dist, domain.AggroRadius)
+		aiLogger.WithField("aggro_radius", domain.AggroRadius).Debug("Decision: Target is outside aggro radius. Action: WAIT")
 		return domain.ActionWait, nil, 0, 0
 	}
 
-	// Если мы здесь, значит, цель видима и находится в радиусе преследования.
-	log.Printf("[AI DEBUG | %s] Target in pursuit range. Calculating move...", npc.Name)
+	// 3.4. Если мы здесь, значит цель в зоне преследования -> Двигаться
+	aiLogger.Debug("Decision: Target in pursuit range. Calculating move path...")
 	moveDx, moveDy := calculateSmartMove(npc, player, w)
 
 	if moveDx == 0 && moveDy == 0 {
-		log.Printf("[AI DEBUG | %s] Path is blocked or destination reached. Action: WAIT", npc.Name)
+		aiLogger.Debug("Path calculation result: Path is blocked or destination reached. Action: WAIT")
 		return domain.ActionWait, nil, 0, 0
 	}
 
-	log.Printf("[AI DEBUG | %s] Path found. Action: MOVE (dx:%d, dy:%d)", npc.Name, moveDx, moveDy)
+	aiLogger.WithFields(logrus.Fields{
+		"move_dx": moveDx,
+		"move_dy": moveDy,
+	}).Debug("Path calculation result: Path found. Action: MOVE")
+
 	return domain.ActionMove, nil, moveDx, moveDy
 }
 

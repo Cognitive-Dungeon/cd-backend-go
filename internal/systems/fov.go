@@ -2,6 +2,8 @@ package systems
 
 import (
 	"cognitive-server/internal/domain"
+	"cognitive-server/pkg/logger"
+	"github.com/sirupsen/logrus"
 )
 
 // Мультипликаторы для трансформации координат в 8 октантов
@@ -14,31 +16,41 @@ var multipliers = [4][8]int{
 
 // ComputeVisibleTiles возвращает мапу индексов {index: true}, которые видны.
 func ComputeVisibleTiles(w *domain.GameWorld, pos domain.Position, vision *domain.VisionComponent) map[int]bool {
-	visibleMap := make(map[int]bool)
+	fovLogger := logger.Log.WithFields(logrus.Fields{
+		"component":    "fov_system",
+		"observer_pos": pos,
+	})
 
 	// 1. Если Всевидящий (ГМ, Птица) -> возвращаем nil (маркер "Вижу всё")
 	if vision != nil && vision.Omniscient {
+		fovLogger.WithField("is_omniscient", true).Debug("FOV calculation skipped for omniscient observer.")
 		return nil // Signal: Full Visibility
 	}
 
-	radius := 8
+	radius := 8 // Значение по умолчанию
 	if vision != nil {
 		radius = vision.Radius
 	}
 
+	fovLogger.WithField("radius", radius).Debug("Starting FOV calculation.")
+
+	visibleMap := make(map[int]bool)
 	if radius <= 0 {
+		fovLogger.Warn("FOV calculation skipped for blind observer (radius <= 0).")
 		return visibleMap // Слепой
 	}
 
-	// 2. Центр
+	// 2. Центр всегда виден
 	visibleMap[w.GetIndex(pos.X, pos.Y)] = true
 
-	// 3. Shadowcasting
+	// 3. Запускаем рекурсивный Shadowcasting для 8 октантов
 	for i := 0; i < 8; i++ {
 		castLight(w, pos.X, pos.Y, 1, 1.0, 0.0, radius,
 			multipliers[0][i], multipliers[1][i],
 			multipliers[2][i], multipliers[3][i], visibleMap)
 	}
+
+	fovLogger.WithField("visible_tiles", len(visibleMap)).Debug("FOV calculation complete.")
 
 	return visibleMap
 }

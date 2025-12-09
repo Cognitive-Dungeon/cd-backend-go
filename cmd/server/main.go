@@ -3,6 +3,8 @@ package main
 import (
 	"cognitive-server/internal/engine"
 	"cognitive-server/pkg/api"
+	"cognitive-server/pkg/logger"
+	"github.com/sirupsen/logrus"
 	"log"
 	"net/http"
 	"os"
@@ -22,7 +24,7 @@ var gameInstance = engine.NewService()
 func wsHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Println("Failed to upgrade connection:", err)
+		logger.Log.Errorln("Failed to upgrade connection:", err)
 		return
 	}
 	defer conn.Close()
@@ -31,7 +33,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	// Читаем первое сообщение, ожидаем { "action": "LOGIN", "token": "entity_uuid" }
 	var loginCmd api.ClientCommand
 	if err := conn.ReadJSON(&loginCmd); err != nil {
-		log.Println("Handshake error:", err)
+		logger.Log.Warnln("Handshake error:", err)
 		return
 	}
 
@@ -41,7 +43,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	ent := gameInstance.GetEntity(entityID)
 	// -----------------------------------------------------------
 	if ent == nil {
-		log.Printf("Login failed: unknown entity '%s'", entityID)
+		logger.Log.WithField("entity_id", entityID).Warn("Login failed: unknown entity")
 		conn.WriteJSON(map[string]string{"error": "Entity not found"})
 		return
 	}
@@ -49,14 +51,19 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	// Помечаем, что сущность управляется человеком
 	ent.ControllerID = "session_" + entityID[:4]
 
-	log.Printf("Client connected and possessed %s (%s) on level %d", ent.Name, entityID, ent.Level)
+	logger.Log.WithFields(logrus.Fields{
+		"component":   "network",
+		"entity_id":   entityID,
+		"entity_name": ent.Name,
+		"level":       ent.Level,
+	}).Info("Client connected and possessed entity")
 
 	// 2. Регистрация в Хабе для получения обновлений
 	clientChan := gameInstance.Hub.Register(entityID)
 	defer func() {
 		gameInstance.Hub.Unregister(entityID)
 		ent.ControllerID = "" // Освобождаем сущность при дисконнекте
-		log.Printf("Client disconnected: %s", entityID)
+		logger.Log.WithField("entity_id", entityID).Info("Client disconnected")
 	}()
 
 	// 3. Отправляем начальное состояние мира
@@ -89,7 +96,13 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// init() вызывается автоматически перед main()
+func init() {
+	logger.Init()
+}
+
 func main() {
+	logger.Log.Info("Starting Cognitive Dungeon...")
 	port := os.Getenv("CD_PORT")
 	if port == "" {
 		port = "8080"
@@ -101,14 +114,14 @@ func main() {
 
 	// 2. Запускаем игровой цикл в фоновой горутине.
 	//    Мир начинает "жить" своей жизнью (ALife симуляция).
-	log.Println("Starting Game Loop...")
+	logger.Log.Info("Starting Game Loop...")
 	gameInstance.Start()
 
 	// 3. Настраиваем обработчик для WebSocket-подключений.
 	http.HandleFunc("/ws", wsHandler)
 
 	// 4. Запускаем веб-сервер, который будет принимать подключения от игроков.
-	log.Println("🛡️  Cognitive Dungeon Server running on :" + port)
+	logger.Log.Infof("🛡️  Cognitive Dungeon Server running on :%s", port)
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		log.Fatal("ListenAndServe error:", err)
 	}

@@ -6,10 +6,18 @@ import (
 	"cognitive-server/internal/engine/handlers/actions"
 	"cognitive-server/internal/network"
 	"cognitive-server/pkg/api"
+	"cognitive-server/pkg/logger"
 	"fmt"
-	"log"
+	"github.com/sirupsen/logrus"
 	"sort"
 	"time"
+)
+
+type LoopState uint8
+
+const (
+	LoopStateRunning LoopState = iota // Цикл активен и обрабатывает ходы.
+	LoopStatePaused                   // Цикл на паузе, т.к. нет игроков.
 )
 
 type GameService struct {
@@ -27,6 +35,8 @@ type GameService struct {
 	Hub         *network.Broadcaster
 
 	handlers map[domain.ActionType]handlers.HandlerFunc
+
+	loopState LoopState
 }
 
 func NewService() *GameService {
@@ -40,6 +50,7 @@ func NewService() *GameService {
 		CommandChan: make(chan domain.InternalCommand, 100),
 		Hub:         network.NewBroadcaster(),
 		handlers:    make(map[domain.ActionType]handlers.HandlerFunc),
+		loopState:   LoopStateRunning,
 	}
 
 	s.registerHandlers()
@@ -48,14 +59,18 @@ func NewService() *GameService {
 
 // GetEntity ищет сущность по ID во всех загруженных мирах.
 func (s *GameService) GetEntity(id string) *domain.Entity {
-	log.Printf("[FINDER DEBUG] Searching for Entity ID: '%s'", id)
+	finderLogger := logger.Log.WithField("entity_id", id)
+
+	finderLogger.Debug("Searching for entity...")
+
 	for level, world := range s.Worlds {
 		if entity := world.GetEntity(id); entity != nil {
-			log.Printf("[FINDER DEBUG] Found '%s' in world %d.", id, level)
+			finderLogger.WithField("found_in_level", level).Debug("Entity found.")
 			return entity
 		}
 	}
-	log.Printf("[FINDER DEBUG] Entity ID '%s' NOT FOUND in any world.", id)
+
+	finderLogger.Warn("Entity not found in any world.")
 	return nil
 }
 
@@ -78,7 +93,7 @@ func (s *GameService) Start() {
 func (s *GameService) ProcessCommand(externalCmd api.ClientCommand) {
 	actionType := domain.ParseAction(externalCmd.Action)
 	if actionType == domain.ActionUnknown {
-		log.Printf("Unknown action: %s", externalCmd.Action)
+		logger.Log.WithField("action", externalCmd.Action).Warn("Unknown action received from client")
 		return
 	}
 
@@ -92,13 +107,30 @@ func (s *GameService) ProcessCommand(externalCmd api.ClientCommand) {
 // --- GAME LOOP ---
 
 func (s *GameService) RunGameLoop() {
-	log.Println("[LOOP] Game Loop started")
+	logger.Log.Info("Game loop started.")
 
 	for {
 		// Если в хабе нет ни одного подписчика (ни игроков, ни ботов),
 		// ставим симуляцию на паузу, чтобы не тратить ресурсы и не "прокручивать" время.
-		if s.Hub.SubscriberCount() == 0 {
-			time.Sleep(100 * time.Millisecond) // Небольшая задержка, чтобы не загружать CPU
+		hasSubscribers := s.Hub.SubscriberCount() > 0
+
+		// Случай 1: Должны быть на паузе, но сейчас работаем.
+		// Переходим в состояние паузы и логируем это ОДИН РАЗ.
+		if !hasSubscribers && s.loopState == LoopStateRunning {
+			logger.Log.Info("Game loop paused: no subscribers.")
+			s.loopState = LoopStatePaused
+		}
+
+		// Случай 2: Должны работать, но сейчас на паузе.
+		// Переходим в рабочее состояние и логируем это ОДИН РАЗ.
+		if hasSubscribers && s.loopState == LoopStatePaused {
+			logger.Log.Info("Game loop resumed.")
+			s.loopState = LoopStateRunning
+		}
+
+		// Если мы на паузе, просто спим и переходим к следующей итерации.
+		if s.loopState == LoopStatePaused {
+			time.Sleep(100 * time.Millisecond)
 			continue
 		}
 
@@ -110,8 +142,6 @@ func (s *GameService) RunGameLoop() {
 			time.Sleep(1 * time.Second)
 			continue
 		}
-
-		log.Printf("[LOOP] Next actor: %s (%s) | NextActionTick: %d", activeActor.Name, activeActor.ID, activeActor.AI.NextActionTick)
 
 		// Обновляем глобальное время
 		s.GlobalTick = activeActor.AI.NextActionTick
@@ -125,6 +155,14 @@ func (s *GameService) RunGameLoop() {
 		// Критерий: Есть ControllerID (устанавливается при логине) ИЛИ просто есть подписчик в Hub.
 		// Для надежности будем проверять наличие активного соединения в Hub.
 		isHumanControlled := s.Hub.HasSubscriber(activeActor.ID)
+
+		logger.Log.WithFields(logrus.Fields{
+			"component":         "game_loop",
+			"tick":              s.GlobalTick,
+			"active_actor_id":   activeActor.ID,
+			"active_actor_name": activeActor.Name,
+			"is_human":          isHumanControlled,
+		}).Debug("--- New Turn ---")
 
 		if !isHumanControlled {
 			// --- ХОД ИИ ---
@@ -161,7 +199,10 @@ func (s *GameService) RunGameLoop() {
 				}
 
 			case <-timeout:
-				log.Printf("[TIMEOUT] %s (%s) skips turn.", activeActor.Name, activeActor.ID)
+				logger.Log.WithFields(logrus.Fields{
+					"actor_id":   activeActor.ID,
+					"actor_name": activeActor.Name,
+				}).Warn("Player turn timed out. Forcing WAIT action.")
 				activeActor.AI.Wait(domain.TimeCostWait)
 				commandProcessed = true
 			}
@@ -178,7 +219,10 @@ func (s *GameService) executeCommand(cmd domain.InternalCommand, actor *domain.E
 
 	actorWorld, ok := s.Worlds[actor.Level]
 	if !ok {
-		log.Printf("[ERROR] Actor %s is on a non-existent level %d", actor.ID, actor.Level)
+		logger.Log.WithFields(logrus.Fields{
+			"actor_id": actor.ID,
+			"level":    actor.Level,
+		}).Error("executeCommand failed: Actor is on a non-existent level.")
 		return
 	}
 
@@ -235,4 +279,8 @@ func (s *GameService) AddLog(text, logType string) {
 		Type:      logType,
 		Timestamp: time.Now().UnixMilli(),
 	})
+	logger.Log.WithFields(logrus.Fields{
+		"component": "game_log",
+		"log_type":  logType,
+	}).Info(text)
 }
