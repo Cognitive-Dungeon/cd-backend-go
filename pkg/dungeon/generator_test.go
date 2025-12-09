@@ -1,12 +1,15 @@
 package dungeon
 
 import (
+	"math/rand"
 	"testing"
+	"time"
 )
 
 func TestGenerate(t *testing.T) {
 	level := 1
-	world, entities, startPos := Generate(level)
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	world, entities, startPos := Generate(level, rng)
 
 	// 1. Проверка размеров мира
 	if world.Width != MapWidth || world.Height != MapHeight {
@@ -33,7 +36,7 @@ func TestGenerate(t *testing.T) {
 
 	hasExitDown := false
 	for _, e := range entities {
-		if e.Type == "EXIT" && e.Label == ">" {
+		if e.Type == "EXIT" && e.Render.Label == ">" {
 			hasExitDown = true
 			break
 		}

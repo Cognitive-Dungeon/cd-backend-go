@@ -37,7 +37,7 @@ type GameService struct {
 	Hub         *network.Broadcaster
 
 	actionHandlers map[domain.ActionType]handlers.HandlerFunc
-	eventHandlers  map[string]handlers.HandlerFunc
+	eventHandlers  map[domain.EventType]handlers.HandlerFunc
 
 	loopState LoopState
 }
@@ -53,7 +53,7 @@ func NewService() *GameService {
 		CommandChan:    make(chan domain.InternalCommand, 100),
 		Hub:            network.NewBroadcaster(),
 		actionHandlers: make(map[domain.ActionType]handlers.HandlerFunc),
-		eventHandlers:  make(map[string]handlers.HandlerFunc),
+		eventHandlers:  make(map[domain.EventType]handlers.HandlerFunc),
 		loopState:      LoopStateRunning,
 	}
 

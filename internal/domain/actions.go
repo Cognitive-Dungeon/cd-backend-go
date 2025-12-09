@@ -17,7 +17,7 @@ const (
 )
 
 // Маппинг для конвертации JSON -> Domain
-var stringToCmd = map[string]ActionType{
+var actionStringToCmd = map[string]ActionType{
 	"INIT":     ActionInit,
 	"MOVE":     ActionMove,
 	"ATTACK":   ActionAttack,
@@ -27,7 +27,7 @@ var stringToCmd = map[string]ActionType{
 }
 
 // Маппинг для логов Domain -> String
-var cmdToString = map[ActionType]string{
+var actionCmdToString = map[ActionType]string{
 	ActionInit:     "INIT",
 	ActionMove:     "MOVE",
 	ActionAttack:   "ATTACK",
@@ -40,7 +40,7 @@ var cmdToString = map[ActionType]string{
 func ParseAction(s string) ActionType {
 	// Делаем нечувствительным к регистру для надежности
 	upper := strings.ToUpper(s)
-	if val, ok := stringToCmd[upper]; ok {
+	if val, ok := actionStringToCmd[upper]; ok {
 		return val
 	}
 	return ActionUnknown
@@ -48,7 +48,7 @@ func ParseAction(s string) ActionType {
 
 // String реализует интерфейс Stringer (для fmt.Printf)
 func (a ActionType) String() string {
-	if val, ok := cmdToString[a]; ok {
+	if val, ok := actionCmdToString[a]; ok {
 		return val
 	}
 	return "UNKNOWN"

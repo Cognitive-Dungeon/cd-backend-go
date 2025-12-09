@@ -3,8 +3,8 @@ package engine
 import (
 	"cognitive-server/internal/domain"
 	"cognitive-server/internal/engine/handlers"
+	"cognitive-server/pkg/logger"
 	"encoding/json"
-	"log"
 )
 
 // processEvent - является точкой входа для обработки событий, возвращенных хендлерами.
@@ -13,13 +13,19 @@ func (s *GameService) processEvent(actor *domain.Entity, eventData json.RawMessa
 		Event string `json:"event"`
 	}
 	if err := json.Unmarshal(eventData, &genericEvent); err != nil {
-		log.Printf("Error parsing event: %v", err)
+		logger.Log.Errorf("Error parsing event: %v", err)
 		return
 	}
 
-	handler, ok := s.eventHandlers[genericEvent.Event]
+	eventType := domain.ParseEvent(genericEvent.Event)
+	if eventType == domain.EventUnknown {
+		logger.Log.Warnf("Unknown event type: %s", genericEvent.Event)
+		return
+	}
+
+	handler, ok := s.eventHandlers[eventType]
 	if !ok {
-		log.Printf("Unknown event type: %s", genericEvent.Event)
+		logger.Log.Warnf("No handler registered for event type: %s", eventType)
 		return
 	}
 
@@ -38,7 +44,7 @@ func (s *GameService) processEvent(actor *domain.Entity, eventData json.RawMessa
 	// Выполняем хендлер
 	result, err := handler(ctx, eventData)
 	if err != nil {
-		log.Printf("Error handling event %s: %v", genericEvent.Event, err)
+		logger.Log.Errorf("Error handling event %s: %v", genericEvent.Event, err)
 		return
 	}
 
