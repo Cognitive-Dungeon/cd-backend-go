@@ -8,7 +8,6 @@ import (
 	"cognitive-server/internal/network"
 	"cognitive-server/pkg/api"
 	"cognitive-server/pkg/logger"
-	"container/heap"
 	"fmt"
 	"time"
 
@@ -39,8 +38,7 @@ type GameService struct {
 	actionHandlers map[domain.ActionType]handlers.HandlerFunc
 	eventHandlers  map[domain.EventType]handlers.HandlerFunc
 
-	turnQueue     TurnQueue            // Очередь ходов (MinHeap)
-	entityItemMap map[string]*TurnItem // Быстрый доступ к элементам очереди по ID сущности
+	TurnManager *TurnManager // Менеджер очередности ходов
 
 	loopState LoopState
 }
@@ -57,32 +55,21 @@ func NewService() *GameService {
 		Hub:            network.NewBroadcaster(),
 		actionHandlers: make(map[domain.ActionType]handlers.HandlerFunc),
 		eventHandlers:  make(map[domain.EventType]handlers.HandlerFunc),
-		turnQueue:      make(TurnQueue, 0),
-		entityItemMap:  make(map[string]*TurnItem),
+		TurnManager:    NewTurnManager(),
 		loopState:      LoopStateRunning,
 	}
 
 	s.registerHandlers()
-	s.initTurnQueue()
 
-	return s
-}
-
-func (s *GameService) initTurnQueue() {
-	s.turnQueue = make(TurnQueue, 0)
-	s.entityItemMap = make(map[string]*TurnItem)
-
+	// Add existing entities to manager
 	for _, e := range s.Entities {
-		if e.AI != nil && e.Stats != nil && !e.Stats.IsDead {
-			item := &TurnItem{
-				Value:    e,
-				Priority: e.AI.NextActionTick,
-			}
-			heap.Push(&s.turnQueue, item)
-			s.entityItemMap[e.ID] = item
+		if e.Stats != nil && !e.Stats.IsDead {
+			s.TurnManager.AddEntity(e)
 		}
 	}
-	logger.Log.WithField("queue_size", s.turnQueue.Len()).Info("TurnQueue initialized.")
+	// s.initTurnQueue() - removed
+
+	return s
 }
 
 // GetEntity ищет сущность по ID во всех загруженных мирах.
@@ -166,7 +153,7 @@ func (s *GameService) RunGameLoop() {
 		}
 
 		// 1. Кто ходит следующим?
-		activeItem := s.peekNextActorItem()
+		activeItem := s.TurnManager.PeekNext()
 
 		// Если никого нет (пустой мир или все мертвы), ждем и повторяем
 		if activeItem == nil {
@@ -241,9 +228,7 @@ func (s *GameService) RunGameLoop() {
 		}
 
 		// В конце хода обновляем приоритет в очереди
-		if item, ok := s.entityItemMap[activeActor.ID]; ok {
-			s.turnQueue.Update(item, activeActor.AI.NextActionTick)
-		}
+		s.TurnManager.UpdatePriority(activeActor.ID, activeActor.AI.NextActionTick)
 	}
 }
 
@@ -285,15 +270,6 @@ func (s *GameService) executeCommand(cmd domain.InternalCommand, actor *domain.E
 		}
 		s.AddLog(result.Msg, msgType)
 	}
-}
-
-// peekNextActorItem смотрит (но не удаляет) следующего актора
-func (s *GameService) peekNextActorItem() *TurnItem {
-	if s.turnQueue.Len() == 0 {
-		return nil
-	}
-	// В MinHeap [0] всегда минимальный элемент
-	return s.turnQueue[0]
 }
 
 func (s *GameService) AddLog(text, logType string) {

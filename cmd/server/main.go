@@ -4,10 +4,11 @@ import (
 	"cognitive-server/internal/engine"
 	"cognitive-server/pkg/api"
 	"cognitive-server/pkg/logger"
-	"github.com/sirupsen/logrus"
 	"log"
 	"net/http"
 	"os"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/gorilla/websocket" // Исправлена возможная опечатка comcom -> com
 )
@@ -19,7 +20,7 @@ var upgrader = websocket.Upgrader{
 
 // Инициализируем игровой сервис (Арбитр).
 // NewService() теперь создает все уровни и сущности.
-var gameInstance = engine.NewService()
+var gameInstance *engine.GameService
 
 func wsHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
@@ -109,6 +110,9 @@ func main() {
 	}
 
 	// --- Порядок запуска ---
+	// 0. Инициализируем сервис (после того как логгер уже готов)
+	gameInstance = engine.NewService()
+
 	// 1. Игровой сервис инициализирован выше (var gameInstance).
 	//    На этом этапе все миры, NPC и предметы уже созданы в памяти.
 
