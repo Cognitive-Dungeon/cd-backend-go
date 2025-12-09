@@ -4,13 +4,15 @@ import (
 	"cognitive-server/internal/domain"
 	"cognitive-server/internal/engine/handlers"
 	"cognitive-server/internal/engine/handlers/actions"
+	"cognitive-server/internal/engine/handlers/events"
 	"cognitive-server/internal/network"
 	"cognitive-server/pkg/api"
 	"cognitive-server/pkg/logger"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"sort"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 type LoopState uint8
@@ -34,7 +36,8 @@ type GameService struct {
 	CommandChan chan domain.InternalCommand
 	Hub         *network.Broadcaster
 
-	handlers map[domain.ActionType]handlers.HandlerFunc
+	actionHandlers map[domain.ActionType]handlers.HandlerFunc
+	eventHandlers  map[string]handlers.HandlerFunc
 
 	loopState LoopState
 }
@@ -43,14 +46,15 @@ func NewService() *GameService {
 	worlds, allEntities := buildInitialWorld()
 
 	s := &GameService{
-		Worlds:      worlds,
-		Entities:    allEntities,
-		GlobalTick:  0,
-		Logs:        []api.LogEntry{},
-		CommandChan: make(chan domain.InternalCommand, 100),
-		Hub:         network.NewBroadcaster(),
-		handlers:    make(map[domain.ActionType]handlers.HandlerFunc),
-		loopState:   LoopStateRunning,
+		Worlds:         worlds,
+		Entities:       allEntities,
+		GlobalTick:     0,
+		Logs:           []api.LogEntry{},
+		CommandChan:    make(chan domain.InternalCommand, 100),
+		Hub:            network.NewBroadcaster(),
+		actionHandlers: make(map[domain.ActionType]handlers.HandlerFunc),
+		eventHandlers:  make(map[string]handlers.HandlerFunc),
+		loopState:      LoopStateRunning,
 	}
 
 	s.registerHandlers()
@@ -75,12 +79,15 @@ func (s *GameService) GetEntity(id string) *domain.Entity {
 }
 
 func (s *GameService) registerHandlers() {
-	s.handlers[domain.ActionMove] = handlers.WithPayload(actions.HandleMove)
-	s.handlers[domain.ActionAttack] = handlers.WithPayload(actions.HandleAttack)
-	s.handlers[domain.ActionTalk] = handlers.WithPayload(actions.HandleTalk)
-	s.handlers[domain.ActionInteract] = handlers.WithPayload(actions.HandleInteract)
-	s.handlers[domain.ActionInit] = handlers.WithEmptyPayload(actions.HandleInit)
-	s.handlers[domain.ActionWait] = handlers.WithEmptyPayload(actions.HandleWait)
+	s.actionHandlers[domain.ActionMove] = handlers.WithPayload(actions.HandleMove)
+	s.actionHandlers[domain.ActionAttack] = handlers.WithPayload(actions.HandleAttack)
+	s.actionHandlers[domain.ActionTalk] = handlers.WithPayload(actions.HandleTalk)
+	s.actionHandlers[domain.ActionInteract] = handlers.WithPayload(actions.HandleInteract)
+	s.actionHandlers[domain.ActionInit] = handlers.WithEmptyPayload(actions.HandleInit)
+	s.actionHandlers[domain.ActionWait] = handlers.WithEmptyPayload(actions.HandleWait)
+
+	// Events
+	s.eventHandlers[domain.EventLevelTransition] = handlers.WithPayload(events.HandleLevelTransition)
 }
 
 func (s *GameService) Start() {
@@ -212,7 +219,7 @@ func (s *GameService) RunGameLoop() {
 
 // executeCommand выполняет хендлер и пишет логи
 func (s *GameService) executeCommand(cmd domain.InternalCommand, actor *domain.Entity) {
-	handler, ok := s.handlers[cmd.Action]
+	handler, ok := s.actionHandlers[cmd.Action]
 	if !ok {
 		return
 	}
