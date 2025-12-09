@@ -259,7 +259,20 @@
         gridInitialized = true;
     }
 
+    // Сбрасывает все тайлы на карте в их "невидимое" состояние по умолчанию.
+    function clearGrid() {
+        if (!gridInitialized) return;
+        const tiles = mapEl.children;
+        for (let i = 0; i < tiles.length; i++) {
+            const el = tiles[i];
+            el.className = "tile"; // Убираем .visible, .explored, .entity и т.д.
+            el.innerText = '';     // Убираем символ
+            el.style.color = '#222'; // Возвращаем дефолтный цвет
+        }
+    }
+
     function renderTiles(tiles) {
+        clearGrid()
         tiles.forEach(t => {
             const el = document.getElementById(`c-${t.x}-${t.y}`);
             if (!el) return;

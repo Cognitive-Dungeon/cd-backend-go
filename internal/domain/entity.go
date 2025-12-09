@@ -48,8 +48,8 @@ type VisionComponent struct {
 
 // MemoryComponent - туман войны
 type MemoryComponent struct {
-	// Храним индексы тайлов, которые мы уже видели
-	ExploredIDs map[int]bool `json:"exploredIds"`
+	// Храним набор исследованных ID для каждого уровня отдельно.
+	ExploredPerLevel map[int]map[int]bool `json:"exploredPerLevel"`
 }
 
 // TriggerComponent описывает, что происходит при взаимодействии с сущностью.

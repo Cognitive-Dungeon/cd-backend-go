@@ -2,6 +2,29 @@ package domain
 
 import "errors"
 
+// GetEntity ищет сущность по ID в реестре ЭТОГО мира.
+func (w *GameWorld) GetEntity(id string) *Entity {
+	if w.EntityRegistry == nil {
+		return nil
+	}
+	return w.EntityRegistry[id]
+}
+
+// RegisterEntity добавляет сущность в реестр ЭТОГО мира.
+func (w *GameWorld) RegisterEntity(e *Entity) {
+	if w.EntityRegistry == nil {
+		w.EntityRegistry = make(map[string]*Entity)
+	}
+	w.EntityRegistry[e.ID] = e
+}
+
+// UnregisterEntity удаляет сущность из реестра ЭТОГО мира.
+func (w *GameWorld) UnregisterEntity(id string) {
+	if w.EntityRegistry != nil {
+		delete(w.EntityRegistry, id)
+	}
+}
+
 func (w *GameWorld) GetIndex(x, y int) int {
 	return y*w.Width + x
 }

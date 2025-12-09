@@ -146,7 +146,7 @@ func Generate(level int, r *rand.Rand) (*domain.GameWorld, []domain.Entity, doma
 				Render:    &domain.RenderComponent{},
 				Narrative: &domain.NarrativeComponent{},
 				Vision:    &domain.VisionComponent{Radius: domain.VisionRadius},
-				Memory:    &domain.MemoryComponent{ExploredIDs: make(map[int]bool)},
+				Memory:    &domain.MemoryComponent{ExploredPerLevel: make(map[int]map[int]bool)},
 			}
 
 			if isOrc {
