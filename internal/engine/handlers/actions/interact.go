@@ -3,28 +3,32 @@ package actions
 import (
 	"cognitive-server/internal/domain"
 	"cognitive-server/internal/engine/handlers"
+	"cognitive-server/internal/systems"
 	"cognitive-server/pkg/api"
 	"fmt"
 )
 
 func HandleInteract(ctx handlers.Context, p api.EntityPayload) (handlers.Result, error) {
-	// 1. Поиск цели взаимодействия
-	target := ctx.Finder.GetEntity(p.TargetID)
-	if target == nil {
-		return handlers.Result{Msg: "Вы не видите, с чем взаимодействовать.", MsgType: "ERROR"}, nil
+	// 1. Валидация через TargetingSystem
+	// Дистанция 1.5 (можно нажать рычаг под ногами или рядом)
+	// LOS = false, так как если мы стоим на лестнице, мы её "чувствуем", даже если под ногами
+	res := systems.ValidateInteraction(ctx.Actor, p.TargetID, 1.5, false, ctx.Finder, ctx.World)
+
+	if !res.Valid {
+		return handlers.Result{Msg: res.Message, MsgType: "ERROR"}, nil
 	}
 
-	// 2. Проверка дистанции, минимум одна клетка
-	if ctx.Actor.Pos.DistanceTo(target.Pos) > 1 {
-		return handlers.Result{Msg: "Нужно подойти ближе.", MsgType: "ERROR"}, nil
-	}
+	target := res.Target
 
-	// 3. Проверка наличия триггера
+	// 2. Проверка наличия триггера (специфика Interact)
 	if target.Trigger == nil || target.Trigger.OnInteract == nil {
-		return handlers.Result{Msg: fmt.Sprintf("Ничего не происходит при взаимодействии с %s.", target.Name), MsgType: "INFO"}, nil
+		return handlers.Result{
+			Msg:     fmt.Sprintf("Ничего не происходит при взаимодействии с %s.", target.Name),
+			MsgType: "INFO",
+		}, nil
 	}
 
-	// 4. Трата времени
+	// 3. Трата времени
 	if ctx.Actor.AI != nil {
 		ctx.Actor.AI.Wait(domain.TimeCostInteract)
 	}

@@ -3,12 +3,13 @@ package actions
 import (
 	"cognitive-server/internal/domain"
 	"cognitive-server/internal/engine/handlers"
+	"cognitive-server/internal/systems"
 	"cognitive-server/pkg/api"
 	"fmt"
 )
 
 func HandleTalk(ctx handlers.Context, p api.EntityPayload) (handlers.Result, error) {
-	// Если ID пустой — просто бормотание
+	// Если ID пустой — просто бормотание (специфичный кейс, оставляем тут)
 	if p.TargetID == "" {
 		return handlers.Result{
 			Msg:     "Вы бормочете в пустоту.",
@@ -16,24 +17,21 @@ func HandleTalk(ctx handlers.Context, p api.EntityPayload) (handlers.Result, err
 		}, nil
 	}
 
-	// 1. Поиск собеседника
-	target := ctx.Finder.GetEntity(p.TargetID)
+	// 1. Валидация через TargetingSystem
+	// Дистанция 1.5 (разговор лицом к лицу), Нужен LOS (нельзя говорить сквозь стену)
+	res := systems.ValidateInteraction(ctx.Actor, p.TargetID, 1.5, true, ctx.Finder, ctx.World)
 
-	if target == nil {
-		return handlers.Result{
-			Msg:     "Вас никто не слышит.",
-			MsgType: "INFO",
-		}, nil
+	if !res.Valid {
+		// Для разговора можно смягчить ошибку до INFO
+		return handlers.Result{Msg: res.Message, MsgType: "INFO"}, nil
 	}
 
-	// 2. Трата времени (разговоры в бою тоже стоят времени)
-	// В мирном режиме это не критично, но для порядка добавим
+	target := res.Target
+
+	// 2. Трата времени
 	if ctx.Actor.AI != nil {
 		ctx.Actor.AI.Wait(domain.TimeCostInteract)
 	}
-
-	// TODO: Здесь будет вызов Gemini API
-	// response := ai.GenerateResponse(...)
 
 	return handlers.Result{
 		Msg:     fmt.Sprintf("Вы говорите с %s (ИИ пока спит).", target.Name),
