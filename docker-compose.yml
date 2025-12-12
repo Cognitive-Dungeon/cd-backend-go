@@ -1,0 +1,31 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cd-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - CD_PORT=8080
+      - LOG_LEVEL=debug
+      - LOG_FORMAT=text
+    networks:
+      - dungeon-net
+
+  # Debug client
+  client:
+    image: nginx:alpine
+    container_name: cd-client
+    restart: unless-stopped
+    ports:
+      - "3080:80"
+    volumes:
+      - ./tools/debug_client.html:/usr/share/nginx/html/index.html:ro
+    networks:
+      - dungeon-net
+
+networks:
+  dungeon-net:
+    driver: bridge
