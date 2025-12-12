@@ -49,6 +49,6 @@ func (s *GameService) processEvent(actor *domain.Entity, eventData json.RawMessa
 
 	// Логируем результат, если есть
 	if result.Msg != "" {
-		s.AddLog(result.Msg, result.MsgType)
+		instance.AddLog(result.Msg, result.MsgType)
 	}
 }

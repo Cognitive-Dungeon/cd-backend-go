@@ -12,8 +12,6 @@ import (
 	"fmt"
 	"math/rand"
 	"time"
-
-	"github.com/sirupsen/logrus"
 )
 
 type GameService struct {
@@ -25,8 +23,6 @@ type GameService struct {
 
 	// Индекс: где находится сущность? (EntityID -> LevelID)
 	EntityLocations map[string]int
-
-	Logs []api.LogEntry
 
 	// Каналы для main.go (входная точка)
 	JoinChan       chan *domain.Entity
@@ -47,7 +43,6 @@ func NewService() *GameService {
 		Instances:       make(map[int]*Instance),
 		EntityLocations: make(map[string]int),
 
-		Logs:           []api.LogEntry{},
 		JoinChan:       make(chan *domain.Entity, 10),
 		DisconnectChan: make(chan string, 10),
 
@@ -259,19 +254,5 @@ func (s *GameService) ChangeLevel(actor *domain.Entity, newLevelID int, targetPo
 	// 6. Добавляем актора в НОВЫЙ инстанс
 	newInstance.JoinChan <- actor
 
-	s.AddLog(fmt.Sprintf("%s переходит на уровень %d.", actor.Name, newLevelID), "INFO")
-}
-
-// AddLog добавляет лог (пока глобально, но можно сделать per-level)
-func (s *GameService) AddLog(text, logType string) {
-	s.Logs = append(s.Logs, api.LogEntry{
-		ID:        fmt.Sprintf("%d", time.Now().UnixNano()),
-		Text:      text,
-		Type:      logType,
-		Timestamp: time.Now().UnixMilli(),
-	})
-	logger.Log.WithFields(logrus.Fields{
-		"component": "game_log",
-		"log_type":  logType,
-	}).Info(text)
+	newInstance.AddLog(fmt.Sprintf("%s переходит на уровень %d.", actor.Name, newLevelID), "INFO")
 }

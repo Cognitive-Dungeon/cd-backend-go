@@ -16,9 +16,8 @@ func (s *GameService) publishUpdate(activeID string, instance *Instance) {
 		}
 	}
 
-	// Очищаем логи сервиса после рассылки (глобальная очистка)
-	// В идеале логи должны быть локальными для инстанса, но пока оставим так
-	s.Logs = []api.LogEntry{}
+	// Очищаем логи инстанса после рассылки
+	instance.Logs = []api.LogEntry{}
 }
 
 // BuildStateFor создает персональный "снимок" мира для конкретной сущности-наблюдателя.
@@ -105,8 +104,8 @@ func (s *GameService) BuildStateFor(observer *domain.Entity, activeID string, in
 	}
 
 	// Копия логов
-	logsCopy := make([]api.LogEntry, len(s.Logs))
-	copy(logsCopy, s.Logs)
+	logsCopy := make([]api.LogEntry, len(instance.Logs))
+	copy(logsCopy, instance.Logs)
 
 	return &api.ServerResponse{
 		Type:           "UPDATE",

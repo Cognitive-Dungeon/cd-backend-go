@@ -3,8 +3,8 @@ package main
 import (
 	"cognitive-server/internal/domain"
 	"cognitive-server/internal/engine"
-	"cognitive-server/pkg/api"
-	"cognitive-server/pkg/dungeon" // Нужно для шаблонов при спавне
+	"cognitive-server/pkg/api" // Нужно для шаблонов при спавне
+	"cognitive-server/pkg/dungeon"
 	"cognitive-server/pkg/logger"
 	"net/http"
 	"os"
@@ -38,32 +38,6 @@ type Client struct {
 	conn     *websocket.Conn
 	send     chan api.ServerResponse
 	entityID string
-}
-
-// createNewPlayer генерирует структуру нового игрока
-func createNewPlayer(id string) *domain.Entity {
-	// Создаем героя на основе шаблона (можно вынести это в dungeon)
-	p := dungeon.EntityTemplate{
-		Name:        "Герой " + id[:4], // Берем первые 4 символа ID для краткости
-		Type:        domain.EntityTypePlayer,
-		Symbol:      "@",
-		Color:       "#22D3EE",
-		Description: "Храбрый исследователь подземелий.",
-		HP:          100,
-		Strength:    10,
-		Gold:        50,
-	}.SpawnEntity(domain.Position{}, 0)
-
-	p.ID = id
-	// Инициализируем пустой инвентарь и экипировку
-	p.Inventory = &domain.InventoryComponent{Items: []*domain.Entity{}, MaxSlots: 20, MaxWeight: 100}
-	p.Equipment = &domain.EquipmentComponent{}
-
-	// Даем стартовое снаряжение
-	p.Inventory.AddItem(dungeon.IronSword.SpawnItem(domain.Position{}, 0))
-	p.Inventory.AddItem(dungeon.HealthPotion.SpawnItem(domain.Position{}, 0))
-
-	return &p
 }
 
 // readPump читает команды от клиента
@@ -108,7 +82,7 @@ func (c *Client) readPump() {
 	ent := c.game.GetEntity(c.entityID)
 	if ent == nil {
 		logger.Log.Infof("Player %s not found. Spawning...", c.entityID)
-		newPlayer := createNewPlayer(c.entityID)
+		newPlayer := dungeon.CreatePlayer(c.entityID)
 
 		// Ищем место для спавна на уровне 0
 		world := c.game.Worlds[0]

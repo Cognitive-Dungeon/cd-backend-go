@@ -37,6 +37,8 @@ type Instance struct {
 
 	CurrentTick int // Локальное время этого уровня
 
+	Logs []api.LogEntry // Локальные логи уровня
+
 }
 
 func NewInstance(id int, world *domain.GameWorld, service *GameService) *Instance {
@@ -50,6 +52,7 @@ func NewInstance(id int, world *domain.GameWorld, service *GameService) *Instanc
 		LeaveChan:   make(chan string, 10),
 		Service:     service,
 		CurrentTick: 0,
+		Logs:        []api.LogEntry{},
 	}
 }
 
@@ -204,7 +207,7 @@ func (i *Instance) executeCommand(cmd domain.InternalCommand, actor *domain.Enti
 
 	if result.Msg != "" {
 		// Используем текущий AddLog (2 аргумента)
-		i.Service.AddLog(result.Msg, result.MsgType)
+		i.AddLog(result.Msg, result.MsgType)
 	}
 
 	// События (переходы) пока оставляем на совести сервиса
