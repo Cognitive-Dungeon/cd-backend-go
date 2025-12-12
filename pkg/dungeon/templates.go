@@ -455,3 +455,13 @@ var SentientItemTemplates = map[string]ItemTemplate{
 	"greedy_ring":        GreedyRing,
 	"masochistic_armor":  MasochisticArmor,
 }
+
+// LootTable - автоматический список ключей всех обычных предметов.
+// Заполняется при старте программы.
+var LootTable []string
+
+func init() {
+	for key := range ItemTemplates {
+		LootTable = append(LootTable, key)
+	}
+}
