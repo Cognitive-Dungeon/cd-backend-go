@@ -84,6 +84,12 @@ type EntityView struct {
 	// Stats характеристики сущности. Поле может отсутствовать (omitempty),
 	// если клиент не имеет права видеть статы этой сущности.
 	Stats *StatsView `json:"stats,omitempty"`
+
+	// Inventory инвентарь сущности (для игрока и контейнеров)
+	Inventory *InventoryView `json:"inventory,omitempty"`
+
+	// Equipment экипированные предметы
+	Equipment *EquipmentView `json:"equipment,omitempty"`
 }
 
 // StatsView это DTO для характеристик сущности.
@@ -104,6 +110,36 @@ type LogEntry struct {
 	Text      string `json:"text"`
 	Type      string `json:"type"`      // INFO, COMBAT, SPEECH, ERROR
 	Timestamp int64  `json:"timestamp"` // Unix milliseconds
+}
+
+// ItemView представляет предмет для клиента
+type ItemView struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Symbol      string `json:"symbol"`
+	Color       string `json:"color"`
+	Category    string `json:"category"`
+	IsStackable bool   `json:"isStackable,omitempty"`
+	StackSize   int    `json:"stackSize,omitempty"`
+	Damage      int    `json:"damage,omitempty"`
+	Defense     int    `json:"defense,omitempty"`
+	Weight      int    `json:"weight,omitempty"`
+	Value       int    `json:"value,omitempty"`
+	IsSentient  bool   `json:"isSentient,omitempty"`
+}
+
+// InventoryView представляет инвентарь для клиента
+type InventoryView struct {
+	Items         []ItemView `json:"items"`
+	MaxSlots      int        `json:"maxSlots"`
+	CurrentWeight int        `json:"currentWeight"`
+	MaxWeight     int        `json:"maxWeight,omitempty"`
+}
+
+// EquipmentView представляет экипированные предметы
+type EquipmentView struct {
+	Weapon *ItemView `json:"weapon,omitempty"`
+	Armor  *ItemView `json:"armor,omitempty"`
 }
 
 // --- КЛИЕНТ -> СЕРВЕР ---
@@ -138,4 +174,10 @@ type EntityPayload struct {
 type PositionPayload struct {
 	X int `json:"x"`
 	Y int `json:"y"`
+}
+
+// ItemPayload используется для действий с предметами (PICKUP, DROP, USE, EQUIP, UNEQUIP).
+type ItemPayload struct {
+	ItemID string `json:"itemId"`
+	Count  int    `json:"count,omitempty"` // Для DROP - количество предметов в стаке
 }

@@ -87,6 +87,52 @@
     { "action": "WAIT", "payload": {} }
     ```
 
+#### `PICKUP`
+-   **Описание:** Подобрать предмет с пола. Игрок должен находиться на одной клетке с предметом или соседней.
+-   **Payload:** `ItemPayload`
+    -   `itemId` (string): ID предмета на карте.
+-   **Пример:**
+    ```json
+    { "action": "PICKUP", "payload": { "itemId": "item_sword_123" } }
+    ```
+
+#### `DROP`
+-   **Описание:** Выбросить предмет из инвентаря на пол.
+-   **Payload:** `ItemPayload`
+    -   `itemId` (string): ID предмета в инвентаре.
+    -   `count` (number, **optional**): Количество предметов (если предмет складываемый).
+-   **Пример:**
+    ```json
+    { "action": "DROP", "payload": { "itemId": "item_potion_5", "count": 1 } }
+    ```
+
+#### `USE`
+-   **Описание:** Использовать предмет (съесть еду, выпить зелье).
+-   **Payload:** `ItemPayload`
+    -   `itemId` (string): ID предмета в инвентаре.
+-   **Пример:**
+    ```json
+    { "action": "USE", "payload": { "itemId": "item_health_potion" } }
+    ```
+
+#### `EQUIP`
+-   **Описание:** Надеть предмет (оружие или броню). Предмет перемещается из инвентаря в слот экипировки.
+-   **Payload:** `ItemPayload`
+    -   `itemId` (string): ID предмета в инвентаре.
+-   **Пример:**
+    ```json
+    { "action": "EQUIP", "payload": { "itemId": "item_iron_sword" } }
+    ```
+
+#### `UNEQUIP`
+-   **Описание:** Снять экипированный предмет. Предмет перемещается в инвентарь.
+-   **Payload:** `ItemPayload`
+    -   `itemId` (string): ID предмета в слоте экипировки.
+-   **Пример:**
+    ```json
+    { "action": "UNEQUIP", "payload": { "itemId": "item_iron_sword" } }
+    ```
+
 ---
 
 ## ⬅️ Сервер -> Клиент (Updates)
@@ -137,12 +183,39 @@
 -   `pos` (object): Координаты `{ "x": number, "y": number }`.
 -   `render` (object): Данные для отображения `{ "symbol": string, "color": string }`.
 -   `stats` (`StatsView`, **optional**): Характеристики сущности.
+-   `inventory` (`InventoryView`, **optional**): Инвентарь (виден только владельцу).
+-   `equipment` (`EquipmentView`, **optional**): Экипировка (видна только владельцу).
 
 #### `StatsView`
 -   `hp`, `maxHp` (number): Текущее и максимальное здоровье.
 -   `stamina`, `maxStamina` (number, **optional**): Выносливость.
 -   `gold`, `strength` (number, **optional**): Другие характеристики.
 -   `isDead` (boolean): `true`, если сущность мертва.
+
+#### `InventoryView`
+-   `items` (array of `ItemView`): Список предметов в рюкзаке.
+-   `maxSlots` (number): Максимальное количество слотов.
+-   `currentWeight` (number): Текущий вес вещей.
+-   `maxWeight` (number): Максимальный переносимый вес.
+
+#### `EquipmentView`
+-   `weapon` (`ItemView`, **optional**): Предмет в слоте оружия.
+-   `armor` (`ItemView`, **optional**): Предмет в слоте брони.
+
+#### `ItemView`
+-   `id` (string): ID предмета.
+-   `name` (string): Название.
+-   `symbol` (string): Символ.
+-   `color` (string): Цвет.
+-   `category` (string): Категория (`weapon`, `armor`, `potion`, `food`, `misc`).
+-   `isStackable` (boolean): Можно ли собирать в стаки.
+-   `stackSize` (number): Текущее количество в стаке.
+-   `damage` (number, **optional**): Урон (для оружия).
+-   `defense` (number, **optional**): Защита (для брони).
+-   `weight` (number): Вес предмета.
+-   `value` (number): Стоимость.
+-   `isSentient` (boolean): Является ли предмет разумным (для диалогов).
+
 
 #### `LogEntry`
 -   `id` (string): Уникальный ID.

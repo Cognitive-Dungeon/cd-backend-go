@@ -97,6 +97,13 @@ func (s *GameService) registerHandlers() {
 	s.actionHandlers[domain.ActionInit] = handlers.WithEmptyPayload(actions.HandleInit)
 	s.actionHandlers[domain.ActionWait] = handlers.WithEmptyPayload(actions.HandleWait)
 
+	// Inventory actions
+	s.actionHandlers[domain.ActionPickup] = handlers.WithPayload(actions.HandlePickup)
+	s.actionHandlers[domain.ActionDrop] = handlers.WithPayload(actions.HandleDrop)
+	s.actionHandlers[domain.ActionUse] = handlers.WithPayload(actions.HandleUse)
+	s.actionHandlers[domain.ActionEquip] = handlers.WithPayload(actions.HandleEquip)
+	s.actionHandlers[domain.ActionUnequip] = handlers.WithPayload(actions.HandleUnequip)
+
 	// Events
 	s.eventHandlers[domain.EventLevelTransition] = handlers.WithPayload(events.HandleLevelTransition)
 }
@@ -162,6 +169,21 @@ func (s *GameService) RunGameLoop() {
 		}
 
 		activeActor := activeItem.Value
+
+		if activeActor.Stats != nil && activeActor.Stats.IsDead {
+			// Если чья-то очередь подошла, а он мертв — удаляем его из очереди навсегда.
+			s.TurnManager.RemoveEntity(activeActor.ID)
+
+			// Если умер Игрок - сообщаем об этом
+			if activeActor.Type == domain.EntityTypePlayer {
+				s.AddLog("ВЫ ПОГИБЛИ! (Обновите страницу для рестарта)", "ERROR")
+				// Принудительно отправляем апдейт, чтобы клиент увидел экран смерти/серый экран
+				s.publishUpdate(activeActor.ID)
+			}
+
+			// Переходим к следующему в очереди, не давая мертвому сделать ход
+			continue
+		}
 
 		// Обновляем глобальное время
 		s.GlobalTick = activeActor.AI.NextActionTick

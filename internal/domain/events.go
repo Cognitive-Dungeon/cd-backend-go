@@ -9,6 +9,7 @@ type EventType uint8
 const (
 	EventUnknown EventType = iota
 	EventLevelTransition
+	EventItemReaction // Для событий живых предметов (будет обрабатываться микросервисом)
 	// Future events:
 	// EventSpawnMonster = "SPAWN_MONSTER"
 	// EventOpenDoor     = "OPEN_DOOR"
@@ -17,11 +18,13 @@ const (
 // Маппинг для конвертации JSON -> Domain
 var eventStringToCmd = map[string]EventType{
 	"LEVEL_TRANSITION": EventLevelTransition,
+	"ITEM_EVENT":       EventItemReaction,
 }
 
 // Маппинг для логов Domain -> String
 var eventCmdToString = map[EventType]string{
 	EventLevelTransition: "LEVEL_TRANSITION",
+	EventItemReaction:    "ITEM_EVENT",
 }
 
 // ParseEvent конвертирует строку из JSON в EventType

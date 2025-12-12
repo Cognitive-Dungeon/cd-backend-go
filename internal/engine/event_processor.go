@@ -37,7 +37,19 @@ func (s *GameService) processEvent(actor *domain.Entity, eventData json.RawMessa
 		Actor:    actor,
 		Worlds:   s.Worlds, // Передаем все миры
 		AddGlobalEntity: func(e *domain.Entity) {
+			// 1. Добавляем в глобальный список
 			s.Entities = append(s.Entities, e)
+
+			// 2. Если у сущности есть AI, её нужно добавить в очередь ходов
+			if e.AI != nil && e.Stats != nil && !e.Stats.IsDead {
+				// ВАЖНО: Синхронизируем время моба с текущим временем мира.
+				// Иначе, если у моба Tick=0, а в мире Tick=1000,
+				// моб сделает 10 ходов мгновенно, чтобы "догнать" время.
+				e.AI.NextActionTick = s.GlobalTick
+
+				// Регистрируем в менеджере
+				s.TurnManager.AddEntity(e)
+			}
 		},
 	}
 

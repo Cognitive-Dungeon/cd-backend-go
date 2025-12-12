@@ -4,9 +4,9 @@ import (
 	"cognitive-server/internal/domain"
 	"cognitive-server/internal/engine/handlers"
 	"cognitive-server/pkg/dungeon"
+	"cognitive-server/pkg/logger"
 	"encoding/json"
 	"fmt"
-	"log"
 	"math/rand"
 	"time"
 )
@@ -17,7 +17,7 @@ func HandleLevelTransition(ctx handlers.Context, eventData json.RawMessage) (han
 		TargetPosId string `json:"targetPosId"`
 	}
 	if err := json.Unmarshal(eventData, &transitionEvent); err != nil {
-		log.Printf("Error parsing LEVEL_TRANSITION event: %v", err)
+		logger.Log.Errorf("Error parsing LEVEL_TRANSITION event: %v", err)
 		return handlers.EmptyResult(), nil
 	}
 
@@ -31,13 +31,13 @@ func HandleLevelTransition(ctx handlers.Context, eventData json.RawMessage) (han
 	newWorld, okNew := ctx.Worlds[newLevel]
 
 	if !okOld {
-		log.Printf("Actor %s tried to transition from a non-existent level %d", actor.ID, oldLevel)
+		logger.Log.Warnf("Actor %s tried to transition from a non-existent level %d", actor.ID, oldLevel)
 		return handlers.EmptyResult(), nil
 	}
 
 	// Если нового мира нет - генерируем его на лету
 	if !okNew {
-		log.Printf("[EVENTS DEBUG | LevelTransition] Generating new level on the fly: %d", newLevel)
+		logger.Log.Debugf("[EVENTS DEBUG | LevelTransition] Generating new level on the fly: %d", newLevel)
 		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 		generatedWorld, newEntities, _ := dungeon.Generate(newLevel, rng)
 
@@ -65,7 +65,7 @@ func HandleLevelTransition(ctx handlers.Context, eventData json.RawMessage) (han
 	if targetEntity != nil {
 		targetPos = targetEntity.Pos
 	} else {
-		log.Printf("[EVENTS DEBUG | LevelTransition] Could not find target position entity %s on level %d. Placing at default.", transitionEvent.TargetPosId, newLevel)
+		logger.Log.Debugf("[EVENTS DEBUG | LevelTransition] Could not find target position entity %s on level %d. Placing at default.", transitionEvent.TargetPosId, newLevel)
 		targetPos = domain.Position{X: newWorld.Width / 2, Y: newWorld.Height / 2} // Запасной вариант
 	}
 

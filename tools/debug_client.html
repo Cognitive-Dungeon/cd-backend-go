@@ -1,399 +1,754 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>Cognitive Debugger v7 (Agent)</title>
     <style>
         :root {
-            --bg: #0d1117; --panel: #161b22; --border: #30363d; --text: #c9d1d9;
-            --accent: #58a6ff; --danger: #da3633; --success: #238636; --warning: #d29922;
+            --bg: #0d1117;
+            --panel: #161b22;
+            --border: #30363d;
+            --text: #c9d1d9;
+            --accent: #58a6ff;
+            --danger: #da3633;
+            --success: #238636;
+            --warning: #d29922;
         }
+
         body {
-            background: var(--bg); color: var(--text); font-family: 'Consolas', monospace;
-            margin: 0; padding: 0; display: flex; height: 100vh; overflow: hidden;
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Consolas', monospace;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
         }
+
         #login-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(13, 17, 23, 0.95); z-index: 9999;
-            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(13, 17, 23, 0.95);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
         }
+
         #login-box {
-            background: var(--panel); border: 1px solid var(--border);
-            padding: 30px; border-radius: 8px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            background: var(--panel);
+            border: 1px solid var(--border);
+            padding: 30px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
         }
+
         input[type="text"] {
-            background: #0d1117; border: 1px solid #30363d; color: white; padding: 10px;
-            font-size: 16px; width: 200px; margin-bottom: 10px; border-radius: 4px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            color: white;
+            padding: 10px;
+            font-size: 16px;
+            width: 200px;
+            margin-bottom: 10px;
+            border-radius: 4px;
         }
+
         .btn-login {
-            background: var(--success); color: white; border: none; padding: 10px 20px;
-            font-size: 16px; cursor: pointer; border-radius: 4px; font-weight: bold; width: 100%;
+            background: var(--success);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-weight: bold;
+            width: 100%;
         }
-        .btn-login:hover { background: #2ea043; }
-        .container { display: flex; gap: 20px; padding: 20px; width: 100%; height: 100%; box-sizing: border-box; }
-        .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 15px; display: flex; flex-direction: column; }
-        #left-panel { flex: 0 0 auto; overflow: hidden; }
-        #right-panel { flex: 1; min-width: 400px; gap: 15px; overflow: hidden; }
-        .panel-header { font-size: 12px; font-weight: bold; margin-bottom: 10px; color: #8b949e; text-transform: uppercase; }
-        #map-wrapper { position: relative; border: 2px solid #000; display: inline-block; background: #000; margin-top: 10px; overflow: auto; max-height: 80vh; }
-        #game-map { display: grid; }
+
+        .btn-login:hover {
+            background: #2ea043;
+        }
+
+        .container {
+            display: flex;
+            gap: 20px;
+            padding: 20px;
+            width: 100%;
+            height: 100%;
+            box-sizing: border-box;
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #left-panel {
+            flex: 0 0 auto;
+            overflow: hidden;
+        }
+
+        #right-panel {
+            flex: 1;
+            min-width: 400px;
+            gap: 15px;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #8b949e;
+            text-transform: uppercase;
+        }
+
+        #map-wrapper {
+            position: relative;
+            border: 2px solid #000;
+            display: inline-block;
+            background: #000;
+            margin-top: 10px;
+            overflow: auto;
+            max-height: 80vh;
+        }
+
+        #game-map {
+            display: grid;
+        }
+
         .tile {
-            width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;
-            font-size: 16px; cursor: crosshair; user-select: none; color: #222; background: #000;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            cursor: crosshair;
+            user-select: none;
+            color: #222;
+            background: #000;
         }
-        .tile.visible { font-weight: bold; }
-        .tile.explored { opacity: 0.5; }
-        .entity { z-index: 10; cursor: pointer; font-weight: bold; text-shadow: 0 0 2px #000; }
-        .player { text-shadow: 0 0 5px var(--accent); }
-        .enemy { text-shadow: 0 0 5px var(--danger); }
-        .npc { text-shadow: 0 0 5px var(--warning); }
-        .corpse { opacity: 0.5; font-weight: normal; text-shadow: none; filter: grayscale(100%); }
+
+        .tile.visible {
+            font-weight: bold;
+        }
+
+        .tile.explored {
+            opacity: 0.5;
+        }
+
+        .entity {
+            z-index: 10;
+            cursor: pointer;
+            font-weight: bold;
+            text-shadow: 0 0 2px #000;
+        }
+
+        .player {
+            text-shadow: 0 0 5px var(--accent);
+        }
+
+        .enemy {
+            text-shadow: 0 0 5px var(--danger);
+        }
+
+        .npc {
+            text-shadow: 0 0 5px var(--warning);
+        }
+
+        .corpse {
+            opacity: 0.5;
+            font-weight: normal;
+            text-shadow: none;
+            filter: grayscale(100%);
+        }
+
         .selected {
             box-shadow: inset 0 0 0 2px var(--accent);
             background: rgba(88, 166, 255, 0.2) !important;
         }
+
         #inspector-content {
-            background: #0d1117; border: 1px solid var(--border); padding: 10px;
-            font-size: 11px; overflow: auto; height: 180px; flex-shrink: 0; color: var(--accent);
+            background: #0d1117;
+            border: 1px solid var(--border);
+            padding: 10px;
+            font-size: 11px;
+            overflow: auto;
+            height: 180px;
+            flex-shrink: 0;
+            color: var(--accent);
         }
-        #logs { flex: 1; overflow-y: auto; background: #050505; border: 1px solid var(--border); padding: 8px; font-size: 12px; }
-        .log-line { margin-bottom: 4px; border-bottom: 1px solid #1a1a1a; padding-bottom: 2px; }
-        .t-COMBAT { color: var(--danger); } .t-INFO { color: #8b949e; }
-        .t-SPEECH { color: var(--warning); font-style: italic; } .t-ERROR { color: #ff0000; font-weight: bold; }
-        #hud { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; }
-        .stat-label { color: #8b949e; }
-        .active-turn { border: 1px solid var(--success); box-shadow: 0 0 15px rgba(35, 134, 54, 0.5); }
-        .control-group { display: flex; gap: 10px; }
-        .d-pad { display: grid; grid-template-columns: repeat(3, 40px); gap: 5px; }
+
+        #logs {
+            flex: 1;
+            overflow-y: auto;
+            background: #050505;
+            border: 1px solid var(--border);
+            padding: 8px;
+            font-size: 12px;
+        }
+
+        .log-line {
+            margin-bottom: 4px;
+            border-bottom: 1px solid #1a1a1a;
+            padding-bottom: 2px;
+        }
+
+        .t-COMBAT {
+            color: var(--danger);
+        }
+
+        .t-INFO {
+            color: #8b949e;
+        }
+
+        .t-SPEECH {
+            color: var(--warning);
+            font-style: italic;
+        }
+
+        .t-ERROR {
+            color: #ff0000;
+            font-weight: bold;
+        }
+
+        #hud {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: #8b949e;
+        }
+
+        .active-turn {
+            border: 1px solid var(--success);
+            box-shadow: 0 0 15px rgba(35, 134, 54, 0.5);
+        }
+
+        .control-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .d-pad {
+            display: grid;
+            grid-template-columns: repeat(3, 40px);
+            gap: 5px;
+        }
+
         button {
-            background: #21262d; color: var(--text); border: 1px solid var(--border);
-            padding: 8px; cursor: pointer; border-radius: 4px; font-family: inherit; font-weight: bold;
+            background: #21262d;
+            color: var(--text);
+            border: 1px solid var(--border);
+            padding: 8px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-family: inherit;
+            font-weight: bold;
         }
-        button:hover { background: #30363d; border-color: #8b949e; }
-        button:active { background: #1f2428; transform: translateY(1px); }
-        .action-column { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+
+        button:hover {
+            background: #30363d;
+            border-color: #8b949e;
+        }
+
+        button:active {
+            background: #1f2428;
+            transform: translateY(1px);
+        }
+
+        .action-column {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
     </style>
 </head>
+
 <body>
 
-<div id="login-overlay">
-    <div id="login-box">
-        <h2 style="margin-top:0">Cognitive Debugger</h2>
-        <p style="color:#8b949e; font-size:12px; margin-bottom:15px">Enter Entity ID to possess</p>
-        <input type="text" id="login-token" value="hero_1" placeholder="Entity ID (e.g. hero_1)">
-        <br>
-        <button class="btn-login" onclick="connect()">Connect Agent</button>
-    </div>
-</div>
-
-<div class="container">
-    <div id="left-panel" class="panel">
-        <div id="hud">
-            <div><span class="stat-label">Tick:</span> <span id="tick">0</span></div>
-            <div><span class="stat-label">Agent:</span> <span id="my-id-display">...</span></div>
+    <div id="login-overlay">
+        <div id="login-box">
+            <h2 style="margin-top:0">Cognitive Debugger</h2>
+            <p style="color:#8b949e; font-size:12px; margin-bottom:15px">Enter Entity ID to possess</p>
+            <input type="text" id="login-token" value="hero_1" placeholder="Entity ID (e.g. hero_1)">
+            <br>
+            <button class="btn-login" onclick="connect()">Connect Agent</button>
         </div>
-        <div id="map-wrapper">
-            <div id="game-map"></div>
-        </div>
-        <div id="target-info" style="margin-top: 10px; font-size: 12px; color: #777; height: 1em;">Click map to select...</div>
     </div>
 
-    <div id="right-panel" class="panel">
-        <div>
-            <div class="panel-header">Controls</div>
-            <div class="control-group">
-                <div class="d-pad">
-                    <div></div><button onclick="sendDir(0, -1)">W</button><div></div>
-                    <button onclick="sendDir(-1, 0)">A</button><button onclick="sendWait()">Wait</button><button onclick="sendDir(1, 0)">D</button>
-                    <div></div><button onclick="sendDir(0, 1)">S</button><div></div>
-                </div>
-                <div class="action-column">
-                    <button style="color:var(--danger)" onclick="sendAction('ATTACK')">⚔️ ATTACK TARGET</button>
-                    <button style="color:var(--warning)" onclick="sendAction('TALK')">💬 TALK TO TARGET</button>
-                    <button style="color:var(--success)" onclick="sendAction('INTERACT')">🖐️ INTERACT</button>
-                    <button onclick="sendAction('INIT')">🔄 RESYNC STATE</button>
+    <div class="container">
+        <div id="left-panel" class="panel">
+            <div id="hud">
+                <div><span class="stat-label">Tick:</span> <span id="tick">0</span></div>
+                <div><span class="stat-label">Agent:</span> <span id="my-id-display">...</span></div>
+            </div>
+            <div id="map-wrapper">
+                <div id="game-map"></div>
+            </div>
+            <div id="target-info" style="margin-top: 10px; font-size: 12px; color: #777; height: 1em;">Click map to
+                select...</div>
+        </div>
+
+        <div id="right-panel" class="panel">
+            <div>
+                <div class="panel-header">Controls</div>
+                <div class="control-group">
+                    <div class="d-pad">
+                        <div></div><button onclick="sendDir(0, -1)">W</button>
+                        <div></div>
+                        <button onclick="sendDir(-1, 0)">A</button><button onclick="sendWait()">Wait</button><button
+                            onclick="sendDir(1, 0)">D</button>
+                        <div></div><button onclick="sendDir(0, 1)">S</button>
+                        <div></div>
+                    </div>
+                    <div class="action-column">
+                        <button style="color:var(--danger)" onclick="sendAction('ATTACK')">⚔️ ATTACK TARGET</button>
+                        <button style="color:var(--warning)" onclick="sendAction('TALK')">💬 TALK TO TARGET</button>
+                        <button style="color:var(--success)" onclick="sendAction('INTERACT')">🖐️ INTERACT</button>
+                        <button onclick="sendAction('INIT')">🔄 RESYNC STATE</button>
+                    </div>
+                    <div class="action-column">
+                        <button style="color:#58a6ff" onclick="pickupNearestItem()">📦 PICKUP</button>
+                        <button style="color:#d29922" onclick="useSelectedItem()">💊 USE ITEM</button>
+                        <button style="color:#238636" onclick="equipSelectedItem()">⚔️ EQUIP</button>
+                        <button style="color:#8b949e" onclick="unequipSelectedItem()">🛡️ UNEQUIP</button>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <div>
-            <div class="panel-header">Entity Inspector</div>
-            <pre id="inspector-content" class="inspector-box">Select an entity on the map to view its live state...</pre>
-        </div>
+            <div>
+                <div class="panel-header">🎒 Inventory & Equipment</div>
+                <div
+                    style="background: #0d1117; border: 1px solid var(--border); padding: 10px; font-size: 11px; max-height: 200px; overflow-y: auto;">
+                    <div id="inventory-display">No inventory data...</div>
+                </div>
+            </div>
 
-        <div style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
-            <div class="panel-header">Game Logs</div>
-            <div id="logs">Logs will appear here...</div>
+            <div>
+                <div class="panel-header">Entity Inspector</div>
+                <pre id="inspector-content"
+                    class="inspector-box">Select an entity on the map to view its live state...</pre>
+            </div>
+
+            <div style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
+                <div class="panel-header">Game Logs</div>
+                <div id="logs">Logs will appear here...</div>
+            </div>
         </div>
     </div>
-</div>
 
-<script>
-    // This is a simple vanilla JS client, but its logic mirrors React's flow.
-    //
-    // 1. STATE MANAGEMENT:
-    //    - `myId`, `selectedTarget`, `entitiesCache` are our component's "state".
-    //    - We store the last known list of entities in `entitiesCache` to be able to
-    //      inspect them even between server updates.
-    //
-    // 2. API COMMUNICATION (like `useEffect` with a fetch):
-    //    - The `ws.onmessage` is the entry point for new data from the server.
-    //    - When a message arrives, it calls `handleUpdate(msg)`, passing the data
-    //      down as "props".
-    //
-    // 3. RENDERING (like a `render()` function):
-    //    - `handleUpdate` is the main "re-render" function.
-    //    - It takes the new data and calls specialized functions (`renderTiles`, `drawEntities`)
-    //      to update the DOM. This is like React updating the virtual DOM and then
-    //      patching the real DOM based on what changed.
-    //
-    // 4. USER EVENTS (like `onClick`):
-    //    - Functions like `sendDir()`, `sendAction()`, and `selectTile()` handle user
-    //      input. They either modify local state (`selectTile` updates `selectedTarget`)
-    //      or send commands to the server (`sendDir`).
+    <script>
+        // This is a simple vanilla JS client, but its logic mirrors React's flow.
+        //
+        // 1. STATE MANAGEMENT:
+        //    - `myId`, `selectedTarget`, `entitiesCache` are our component's "state".
+        //    - We store the last known list of entities in `entitiesCache` to be able to
+        //      inspect them even between server updates.
+        //
+        // 2. API COMMUNICATION (like `useEffect` with a fetch):
+        //    - The `ws.onmessage` is the entry point for new data from the server.
+        //    - When a message arrives, it calls `handleUpdate(msg)`, passing the data
+        //      down as "props".
+        //
+        // 3. RENDERING (like a `render()` function):
+        //    - `handleUpdate` is the main "re-render" function.
+        //    - It takes the new data and calls specialized functions (`renderTiles`, `drawEntities`)
+        //      to update the DOM. This is like React updating the virtual DOM and then
+        //      patching the real DOM based on what changed.
+        //
+        // 4. USER EVENTS (like `onClick`):
+        //    - Functions like `sendDir()`, `sendAction()`, and `selectTile()` handle user
+        //      input. They either modify local state (`selectTile` updates `selectedTarget`)
+        //      or send commands to the server (`sendDir`).
 
-    let ws;
-    // --- STATE ---
-    let myId = "";
-    let selectedTarget = null;
-    let entitiesCache = []; // Cache of all entities from the last update
-    let gridInitialized = false;
+        let ws;
+        // --- STATE ---
+        let myId = "";
+        let selectedTarget = null;
+        let entitiesCache = []; // Cache of all entities from the last update
+        let gridInitialized = false;
 
-    // --- DOM ELEMENT CACHE ---
-    const mapEl = document.getElementById("game-map");
-    const logsEl = document.getElementById("logs");
-    const inspectorEl = document.getElementById("inspector-content");
-    const targetLabel = document.getElementById("target-info");
+        // --- DOM ELEMENT CACHE ---
+        const mapEl = document.getElementById("game-map");
+        const logsEl = document.getElementById("logs");
+        const inspectorEl = document.getElementById("inspector-content");
+        const targetLabel = document.getElementById("target-info");
 
-    function connect() {
-        const token = document.getElementById("login-token").value.trim();
-        if (!token) return alert("Please enter an Entity ID");
+        function connect() {
+            const token = document.getElementById("login-token").value.trim();
+            if (!token) return alert("Please enter an Entity ID");
 
-        ws = new WebSocket("ws://localhost:8080/ws");
+            ws = new WebSocket("ws://localhost:8080/ws");
 
-        ws.onopen = () => {
-            // First message after connect is always the LOGIN handshake
-            ws.send(JSON.stringify({ action: "LOGIN", token: token }));
-            document.getElementById("login-overlay").style.display = "none";
-            logsEl.innerHTML = `<div style='color:var(--success)'>Connected. Attempting to possess '${token}'...</div>`;
-        };
+            ws.onopen = () => {
+                // First message after connect is always the LOGIN handshake
+                ws.send(JSON.stringify({ action: "LOGIN", token: token }));
+                document.getElementById("login-overlay").style.display = "none";
+                logsEl.innerHTML = `<div style='color:var(--success)'>Connected. Attempting to possess '${token}'...</div>`;
+            };
 
-        ws.onclose = () => {
-            document.getElementById("login-overlay").style.display = "flex";
-            logsEl.innerHTML += "<div style='color:var(--danger)'>Connection Closed.</div>";
-            gridInitialized = false;
-        };
+            ws.onclose = () => {
+                document.getElementById("login-overlay").style.display = "flex";
+                logsEl.innerHTML += "<div style='color:var(--danger)'>Connection Closed.</div>";
+                gridInitialized = false;
+            };
 
-        ws.onerror = (err) => {
-            console.error("WS Error", err);
-            alert("Connection error. Is the Go server running? Check console.");
-        };
+            ws.onerror = (err) => {
+                console.error("WS Error", err);
+                alert("Connection error. Is the Go server running? Check console.");
+            };
 
-        // This is the main listener for data from the server
-        ws.onmessage = (evt) => {
-            const msg = JSON.parse(evt.data);
+            // This is the main listener for data from the server
+            ws.onmessage = (evt) => {
+                const msg = JSON.parse(evt.data);
 
-            if (msg.error) {
-                alert("Server Error: " + msg.error);
-                ws.close();
+                if (msg.error) {
+                    alert("Server Error: " + msg.error);
+                    ws.close();
+                    return;
+                }
+
+                if (msg.type === "UPDATE") {
+                    handleUpdate(msg);
+                }
+            };
+        }
+
+        // Main "render" function, called on every server update.
+        function handleUpdate(msg) {
+            if (msg.myEntityId) {
+                myId = msg.myEntityId;
+                document.getElementById("my-id-display").innerText = myId;
+            }
+
+            if (msg.grid && !gridInitialized) {
+                initGrid(msg.grid.w, msg.grid.h);
+            }
+
+            if (msg.map) {
+                renderTiles(msg.map);
+            }
+
+            if (msg.entities) {
+                entitiesCache = msg.entities; // Update state cache
+                drawEntities(entitiesCache);
+                updateInspector(); // Refresh inspector if target is still visible
+                renderInventory(); // Render inventory panel
+            }
+
+            if (msg.logs) {
+                renderLogs(msg.logs);
+            }
+
+            if (msg.tick !== undefined) {
+                document.getElementById("tick").innerText = msg.tick;
+            }
+
+            const leftPanel = document.getElementById("left-panel");
+            if (msg.activeEntityId === myId) {
+                leftPanel.classList.add("active-turn");
+            } else {
+                leftPanel.classList.remove("active-turn");
+            }
+        }
+
+        // --- Rendering Sub-routines ---
+
+        function initGrid(w, h) {
+            mapEl.innerHTML = '';
+            mapEl.style.gridTemplateColumns = `repeat(${w}, 20px)`;
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    const div = document.createElement("div");
+                    div.id = `c-${x}-${y}`;
+                    div.className = "tile";
+                    div.onclick = () => selectTile(x, y);
+                    mapEl.appendChild(div);
+                }
+            }
+            gridInitialized = true;
+        }
+
+        // Сбрасывает все тайлы на карте в их "невидимое" состояние по умолчанию.
+        function clearGrid() {
+            if (!gridInitialized) return;
+            const tiles = mapEl.children;
+            for (let i = 0; i < tiles.length; i++) {
+                const el = tiles[i];
+                el.className = "tile"; // Убираем .visible, .explored, .entity и т.д.
+                el.innerText = '';     // Убираем символ
+                el.style.color = '#222'; // Возвращаем дефолтный цвет
+            }
+        }
+
+        function renderTiles(tiles) {
+            clearGrid()
+            tiles.forEach(t => {
+                const el = document.getElementById(`c-${t.x}-${t.y}`);
+                if (!el) return;
+
+                el.innerText = t.symbol;
+                el.style.color = t.color;
+                el.className = "tile"; // Reset classes
+                if (t.isVisible) el.classList.add("visible");
+                else if (t.isExplored) el.classList.add("explored");
+            });
+        }
+
+        function drawEntities(entities) {
+            document.querySelectorAll('.entity').forEach(el => {
+                el.classList.remove('entity', 'player', 'enemy', 'npc', 'corpse', 'selected');
+            });
+
+            entities.forEach(e => {
+                const el = document.getElementById(`c-${e.pos.x}-${e.pos.y}`);
+                if (!el) return;
+
+                el.innerText = e.render?.symbol || "?";
+                el.style.color = e.render?.color || "#fff";
+                el.classList.add("entity");
+
+                if (e.id === myId) el.classList.add("player");
+                else if (e.type === "ENEMY") el.classList.add("enemy");
+                else if (e.type === "NPC") el.classList.add("npc");
+
+                if (e.stats?.isDead) {
+                    el.classList.add("corpse");
+                    el.classList.remove("enemy", "npc");
+                }
+
+                if (e.id === selectedTarget) {
+                    el.classList.add("selected");
+                }
+            });
+        }
+
+        // --- User Actions & State Updates ---
+
+        function selectTile(x, y) {
+            const ent = entitiesCache.find(e => e.pos.x === x && e.pos.y === y);
+            selectedTarget = ent ? ent.id : null;
+
+            if (ent) {
+                targetLabel.innerText = `Target: ${ent.name} [${ent.id}]`;
+                targetLabel.style.color = "#fff";
+            } else {
+                targetLabel.innerText = "Target: None";
+                targetLabel.style.color = "#777";
+            }
+            drawEntities(entitiesCache); // Redraw to show selection highlight
+            updateInspector();
+        }
+
+        function updateInspector() {
+            if (!selectedTarget) {
+                inspectorEl.innerText = "Select an entity on the map...";
+                return;
+            }
+            const ent = entitiesCache.find(e => e.id === selectedTarget);
+            if (ent) {
+                inspectorEl.innerText = JSON.stringify(ent, null, 2);
+            } else {
+                inspectorEl.innerText = `Entity ${selectedTarget} lost from view.`;
+            }
+        }
+
+        function renderLogs(logs) {
+            logs.forEach(l => {
+                const row = document.createElement("div");
+                row.className = `log-line t-${l.type}`;
+                const time = new Date(l.timestamp).toLocaleTimeString([], { hour12: false });
+                row.innerHTML = `<span style="color:#555">[${time}]</span> ${l.text}`;
+                logsEl.appendChild(row);
+            });
+            logsEl.scrollTop = logsEl.scrollHeight;
+        }
+
+        // --- Command Senders ---
+
+        function sendCommand(action, payload = {}) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                console.error("WebSocket is not connected.");
+                return;
+            }
+            ws.send(JSON.stringify({ action, payload }));
+        }
+
+        function sendDir(dx, dy) { sendCommand("MOVE", { dx, dy }); }
+        function sendWait() { sendCommand("WAIT"); }
+        function sendAction(action) {
+            if (action === 'INIT') {
+                sendCommand("INIT");
+                return;
+            }
+            if (!selectedTarget) {
+                alert("Select a target on the map first!");
+                return;
+            }
+            sendCommand(action, { targetId: selectedTarget });
+        }
+
+        // --- Inventory Management ---
+        let selectedItemId = null;
+
+        function pickupNearestItem() {
+            const player = entitiesCache.find(e => e.id === myId);
+            if (!player) return;
+
+            const nearbyItems = entitiesCache.filter(e =>
+                e.type === 'ITEM' &&
+                Math.abs(e.pos.x - player.pos.x) <= 1 &&
+                Math.abs(e.pos.y - player.pos.y) <= 1
+            );
+
+            if (nearbyItems.length > 0) {
+                sendCommand('PICKUP', { itemId: nearbyItems[0].id });
+            } else {
+                alert('No items nearby!');
+            }
+        }
+
+        function useSelectedItem() {
+            if (!selectedItemId) {
+                alert('Select an item from inventory first!');
+                return;
+            }
+            sendCommand('USE', { itemId: selectedItemId });
+            selectedItemId = null;
+        }
+
+        function equipSelectedItem() {
+            if (!selectedItemId) {
+                alert('Select an item from inventory first!');
+                return;
+            }
+            sendCommand('EQUIP', { itemId: selectedItemId });
+            selectedItemId = null;
+        }
+
+        function unequipSelectedItem() {
+            if (!selectedItemId) {
+                alert('Select an equipped item first!');
+                return;
+            }
+            sendCommand('UNEQUIP', { itemId: selectedItemId });
+            selectedItemId = null;
+        }
+
+        function selectInventoryItem(itemId) {
+            selectedItemId = itemId;
+            renderInventory();
+        }
+
+        function renderInventory() {
+            const player = entitiesCache.find(e => e.id === myId);
+            const invDisplay = document.getElementById('inventory-display');
+
+            if (!player || !player.inventory) {
+                invDisplay.innerHTML = '<div style="color:#666">No inventory data...</div>';
                 return;
             }
 
-            if (msg.type === "UPDATE") {
-                handleUpdate(msg);
-            }
-        };
-    }
+            let html = '<div style="margin-bottom: 8px; color: #8b949e; font-size: 10px;">📦 ' +
+                player.inventory.items.length + '/' + player.inventory.maxSlots +
+                ' slots | ⚖️ ' + player.inventory.currentWeight + 'kg</div>';
 
-    // Main "render" function, called on every server update.
-    function handleUpdate(msg) {
-        if (msg.myEntityId) {
-            myId = msg.myEntityId;
-            document.getElementById("my-id-display").innerText = myId;
-        }
+            // Equipment
+            if (player.equipment) {
+                html += '<div style="margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #30363d;">';
+                html += '<div style="color: var(--warning); font-weight: bold; margin-bottom: 3px; font-size: 10px;">⚔️ EQUIPPED:</div>';
 
-        if (msg.grid && !gridInitialized) {
-            initGrid(msg.grid.w, msg.grid.h);
-        }
+                if (player.equipment.weapon) {
+                    const w = player.equipment.weapon;
+                    const isSelected = w.id === selectedItemId;
+                    html += `<div style="background: ${isSelected ? '#2a3a1a' : '#1a2a1a'}; padding: 4px; margin: 2px 0; cursor: pointer; border-left: 2px solid var(--warning); font-size: 10px;" 
+                             onclick="selectInventoryItem('${w.id}')">
+                        <span style="color: ${w.color}">${w.symbol}</span> ${w.name} 
+                        <span style="color: #666">(⚔️${w.damage})</span>
+                    </div>`;
+                }
 
-        if (msg.map) {
-            renderTiles(msg.map);
-        }
+                if (player.equipment.armor) {
+                    const a = player.equipment.armor;
+                    const isSelected = a.id === selectedItemId;
+                    html += `<div style="background: ${isSelected ? '#2a3a1a' : '#1a2a1a'}; padding: 4px; margin: 2px 0; cursor: pointer; border-left: 2px solid var(--warning); font-size: 10px;" 
+                             onclick="selectInventoryItem('${a.id}')">
+                        <span style="color: ${a.color}">${a.symbol}</span> ${a.name} 
+                        <span style="color: #666">(🛡️${a.defense})</span>
+                    </div>`;
+                }
 
-        if (msg.entities) {
-            entitiesCache = msg.entities; // Update state cache
-            drawEntities(entitiesCache);
-            updateInspector(); // Refresh inspector if target is still visible
-        }
-
-        if (msg.logs) {
-            renderLogs(msg.logs);
-        }
-
-        if (msg.tick !== undefined) {
-            document.getElementById("tick").innerText = msg.tick;
-        }
-
-        const leftPanel = document.getElementById("left-panel");
-        if (msg.activeEntityId === myId) {
-            leftPanel.classList.add("active-turn");
-        } else {
-            leftPanel.classList.remove("active-turn");
-        }
-    }
-
-    // --- Rendering Sub-routines ---
-
-    function initGrid(w, h) {
-        mapEl.innerHTML = '';
-        mapEl.style.gridTemplateColumns = `repeat(${w}, 20px)`;
-        for(let y=0; y<h; y++) {
-            for(let x=0; x<w; x++) {
-                const div = document.createElement("div");
-                div.id = `c-${x}-${y}`;
-                div.className = "tile";
-                div.onclick = () => selectTile(x, y);
-                mapEl.appendChild(div);
-            }
-        }
-        gridInitialized = true;
-    }
-
-    // Сбрасывает все тайлы на карте в их "невидимое" состояние по умолчанию.
-    function clearGrid() {
-        if (!gridInitialized) return;
-        const tiles = mapEl.children;
-        for (let i = 0; i < tiles.length; i++) {
-            const el = tiles[i];
-            el.className = "tile"; // Убираем .visible, .explored, .entity и т.д.
-            el.innerText = '';     // Убираем символ
-            el.style.color = '#222'; // Возвращаем дефолтный цвет
-        }
-    }
-
-    function renderTiles(tiles) {
-        clearGrid()
-        tiles.forEach(t => {
-            const el = document.getElementById(`c-${t.x}-${t.y}`);
-            if (!el) return;
-
-            el.innerText = t.symbol;
-            el.style.color = t.color;
-            el.className = "tile"; // Reset classes
-            if (t.isVisible) el.classList.add("visible");
-            else if (t.isExplored) el.classList.add("explored");
-        });
-    }
-
-    function drawEntities(entities) {
-        document.querySelectorAll('.entity').forEach(el => {
-            el.classList.remove('entity', 'player', 'enemy', 'npc', 'corpse', 'selected');
-        });
-
-        entities.forEach(e => {
-            const el = document.getElementById(`c-${e.pos.x}-${e.pos.y}`);
-            if (!el) return;
-
-            el.innerText = e.render?.symbol || "?";
-            el.style.color = e.render?.color || "#fff";
-            el.classList.add("entity");
-
-            if (e.id === myId) el.classList.add("player");
-            else if (e.type === "ENEMY") el.classList.add("enemy");
-            else if (e.type === "NPC") el.classList.add("npc");
-
-            if (e.stats?.isDead) {
-                el.classList.add("corpse");
-                el.classList.remove("enemy", "npc");
+                if (!player.equipment.weapon && !player.equipment.armor) {
+                    html += '<div style="color:#666; font-size: 9px;">Nothing equipped</div>';
+                }
+                html += '</div>';
             }
 
-            if (e.id === selectedTarget) {
-                el.classList.add("selected");
+            // Inventory items
+            if (player.inventory.items.length === 0) {
+                html += '<div style="color:#666; font-size: 10px;">Inventory is empty</div>';
+            } else {
+                player.inventory.items.forEach(item => {
+                    const isSelected = item.id === selectedItemId;
+                    const bgColor = isSelected ? '#2a3a2a' : '#0d1117';
+                    const border = item.isSentient ? '#ff00ff' : 'var(--success)';
+                    const sentientMark = item.isSentient ? ' ✨' : '';
+                    const stackInfo = item.isStackable ? ` x${item.stackSize}` : '';
+
+                    html += `<div style="background: ${bgColor}; padding: 4px; margin: 2px 0; cursor: pointer; border-left: 2px solid ${border}; font-size: 10px;" 
+                             onclick="selectInventoryItem('${item.id}')">
+                        <span style="color: ${item.color}">${item.symbol}</span> ${item.name}${stackInfo}${sentientMark}
+                        <div style="font-size: 9px; color: #666;">
+                            ${item.damage ? `⚔️${item.damage} ` : ''}
+                            ${item.defense ? `🛡️${item.defense} ` : ''}
+                            ${item.weight ? `⚖️${item.weight}kg` : ''}
+                        </div>
+                    </div>`;
+                });
             }
+
+            invDisplay.innerHTML = html;
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener("keydown", (e) => {
+            if (e.target.tagName === "INPUT" || !myId) return;
+
+            let actionTaken = true;
+            switch (e.key.toLowerCase()) {
+                case "w": case "arrowup": sendDir(0, -1); break;
+                case "s": case "arrowdown": sendDir(0, 1); break;
+                case "a": case "arrowleft": sendDir(-1, 0); break;
+                case "d": case "arrowright": sendDir(1, 0); break;
+                case " ": case "wait": sendWait(); break;
+                case "g": pickupNearestItem(); break;
+                case "u": useSelectedItem(); break;
+                case "e": equipSelectedItem(); break;
+                case "x": unequipSelectedItem(); break;
+                default: actionTaken = false; break;
+            }
+            if (actionTaken) e.preventDefault();
         });
-    }
-
-    // --- User Actions & State Updates ---
-
-    function selectTile(x, y) {
-        const ent = entitiesCache.find(e => e.pos.x === x && e.pos.y === y);
-        selectedTarget = ent ? ent.id : null;
-
-        if (ent) {
-            targetLabel.innerText = `Target: ${ent.name} [${ent.id}]`;
-            targetLabel.style.color = "#fff";
-        } else {
-            targetLabel.innerText = "Target: None";
-            targetLabel.style.color = "#777";
-        }
-        drawEntities(entitiesCache); // Redraw to show selection highlight
-        updateInspector();
-    }
-
-    function updateInspector() {
-        if (!selectedTarget) {
-            inspectorEl.innerText = "Select an entity on the map...";
-            return;
-        }
-        const ent = entitiesCache.find(e => e.id === selectedTarget);
-        if (ent) {
-            inspectorEl.innerText = JSON.stringify(ent, null, 2);
-        } else {
-            inspectorEl.innerText = `Entity ${selectedTarget} lost from view.`;
-        }
-    }
-
-    function renderLogs(logs) {
-        logs.forEach(l => {
-            const row = document.createElement("div");
-            row.className = `log-line t-${l.type}`;
-            const time = new Date(l.timestamp).toLocaleTimeString([], {hour12: false});
-            row.innerHTML = `<span style="color:#555">[${time}]</span> ${l.text}`;
-            logsEl.appendChild(row);
-        });
-        logsEl.scrollTop = logsEl.scrollHeight;
-    }
-
-    // --- Command Senders ---
-
-    function sendCommand(action, payload = {}) {
-        if (!ws || ws.readyState !== WebSocket.OPEN) {
-            console.error("WebSocket is not connected.");
-            return;
-        }
-        ws.send(JSON.stringify({ action, payload }));
-    }
-
-    function sendDir(dx, dy) { sendCommand("MOVE", { dx, dy }); }
-    function sendWait() { sendCommand("WAIT"); }
-    function sendAction(action) {
-        if (action === 'INIT') {
-            sendCommand("INIT");
-            return;
-        }
-        if (!selectedTarget) {
-            alert("Select a target on the map first!");
-            return;
-        }
-        sendCommand(action, { targetId: selectedTarget });
-    }
-
-    // Keyboard shortcuts
-    document.addEventListener("keydown", (e) => {
-        if (e.target.tagName === "INPUT" || !myId) return;
-
-        let actionTaken = true;
-        switch(e.key.toLowerCase()) {
-            case "w": case "arrowup": sendDir(0, -1); break;
-            case "s": case "arrowdown": sendDir(0, 1); break;
-            case "a": case "arrowleft": sendDir(-1, 0); break;
-            case "d": case "arrowright": sendDir(1, 0); break;
-            case " ": case "wait": sendWait(); break;
-            default: actionTaken = false; break;
-        }
-        if(actionTaken) e.preventDefault();
-    });
-</script>
+    </script>
 
 </body>
+
 </html>

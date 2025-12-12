@@ -13,7 +13,12 @@ const (
 	ActionWait
 	ActionTalk
 	ActionInteract
-	// В будущем: ActionTrade, ActionUseItem...
+	// Inventory actions
+	ActionPickup
+	ActionDrop
+	ActionUse
+	ActionEquip
+	ActionUnequip
 )
 
 // Маппинг для конвертации JSON -> Domain
@@ -24,6 +29,11 @@ var actionStringToCmd = map[string]ActionType{
 	"WAIT":     ActionWait,
 	"TALK":     ActionTalk,
 	"INTERACT": ActionInteract,
+	"PICKUP":   ActionPickup,
+	"DROP":     ActionDrop,
+	"USE":      ActionUse,
+	"EQUIP":    ActionEquip,
+	"UNEQUIP":  ActionUnequip,
 }
 
 // Маппинг для логов Domain -> String
@@ -34,6 +44,11 @@ var actionCmdToString = map[ActionType]string{
 	ActionWait:     "WAIT",
 	ActionTalk:     "TALK",
 	ActionInteract: "INTERACT",
+	ActionPickup:   "PICKUP",
+	ActionDrop:     "DROP",
+	ActionUse:      "USE",
+	ActionEquip:    "EQUIP",
+	ActionUnequip:  "UNEQUIP",
 }
 
 // ParseAction конвертирует строку из JSON в ActionType

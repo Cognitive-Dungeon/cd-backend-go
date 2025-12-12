@@ -14,11 +14,22 @@ func buildInitialWorld() (map[int]*domain.GameWorld, []*domain.Entity) {
 
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	// 1. Генерируем миры
+	// 1. Генерируем миры с помощью нового API
 	surfaceWorld, surfaceEntities, startPos := dungeon.GenerateSurface()
 	worlds[0] = surfaceWorld
 
-	dungeonWorld1, dungeonEntities1, _ := dungeon.Generate(1, rng)
+	// Уровень 1: Начальное подземелье (гоблины + немного орков + предметы)
+	dungeonWorld1, dungeonEntities1, _ := dungeon.NewLevel(1, rng).
+		WithRooms(8).
+		SpawnEnemy("goblin", 3).
+		SpawnEnemy("orc", 1).
+		SpawnItem("health_potion", 2).
+		SpawnItem("bread", 3).
+		SpawnItem("leather_armor", 1).
+		SpawnItem("steel_dagger", 1).
+		PlaceExit("up", 0).
+		PlaceExit("down", 2).
+		Build()
 	worlds[1] = dungeonWorld1
 
 	// 2. Создаем игрока
@@ -36,7 +47,21 @@ func buildInitialWorld() (map[int]*domain.GameWorld, []*domain.Entity) {
 		Narrative: &domain.NarrativeComponent{Description: "Искатель приключений."},
 		Vision:    &domain.VisionComponent{Radius: domain.VisionRadius},
 		Memory:    &domain.MemoryComponent{ExploredPerLevel: make(map[int]map[int]bool)},
+		Inventory: &domain.InventoryComponent{
+			Items:     []*domain.Entity{},
+			MaxSlots:  20,
+			MaxWeight: 100,
+		},
+		Equipment: &domain.EquipmentComponent{},
 	}
+
+	// Даём игроку стартовые предметы
+	startingSword := dungeon.IronSword.SpawnItem(startPos, 0)
+	startingPotion := dungeon.HealthPotion.SpawnItem(startPos, 0)
+
+	player.Inventory.AddItem(startingSword)
+	player.Inventory.AddItem(startingPotion)
+
 	allEntities = append(allEntities, player)
 
 	// 3. Собираем всех сущностей в один список

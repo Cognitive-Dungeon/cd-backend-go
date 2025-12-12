@@ -31,10 +31,14 @@ func (r Rect) Intersects(other Rect) bool {
 		r.Y <= other.Y+other.H && r.Y+r.H >= other.Y
 }
 
+// Список ключей предметов для случайного выбора
+var commonItems = []string{
+	"health_potion", "gold", "torch", "bread", "meat",
+	"iron_sword", "leather_armor", "wooden_club",
+}
+
 // Generate создает новый уровень
 func Generate(level int, r *rand.Rand) (*domain.GameWorld, []domain.Entity, domain.Position) {
-	// Инициализируем рандом (важно, иначе карта будет одинаковой)
-	// В Go 1.20+ глобальный сид рандомен, но для надежности можно так:
 	rand.Seed(time.Now().UnixNano())
 
 	// 1. Заполняем стенами
@@ -42,9 +46,7 @@ func Generate(level int, r *rand.Rand) (*domain.GameWorld, []domain.Entity, doma
 	for y := 0; y < MapHeight; y++ {
 		row := make([]domain.Tile, MapWidth)
 		for x := 0; x < MapWidth; x++ {
-			row[x] = domain.Tile{
-				X: x, Y: y, IsWall: true, Env: "stone",
-			}
+			row[x] = domain.Tile{X: x, Y: y, IsWall: true, Env: "stone"}
 		}
 		gameMap[y] = row
 	}
@@ -71,12 +73,9 @@ func Generate(level int, r *rand.Rand) (*domain.GameWorld, []domain.Entity, doma
 
 		if !failed {
 			createRoom(gameMap, newRoom)
-
 			if len(rooms) > 0 {
-				// Соединяем с предыдущей комнатой
 				prevX, prevY := rooms[len(rooms)-1].Center()
 				currX, currY := newRoom.Center()
-
 				if rand.Intn(2) == 0 {
 					createHCorridor(gameMap, prevX, currX, prevY)
 					createVCorridor(gameMap, prevY, currY, currX)
@@ -89,84 +88,80 @@ func Generate(level int, r *rand.Rand) (*domain.GameWorld, []domain.Entity, doma
 		}
 	}
 
-	// 3. Спавн игрока (в центре первой комнаты)
+	// 3. Спавн игрока (в первой комнате)
 	startPos := domain.Position{X: 0, Y: 0}
 	if len(rooms) > 0 {
 		cx, cy := rooms[0].Center()
 		startPos = domain.Position{X: cx, Y: cy}
 
-		// Лестница ВВЕРХ там же
+		// Лестница ВВЕРХ
 		eventUp, _ := json.Marshal(map[string]interface{}{
 			"event":       "LEVEL_TRANSITION",
 			"targetLevel": level - 1,
-			"targetPosId": fmt.Sprintf("exit_down_from_%d", level-1), // ID лестницы, куда мы придем
+			"targetPosId": fmt.Sprintf("exit_down_from_%d", level-1),
 		})
 		entities = append(entities, domain.Entity{
-			ID:    fmt.Sprintf("exit_up_from_%d", level),
-			Type:  domain.EntityTypeExit,
-			Name:  "Лестница вверх",
-			Pos:   domain.Position{X: cx, Y: cy},
-			Level: level,
-			Render: &domain.RenderComponent{
-				Symbol: "<",
-				Color:  "#FFFFFF", Label: "<",
-			},
-			Narrative: &domain.NarrativeComponent{
-				Description: "Старая каменная лестница, ведущая на поверхность.",
-			},
+			ID:      fmt.Sprintf("exit_up_from_%d", level),
+			Type:    domain.EntityTypeExit,
+			Name:    "Лестница вверх",
+			Pos:     domain.Position{X: cx, Y: cy},
+			Level:   level,
+			Render:  &domain.RenderComponent{Symbol: "<", Color: "#FFFFFF", Label: "<"},
 			Trigger: &domain.TriggerComponent{OnInteract: eventUp},
 		})
 	}
 
-	// 4. Спавн врагов и предметов (во всех комнатах кроме первой)
+	// 4. Заполнение комнат (Враги И Предметы)
 	for i := 1; i < len(rooms); i++ {
 		room := rooms[i]
 		cx, cy := room.Center()
 
-		if r.Float32() > 0.3 {
+		// --- ВРАГИ (30% шанс) ---
+		if r.Float32() > 0.7 {
 			isOrc := r.Float32() > 0.7 || level > 3
-
 			enemy := domain.Entity{
 				ID:    domain.GenerateID(),
 				Type:  domain.EntityTypeEnemy,
 				Pos:   domain.Position{X: cx + randRange(-1, 1), Y: cy + randRange(-1, 1)},
 				Level: level,
-
 				Stats: &domain.StatsComponent{
-					HP:       15 + level*2,
-					MaxHP:    15 + level*2,
-					Strength: 2 + level/2,
-					Gold:     randRange(1, 10),
+					HP: 15 + level*2, MaxHP: 15 + level*2, Strength: 2 + level/2, Gold: randRange(1, 10),
 				},
-				AI: &domain.AIComponent{
-					IsHostile:      true,
-					NextActionTick: 0,
-					State:          "IDLE",
-				},
-				Render:    &domain.RenderComponent{},
-				Narrative: &domain.NarrativeComponent{},
-				Vision:    &domain.VisionComponent{Radius: domain.VisionRadius},
-				Memory:    &domain.MemoryComponent{ExploredPerLevel: make(map[int]map[int]bool)},
+				AI:     &domain.AIComponent{IsHostile: true, State: "IDLE"},
+				Render: &domain.RenderComponent{},
+				Vision: &domain.VisionComponent{Radius: domain.VisionRadius},
+				Memory: &domain.MemoryComponent{ExploredPerLevel: make(map[int]map[int]bool)},
 			}
-
 			if isOrc {
 				enemy.Name = "Свирепый Орк"
 				enemy.Render.Symbol = "O"
 				enemy.Render.Color = "#DC2626"
-				enemy.AI.Personality = "Furious"
 				enemy.Stats.HP *= 2
-				enemy.Stats.Strength += 2
 				enemy.Stats.MaxHP = enemy.Stats.HP
-
-				enemy.Narrative.Description = "Огромный зеленокожий орк с тяжелой дубиной."
 			} else {
 				enemy.Name = "Хитрый Гоблин"
 				enemy.Render.Symbol = "g"
 				enemy.Render.Color = "#22C55E"
-				enemy.AI.Personality = "Cowardly"
-				enemy.Narrative.Description = "Мелкий пакостный гоблин, воровато оглядывается."
 			}
 			entities = append(entities, enemy)
+		}
+
+		// --- ПРЕДМЕТЫ (50% шанс) ---
+		// Спавним 1-2 предмета в комнате
+		if r.Float32() > 0.5 {
+			count := randRange(1, 2)
+			for j := 0; j < count; j++ {
+				// Выбираем случайный шаблон
+				itemKey := commonItems[r.Intn(len(commonItems))]
+				template := ItemTemplates[itemKey]
+
+				// Случайная позиция внутри комнаты
+				ix := room.X + 1 + r.Intn(room.W-2)
+				iy := room.Y + 1 + r.Intn(room.H-2)
+
+				itemEnt := template.SpawnItem(domain.Position{X: ix, Y: iy}, level)
+				entities = append(entities, *itemEnt)
+			}
 		}
 	}
 
@@ -179,14 +174,13 @@ func Generate(level int, r *rand.Rand) (*domain.GameWorld, []domain.Entity, doma
 			"targetPosId": fmt.Sprintf("exit_up_from_%d", level+1),
 		})
 		entities = append(entities, domain.Entity{
-			ID:        fmt.Sprintf("exit_down_from_%d", level),
-			Type:      domain.EntityTypeExit,
-			Name:      "Лестница вниз",
-			Pos:       domain.Position{X: lx, Y: ly},
-			Level:     level,
-			Render:    &domain.RenderComponent{Symbol: ">", Color: "#FFFFFF", Label: ">"},
-			Narrative: &domain.NarrativeComponent{Description: "Темный проход, ведущий вглубь подземелья."},
-			Trigger:   &domain.TriggerComponent{OnInteract: eventDown},
+			ID:      fmt.Sprintf("exit_down_from_%d", level),
+			Type:    domain.EntityTypeExit,
+			Name:    "Лестница вниз",
+			Pos:     domain.Position{X: lx, Y: ly},
+			Level:   level,
+			Render:  &domain.RenderComponent{Symbol: ">", Color: "#FFFFFF", Label: ">"},
+			Trigger: &domain.TriggerComponent{OnInteract: eventDown},
 		})
 	}
 

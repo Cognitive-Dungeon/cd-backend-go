@@ -105,6 +105,12 @@ func (s *GameService) BuildStateFor(observer *domain.Entity, activeID string) *a
 			continue
 		}
 
+		// Проверяем, действительно ли сущность зарегистрирована в этом мире.
+		// Если предмет в инвентаре, он удален из registry мира, и этот метод вернет nil.
+		if observerWorld.GetEntity(e.ID) == nil {
+			continue
+		}
+
 		// Остальных - если они в зоне видимости
 		idx := observerWorld.GetIndex(e.Pos.X, e.Pos.Y)
 		if isGod || visibleIdxs[idx] {
@@ -170,6 +176,86 @@ func (s *GameService) toEntityView(target *domain.Entity, observer *domain.Entit
 
 	if isDead {
 		view.Stats.IsDead = true
+	}
+
+	// Инвентарь и экипировка (только владелец и контейнеры)
+	if isMe || target.Type == domain.EntityTypeItem {
+		// Инвентарь
+		if target.Inventory != nil {
+			invView := &api.InventoryView{
+				Items:         make([]api.ItemView, 0, len(target.Inventory.Items)),
+				MaxSlots:      target.Inventory.MaxSlots,
+				CurrentWeight: target.Inventory.CurrentWeight,
+				MaxWeight:     target.Inventory.MaxWeight,
+			}
+
+			for _, item := range target.Inventory.Items {
+				if item != nil && item.Item != nil {
+					itemView := api.ItemView{
+						ID:          item.ID,
+						Name:        item.Name,
+						Category:    item.Item.Category,
+						IsStackable: item.Item.IsStackable,
+						StackSize:   item.Item.StackSize,
+						Damage:      item.Item.Damage,
+						Defense:     item.Item.Defense,
+						Weight:      item.Item.Weight,
+						Value:       item.Item.Value,
+						IsSentient:  item.Item.IsSentient,
+					}
+
+					if item.Render != nil {
+						itemView.Symbol = item.Render.Symbol
+						itemView.Color = item.Render.Color
+					}
+
+					invView.Items = append(invView.Items, itemView)
+				}
+			}
+
+			view.Inventory = invView
+		}
+
+		// Экипировка (только для владельца)
+		if isMe && target.Equipment != nil {
+			eqView := &api.EquipmentView{}
+
+			if target.Equipment.Weapon != nil && target.Equipment.Weapon.Item != nil {
+				w := target.Equipment.Weapon
+				weaponView := api.ItemView{
+					ID:       w.ID,
+					Name:     w.Name,
+					Category: w.Item.Category,
+					Damage:   w.Item.Damage,
+					Weight:   w.Item.Weight,
+					Value:    w.Item.Value,
+				}
+				if w.Render != nil {
+					weaponView.Symbol = w.Render.Symbol
+					weaponView.Color = w.Render.Color
+				}
+				eqView.Weapon = &weaponView
+			}
+
+			if target.Equipment.Armor != nil && target.Equipment.Armor.Item != nil {
+				a := target.Equipment.Armor
+				armorView := api.ItemView{
+					ID:       a.ID,
+					Name:     a.Name,
+					Category: a.Item.Category,
+					Defense:  a.Item.Defense,
+					Weight:   a.Item.Weight,
+					Value:    a.Item.Value,
+				}
+				if a.Render != nil {
+					armorView.Symbol = a.Render.Symbol
+					armorView.Color = a.Render.Color
+				}
+				eqView.Armor = &armorView
+			}
+
+			view.Equipment = eqView
+		}
 	}
 
 	return view

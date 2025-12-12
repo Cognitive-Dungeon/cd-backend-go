@@ -89,4 +89,9 @@ type Entity struct {
 	Vision    *VisionComponent    `json:"vision,omitempty"`
 	Memory    *MemoryComponent    `json:"memory,omitempty"`
 	Trigger   *TriggerComponent   `json:"trigger,omitempty"`
+
+	// Компоненты инвентаря
+	Item      *ItemComponent      `json:"item,omitempty"`      // Делает Entity предметом
+	Inventory *InventoryComponent `json:"inventory,omitempty"` // Инвентарь для существ
+	Equipment *EquipmentComponent `json:"equipment,omitempty"` // Экипировка для существ
 }
