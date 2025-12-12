@@ -7,6 +7,51 @@ import (
 	"math/rand"
 )
 
+// Rect - Вспомогательная структура для комнаты
+type Rect struct {
+	X, Y, W, H int
+}
+
+func (r Rect) Center() (int, int) {
+	return r.X + r.W/2, r.Y + r.H/2
+}
+
+func (r Rect) Intersects(other Rect) bool {
+	return r.X <= other.X+other.W && r.X+r.W >= other.X &&
+		r.Y <= other.Y+other.H && r.Y+r.H >= other.Y
+}
+
+func createRoom(gameMap [][]domain.Tile, room Rect) {
+	for y := room.Y + 1; y < room.Y+room.H; y++ {
+		for x := room.X + 1; x < room.X+room.W; x++ {
+			gameMap[y][x].IsWall = false
+			gameMap[y][x].Env = "floor"
+		}
+	}
+}
+
+func createHCorridor(gameMap [][]domain.Tile, x1, x2, y int) {
+	start := min(x1, x2)
+	end := max(x1, x2)
+	for x := start; x <= end; x++ {
+		gameMap[y][x].IsWall = false
+		gameMap[y][x].Env = "floor"
+	}
+}
+
+func createVCorridor(gameMap [][]domain.Tile, y1, y2, x int) {
+	start := min(y1, y2)
+	end := max(y1, y2)
+	for y := start; y <= end; y++ {
+		gameMap[y][x].IsWall = false
+		gameMap[y][x].Env = "floor"
+	}
+}
+
+func randRange(min, max int) int {
+	return rand.Intn(max-min+1) + min
+}
+
 // LevelBuilder предоставляет fluent API для создания уровней
 type LevelBuilder struct {
 	level    int
