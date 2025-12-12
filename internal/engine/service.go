@@ -7,91 +7,90 @@ import (
 	"cognitive-server/internal/engine/handlers/events"
 	"cognitive-server/internal/network"
 	"cognitive-server/pkg/api"
+	"cognitive-server/pkg/dungeon"
 	"cognitive-server/pkg/logger"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/sirupsen/logrus"
 )
 
-type LoopState uint8
-
-const (
-	LoopStateRunning LoopState = iota // Цикл активен и обрабатывает ходы.
-	LoopStatePaused                   // Цикл на паузе, т.к. нет игроков.
-)
-
 type GameService struct {
-	// Worlds хранит все загруженные/сгенерированные уровни
+	// Храним данные всех уровней (статические данные GameWorld)
 	Worlds map[int]*domain.GameWorld
 
-	GlobalTick int
+	// Активные запущенные инстансы
+	Instances map[int]*Instance
 
-	// Entities хранит указатели на ВСЕ сущности (Игроки, NPC, Монстры)
-	Entities []*domain.Entity
+	// Индекс: где находится сущность? (EntityID -> LevelID)
+	EntityLocations map[string]int
 
 	Logs []api.LogEntry
 
-	CommandChan chan domain.InternalCommand
-	Hub         *network.Broadcaster
-
-	// Канал для безопасного добавления новых игроков в работающий цикл
+	// Каналы для main.go (входная точка)
 	JoinChan       chan *domain.Entity
 	DisconnectChan chan string
 
+	Hub *network.Broadcaster
+
+	// Реестр хендлеров (общий для всех инстансов)
 	actionHandlers map[domain.ActionType]handlers.HandlerFunc
 	eventHandlers  map[domain.EventType]handlers.HandlerFunc
-
-	TurnManager *TurnManager // Менеджер очередности ходов
-
-	loopState LoopState
 }
 
 func NewService() *GameService {
 	worlds, allEntities := buildInitialWorld()
 
 	s := &GameService{
-		Worlds:         worlds,
-		Entities:       allEntities,
-		GlobalTick:     0,
+		Worlds:          worlds,
+		Instances:       make(map[int]*Instance),
+		EntityLocations: make(map[string]int),
+
 		Logs:           []api.LogEntry{},
-		CommandChan:    make(chan domain.InternalCommand, 100),
 		JoinChan:       make(chan *domain.Entity, 10),
 		DisconnectChan: make(chan string, 10),
+
 		Hub:            network.NewBroadcaster(),
 		actionHandlers: make(map[domain.ActionType]handlers.HandlerFunc),
 		eventHandlers:  make(map[domain.EventType]handlers.HandlerFunc),
-		TurnManager:    NewTurnManager(),
-		loopState:      LoopStateRunning,
 	}
 
 	s.registerHandlers()
 
-	// Add existing entities to manager
-	for _, e := range s.Entities {
-		if e.Stats != nil && !e.Stats.IsDead {
-			s.TurnManager.AddEntity(e)
+	// 1. Создаем и запускаем Инстансы для каждого мира
+	for id, world := range worlds {
+		instance := NewInstance(id, world, s)
+		s.Instances[id] = instance
+
+		// Запускаем игровой цикл этого уровня в отдельной горутине
+		go instance.Run()
+	}
+
+	// 2. Распределяем начальные сущности по инстансам
+	for _, e := range allEntities {
+		if instance, ok := s.Instances[e.Level]; ok {
+			s.EntityLocations[e.ID] = e.Level
+			// Напрямую добавляем, так как циклы только запустились
+			instance.addEntity(e)
 		}
 	}
-	// s.initTurnQueue() - removed
 
 	return s
 }
 
-// GetEntity ищет сущность по ID во всех загруженных мирах.
+// GetEntity ищет сущность. Использует быстрый индекс EntityLocations.
 func (s *GameService) GetEntity(id string) *domain.Entity {
-	finderLogger := logger.Log.WithField("entity_id", id)
-
-	finderLogger.Debug("Searching for entity...")
-
-	for level, world := range s.Worlds {
-		if entity := world.GetEntity(id); entity != nil {
-			finderLogger.WithField("found_in_level", level).Debug("Entity found.")
-			return entity
-		}
+	// 1. Узнаем уровень
+	levelID, ok := s.EntityLocations[id]
+	if !ok {
+		return nil
 	}
 
-	finderLogger.Warn("Entity not found in any world.")
+	// 2. Берем из мира (GameWorld хранит реестр)
+	if world, ok := s.Worlds[levelID]; ok {
+		return world.GetEntity(id)
+	}
 	return nil
 }
 
@@ -103,272 +102,167 @@ func (s *GameService) registerHandlers() {
 	s.actionHandlers[domain.ActionInit] = handlers.WithEmptyPayload(actions.HandleInit)
 	s.actionHandlers[domain.ActionWait] = handlers.WithEmptyPayload(actions.HandleWait)
 
-	// Inventory actions
+	// Inventory
 	s.actionHandlers[domain.ActionPickup] = handlers.WithPayload(actions.HandlePickup)
 	s.actionHandlers[domain.ActionDrop] = handlers.WithPayload(actions.HandleDrop)
 	s.actionHandlers[domain.ActionUse] = handlers.WithPayload(actions.HandleUse)
 	s.actionHandlers[domain.ActionEquip] = handlers.WithPayload(actions.HandleEquip)
 	s.actionHandlers[domain.ActionUnequip] = handlers.WithPayload(actions.HandleUnequip)
 
-	// Events
 	s.eventHandlers[domain.EventLevelTransition] = handlers.WithPayload(events.HandleLevelTransition)
 }
 
+// Start теперь запускает только диспетчер входов/выходов
 func (s *GameService) Start() {
-	go s.RunGameLoop()
+	go s.DispatcherLoop()
 }
 
-// ProcessCommand принимает команду от внешнего мира (WebSocket)
-// Валидация прав доступа (Token) должна происходить ДО этого метода или внутри хендлеров,
-// но здесь мы доверяем, что Token соответствует ActorID.
-func (s *GameService) ProcessCommand(externalCmd api.ClientCommand) {
-	actionType := domain.ParseAction(externalCmd.Action)
-	if actionType == domain.ActionUnknown {
-		logger.Log.WithField("action", externalCmd.Action).Warn("Unknown action received from client")
-		return
-	}
-
-	s.CommandChan <- domain.InternalCommand{
-		Action:  actionType,
-		Token:   externalCmd.Token, // ID сущности, выполняющей действие
-		Payload: externalCmd.Payload,
-	}
-}
-
-// --- GAME LOOP ---
-
-func (s *GameService) RunGameLoop() {
-	logger.Log.Info("Game loop started.")
+// DispatcherLoop обрабатывает глобальные события входа/выхода
+func (s *GameService) DispatcherLoop() {
+	logger.Log.Info("Global Dispatcher started")
 
 	for {
-		// 1. Проверяем, есть ли новые игроки
 		select {
+		// Новый игрок (из main.go)
 		case newEntity := <-s.JoinChan:
-			s.registerNewEntity(newEntity)
-		// Очищаем "зависшие" отключения, которые произошли не в свой ход
-		case <-s.DisconnectChan:
-			// Просто вычитываем, чтобы канал не забился.
-			// Если ход не этого игрока, нам все равно, Hub.Unregister уже сработал в main.go
-		default:
-			// Никого нет, продолжаем
-		}
+			s.AddPlayerToLevel(newEntity)
 
-		// Если в хабе нет ни одного подписчика (ни игроков, ни ботов),
-		// ставим симуляцию на паузу, чтобы не тратить ресурсы и не "прокручивать" время.
-		hasSubscribers := s.Hub.SubscriberCount() > 0
-
-		// Случай 1: Должны быть на паузе, но сейчас работаем.
-		// Переходим в состояние паузы и логируем это ОДИН РАЗ.
-		if !hasSubscribers && s.loopState == LoopStateRunning {
-			logger.Log.Info("Game loop paused: no subscribers.")
-			s.loopState = LoopStatePaused
-		}
-
-		// Случай 2: Должны работать, но сейчас на паузе.
-		// Переходим в рабочее состояние и логируем это ОДИН РАЗ.
-		if hasSubscribers && s.loopState == LoopStatePaused {
-			logger.Log.Info("Game loop resumed.")
-			s.loopState = LoopStateRunning
-		}
-
-		// Если мы на паузе, просто спим и переходим к следующей итерации.
-		if s.loopState == LoopStatePaused {
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-
-		// 1. Кто ходит следующим?
-		activeItem := s.TurnManager.PeekNext()
-
-		// Если никого нет (пустой мир или все мертвы), ждем и повторяем
-		if activeItem == nil {
-			time.Sleep(1 * time.Second)
-			continue
-		}
-
-		activeActor := activeItem.Value
-
-		if activeActor.Stats != nil && activeActor.Stats.IsDead {
-			// Удаляем из очереди ходов — мертвые не ходят, кем бы они ни были
-			s.TurnManager.RemoveEntity(activeActor.ID)
-
-			// Логируем смерть. Это событие должно быть видно окружающим.
-			// Тип лога COMBAT, чтобы клиент мог выделить красным.
-			s.AddLog(fmt.Sprintf("%s погибает.", activeActor.Name), "COMBAT")
-
-			// Если у сущности есть "душа" (подписчик/контроллер), принудительно обновляем его состояние.
-			// Это нужно, чтобы клиент увидел HP: 0 и экран смерти, или микросервис получил сигнал о гибели.
-			if s.Hub.HasSubscriber(activeActor.ID) {
-				s.publishUpdate(activeActor.ID)
-			}
-
-			// Пропускаем ход, переходим к следующему
-			continue
-		}
-
-		// Обновляем глобальное время
-		s.GlobalTick = activeActor.AI.NextActionTick
-
-		// 2. Рассылаем обновление всем клиентам
-		// Передаем activeActor.ID, чтобы клиенты знали, чей ход (подсветка интерфейса)
-		s.publishUpdate(activeActor.ID)
-
-		// 3. Логика хода
-		// Проверяем, управляется ли сущность человеком.
-		// Критерий: Есть ControllerID (устанавливается при логине) ИЛИ просто есть подписчик в Hub.
-		// Для надежности будем проверять наличие активного соединения в Hub.
-		isHumanControlled := s.Hub.HasSubscriber(activeActor.ID)
-
-		logger.Log.WithFields(logrus.Fields{
-			"component":         "game_loop",
-			"tick":              s.GlobalTick,
-			"active_actor_id":   activeActor.ID,
-			"active_actor_name": activeActor.Name,
-			"is_human":          isHumanControlled,
-		}).Debug("--- New Turn ---")
-
-		if !isHumanControlled {
-			// --- ХОД ИИ ---
-			s.processAITurn(activeActor)
-		} else {
-			// --- ХОД ИГРОКА ---
-			timeout := time.After(60 * time.Second) // Тайм-аут на ход игрока
-			commandProcessed := false
-
-			for !commandProcessed {
-				select {
-				// 1. ВАЖНО: Слушаем новых игроков ДАЖЕ пока ждем хода старого
-				case newEntity := <-s.JoinChan:
-					s.registerNewEntity(newEntity)
-					// Сразу отправляем новому игроку состояние мира, не дожидаясь конца хода текущего
-					if s.Hub.HasSubscriber(newEntity.ID) {
-						state := s.BuildStateFor(newEntity, activeActor.ID)
-						s.Hub.SendTo(newEntity.ID, *state)
+		// Дисконнект (из main.go)
+		case entityID := <-s.DisconnectChan:
+			levelID, ok := s.EntityLocations[entityID]
+			if ok {
+				if instance, ok := s.Instances[levelID]; ok {
+					// Сообщаем инстансу, чтобы он прервал ход
+					select {
+					case instance.LeaveChan <- entityID:
+					default:
 					}
-
-				case disconnectedID := <-s.DisconnectChan:
-					// Если отключился тот, чей сейчас ход - прерываем ожидание!
-					if disconnectedID == activeActor.ID {
-						logger.Log.WithField("actor", activeActor.Name).Info("Active player disconnected. Skipping turn.")
-
-						// Заставляем его ждать (или можно вообще ничего не делать, просто передать ход)
-						activeActor.AI.Wait(domain.TimeCostWait)
-
-						// Удаляем ControllerID, чтобы в следующем круге он считался AI (или просто стоял)
-						activeActor.ControllerID = ""
-
-						commandProcessed = true
-					}
-
-				// 2. Обработка команд
-				case cmd := <-s.CommandChan:
-					// Находим того, кто прислал команду (может быть не активный игрок, а тот, кто делает INIT)
-					requester := s.GetEntity(cmd.Token)
-					if requester == nil {
-						continue
-					}
-
-					isTurn := cmd.Token == activeActor.ID
-					isSystem := cmd.Action == domain.ActionInit
-
-					if isTurn || isSystem {
-						// Выполняем команду
-						s.executeCommand(cmd, requester)
-
-						// Если это INIT (реконнект или вход), принудительно шлем состояние
-						if isSystem {
-							if s.Hub.HasSubscriber(requester.ID) {
-								state := s.BuildStateFor(requester, activeActor.ID)
-								s.Hub.SendTo(requester.ID, *state)
-							}
-						} else {
-							// Если это был игровой ход - выходим из цикла ожидания
-							commandProcessed = true
-						}
-					}
-
-				// 3. Тайм-аут
-				case <-timeout:
-					logger.Log.WithFields(logrus.Fields{
-						"actor_id":   activeActor.ID,
-						"actor_name": activeActor.Name,
-					}).Warn("Player turn timed out. Forcing WAIT action.")
-					activeActor.AI.Wait(domain.TimeCostWait)
-					commandProcessed = true
 				}
 			}
 		}
-
-		// В конце хода обновляем приоритет в очереди
-		s.TurnManager.UpdatePriority(activeActor.ID, activeActor.AI.NextActionTick)
 	}
 }
 
-// registerNewEntity безопасно добавляет сущность в структуры движка
-func (s *GameService) registerNewEntity(e *domain.Entity) {
-	world, ok := s.Worlds[e.Level]
+// AddPlayerToLevel добавляет игрока в нужный инстанс
+func (s *GameService) AddPlayerToLevel(e *domain.Entity) {
+	instance, ok := s.Instances[e.Level]
+
+	// Если уровня нет (например, процедурный левел, который еще не создан)
+	// В текущей архитектуре мы создаем уровни при старте, но тут можно добавить Lazy Init
 	if !ok {
-		logger.Log.Warnf("Cannot join entity %s: level %d not found", e.ID, e.Level)
+		logger.Log.Warnf("Level %d not found for player %s", e.Level, e.ID)
 		return
 	}
 
-	// 1. Добавляем в глобальный список
-	s.Entities = append(s.Entities, e)
+	// Обновляем глобальный индекс
+	s.EntityLocations[e.ID] = e.Level
 
-	// 2. Добавляем в мир (Реестр + Карта)
-	world.RegisterEntity(e)
-	world.AddEntity(e)
-
-	// 3. Добавляем в очередь ходов (синхронизируя время)
-	if e.Stats != nil && !e.Stats.IsDead {
-		// Синхронизируем время, чтобы новичок не делал 100 ходов подряд
-		e.AI.NextActionTick = s.GlobalTick
-		s.TurnManager.AddEntity(e)
-	}
-
-	logger.Log.WithField("id", e.ID).Info("New entity joined the game loop")
+	// Отправляем в инстанс
+	instance.JoinChan <- e
 }
 
-// executeCommand выполняет хендлер и пишет логи
-func (s *GameService) executeCommand(cmd domain.InternalCommand, actor *domain.Entity) {
-	handler, ok := s.actionHandlers[cmd.Action]
+// ProcessCommand маршрутизирует команды в нужный инстанс
+func (s *GameService) ProcessCommand(cmd api.ClientCommand) {
+	// 1. Где игрок?
+	levelID, ok := s.EntityLocations[cmd.Token]
+	if !ok {
+		// Игрока нет в индексе (возможно, только зашел и шлет INIT).
+		// В этом случае игнорируем, так как INIT при входе отправляется автоматически из main.go,
+		// но если клиент шлет повторный INIT вручную, он может потеряться.
+		// Для надежности можно проверить JoinChan, но обычно это не нужно.
+		return
+	}
+
+	// 2. Получаем инстанс
+	instance, ok := s.Instances[levelID]
 	if !ok {
 		return
 	}
 
-	actorWorld, ok := s.Worlds[actor.Level]
-	if !ok {
-		logger.Log.WithFields(logrus.Fields{
-			"actor_id": actor.ID,
-			"level":    actor.Level,
-		}).Error("executeCommand failed: Actor is on a non-existent level.")
+	// 3. Формируем команду
+	internalCmd := domain.InternalCommand{
+		Action:  domain.ParseAction(cmd.Action),
+		Token:   cmd.Token,
+		Payload: cmd.Payload,
+	}
+
+	// 4. Находим объект актора (чтобы передать указатель, а не искать его снова внутри хода)
+	// Используем быстрый поиск по миру
+	actor := instance.World.GetEntity(cmd.Token)
+	if actor == nil {
 		return
 	}
 
-	ctx := handlers.Context{
-		Finder:   s,
-		World:    actorWorld,
-		Entities: s.Entities, // Передаем весь список
-		Actor:    actor,
+	// 5. Отправляем в канал инстанса
+	instance.CommandChan <- InstanceCommand{
+		Cmd:    internalCmd,
+		Source: actor,
 	}
+}
 
-	result, _ := handler(ctx, cmd.Payload)
+func (s *GameService) ChangeLevel(actor *domain.Entity, newLevelID int, targetPosID string) {
+	oldLevelID := actor.Level
 
-	// --- Обработка события, если оно есть ---
-	if result.Event != nil {
-		s.processEvent(actor, result.Event)
-	}
+	logger.Log.Infof("Transitioning entity %s from Level %d to %d", actor.ID, oldLevelID, newLevelID)
 
-	// Логирование результата
-	if result.Msg != "" {
-		msgType := result.MsgType
-		if msgType == "" {
-			msgType = "INFO"
+	// 1. Получаем (или создаем) целевой Инстанс
+	newInstance, ok := s.Instances[newLevelID]
+	if !ok {
+		logger.Log.Infof("Generating new level %d on the fly...", newLevelID)
+
+		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		newWorld, newEntities, _ := dungeon.Generate(newLevelID, rng)
+
+		newInstance = NewInstance(newLevelID, newWorld, s)
+
+		for i := range newEntities {
+			newInstance.addEntity(&newEntities[i])
 		}
-		s.AddLog(result.Msg, msgType)
+
+		s.Instances[newLevelID] = newInstance
+		go newInstance.Run()
 	}
+
+	// 2. Удаляем актора из СТАРОГО инстанса
+	if oldInstance, ok := s.Instances[oldLevelID]; ok {
+		oldInstance.LeaveChan <- actor.ID
+	}
+
+	// 3. Вычисляем позицию в НОВОМ инстансе
+	targetPos := domain.Position{X: 1, Y: 1}
+
+	// Ищем в реестре мира (это безопасно, т.к. GameWorld - это данные)
+	targetEntity := newInstance.World.GetEntity(targetPosID)
+	if targetEntity != nil {
+		targetPos = targetEntity.Pos
+	} else {
+		// Fallback: центр карты
+		cx, cy := newInstance.World.Width/2, newInstance.World.Height/2
+		if !newInstance.World.Map[cy][cx].IsWall {
+			targetPos = domain.Position{X: cx, Y: cy}
+		}
+	}
+
+	// 4. Обновляем данные актора
+	actor.Level = newLevelID
+	actor.Pos = targetPos
+
+	if actor.AI != nil {
+		actor.AI.State = "IDLE"
+		// Синхронизация времени
+		actor.AI.NextActionTick = newInstance.CurrentTick
+	}
+
+	// 5. Обновляем Глобальный Индекс
+	s.EntityLocations[actor.ID] = newLevelID
+
+	// 6. Добавляем актора в НОВЫЙ инстанс
+	newInstance.JoinChan <- actor
+
+	s.AddLog(fmt.Sprintf("%s переходит на уровень %d.", actor.Name, newLevelID), "INFO")
 }
 
+// AddLog добавляет лог (пока глобально, но можно сделать per-level)
 func (s *GameService) AddLog(text, logType string) {
 	s.Logs = append(s.Logs, api.LogEntry{
 		ID:        fmt.Sprintf("%d", time.Now().UnixNano()),

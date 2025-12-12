@@ -7,6 +7,7 @@ import (
 	"cognitive-server/pkg/api"
 )
 
+// HandlePickup обрабатывает команду PICKUP - подбор предмета с земли
 func HandlePickup(ctx handlers.Context, p api.ItemPayload) (handlers.Result, error) {
 	// 1. Валидация цели (TargetingSystem)
 	res := systems.ValidateInteraction(ctx.Actor, p.ItemID, 1.5, true, ctx.Finder, ctx.World)

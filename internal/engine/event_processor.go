@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 )
 
-// processEvent - является точкой входа для обработки событий, возвращенных хендлерами.
+// processEvent вызывает соответствующий хендлер для события
 func (s *GameService) processEvent(actor *domain.Entity, eventData json.RawMessage) {
 	var genericEvent struct {
 		Event string `json:"event"`
@@ -29,28 +29,15 @@ func (s *GameService) processEvent(actor *domain.Entity, eventData json.RawMessa
 		return
 	}
 
-	// Создаем контекст для события
+	levelID := s.EntityLocations[actor.ID]
+	instance := s.Instances[levelID]
+
 	ctx := handlers.Context{
-		Finder:   s,
-		World:    nil,        // Будет определен внутри хендлера, если нужно (или передадим текущий мир актора)
-		Entities: s.Entities, // Глобальный список
+		Finder:   instance.World,
+		World:    instance.World,
+		Entities: instance.Entities,
 		Actor:    actor,
-		Worlds:   s.Worlds, // Передаем все миры
-		AddGlobalEntity: func(e *domain.Entity) {
-			// 1. Добавляем в глобальный список
-			s.Entities = append(s.Entities, e)
-
-			// 2. Если у сущности есть AI, её нужно добавить в очередь ходов
-			if e.AI != nil && e.Stats != nil && !e.Stats.IsDead {
-				// ВАЖНО: Синхронизируем время моба с текущим временем мира.
-				// Иначе, если у моба Tick=0, а в мире Tick=1000,
-				// моб сделает 10 ходов мгновенно, чтобы "догнать" время.
-				e.AI.NextActionTick = s.GlobalTick
-
-				// Регистрируем в менеджере
-				s.TurnManager.AddEntity(e)
-			}
-		},
+		Switcher: s,
 	}
 
 	// Выполняем хендлер

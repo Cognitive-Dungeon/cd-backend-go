@@ -11,6 +11,10 @@ type EntityFinder interface {
 	GetEntity(id string) *domain.Entity
 }
 
+type WorldSwitcher interface {
+	ChangeLevel(entity *domain.Entity, targetLevel int, targetPosID string)
+}
+
 // Context передает хендлеру состояние мира.
 // Мы передаем ссылки, чтобы хендлер мог менять состояние (мутировать данные).
 type Context struct {
@@ -22,6 +26,7 @@ type Context struct {
 	// --- Global Context for Events ---
 	Worlds          map[int]*domain.GameWorld // Доступ ко всем мирам (нужен для переходов)
 	AddGlobalEntity func(*domain.Entity)      // Коллбэк для регистрации новой сущности в глобальном стейте
+	Switcher        WorldSwitcher
 }
 
 // Result - возвращает результат выполнения команды.

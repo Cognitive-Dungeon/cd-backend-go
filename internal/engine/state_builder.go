@@ -6,27 +6,25 @@ import (
 	"cognitive-server/pkg/api"
 )
 
-// publishUpdate рассылает актуальное состояние мира всем активным подписчикам.
-func (s *GameService) publishUpdate(activeID string) {
-	// Пробегаем по всем сущностям, и если у них есть "душа" (подключенный клиент), шлем апдейт
-	for _, e := range s.Entities {
+// publishUpdate рассылает актуальное состояние мира всем активным подписчикам КОНКРЕТНОГО инстанса.
+func (s *GameService) publishUpdate(activeID string, instance *Instance) {
+	// Пробегаем по сущностям ТОЛЬКО этого уровня
+	for _, e := range instance.Entities {
 		if s.Hub.HasSubscriber(e.ID) {
-			state := s.BuildStateFor(e, activeID)
+			state := s.BuildStateFor(e, activeID, instance)
 			s.Hub.SendTo(e.ID, *state)
 		}
 	}
 
-	// Очищаем логи ПОСЛЕ рассылки (так как они рассылаются всем одинаковые в текущей итерации)
-	// Примечание: В production лучше хранить лог буфер или рассылать события сразу.
+	// Очищаем логи сервиса после рассылки (глобальная очистка)
+	// В идеале логи должны быть локальными для инстанса, но пока оставим так
 	s.Logs = []api.LogEntry{}
 }
 
 // BuildStateFor создает персональный "снимок" мира для конкретной сущности-наблюдателя.
-func (s *GameService) BuildStateFor(observer *domain.Entity, activeID string) *api.ServerResponse {
-	observerWorld, ok := s.Worlds[observer.Level]
-	if !ok {
-		return &api.ServerResponse{Type: "ERROR", Logs: []api.LogEntry{{Text: "You are in the void."}}}
-	}
+func (s *GameService) BuildStateFor(observer *domain.Entity, activeID string, instance *Instance) *api.ServerResponse {
+	// Используем мир из инстанса
+	observerWorld := instance.World
 
 	// 1. Расчет FOV (Поля зрения)
 	var visibleIdxs map[int]bool
@@ -34,22 +32,18 @@ func (s *GameService) BuildStateFor(observer *domain.Entity, activeID string) *a
 
 	if observer.Vision != nil {
 		visibleIdxs = systems.ComputeVisibleTiles(observerWorld, observer.Pos, observer.Vision)
-		if visibleIdxs == nil { // nil возвращается для Omniscient (всевидящих)
+		if visibleIdxs == nil {
 			isGod = true
 		}
 	}
 
 	// Обновляем память (туман войны)
 	if observer.Memory != nil && !isGod && visibleIdxs != nil {
-		// Работаем с памятью текущего уровня ---
 		currentLevelMemory := observer.Memory.ExploredPerLevel[observer.Level]
-		// Если для этого уровня памяти еще нет, создаем ее
 		if currentLevelMemory == nil {
 			currentLevelMemory = make(map[int]bool)
 			observer.Memory.ExploredPerLevel[observer.Level] = currentLevelMemory
 		}
-
-		// Записываем все видимые сейчас тайлы в память ТЕКУЩЕГО уровня
 		for idx := range visibleIdxs {
 			currentLevelMemory[idx] = true
 		}
@@ -57,12 +51,10 @@ func (s *GameService) BuildStateFor(observer *domain.Entity, activeID string) *a
 
 	// 2. Формирование карты (Map DTO)
 	var mapDTO []api.TileView
-	// TODO: Оптимизация: можно отправлять только изменения, но пока шлем всю видимую карту
 	for y := 0; y < observerWorld.Height; y++ {
 		for x := 0; x < observerWorld.Width; x++ {
 			idx := observerWorld.GetIndex(x, y)
 
-			// Проверяем, знает ли наблюдатель об этой клетке
 			isExplored := isGod
 			if !isGod && observer.Memory != nil {
 				if levelMemory, ok := observer.Memory.ExploredPerLevel[observer.Level]; ok {
@@ -70,7 +62,6 @@ func (s *GameService) BuildStateFor(observer *domain.Entity, activeID string) *a
 				}
 			}
 
-			// Если клетка исследована, добавляем её в ответ
 			if isExplored {
 				tile := observerWorld.Map[y][x]
 				isVisible := isGod || visibleIdxs[idx]
@@ -91,22 +82,17 @@ func (s *GameService) BuildStateFor(observer *domain.Entity, activeID string) *a
 	}
 
 	// 3. Формирование списка сущностей (Entities DTO)
+	// Берем сущности из INSTANCE, а не из Service
 	var viewEntities []api.EntityView
 
-	for _, e := range s.Entities {
-		// --- ВАЖНО: Показываем только сущностей на том же уровне ---
-		if e.Level != observer.Level {
-			continue
-		}
-
+	for _, e := range instance.Entities {
 		// Себя видим всегда
 		if e.ID == observer.ID {
 			viewEntities = append(viewEntities, s.toEntityView(e, observer))
 			continue
 		}
 
-		// Проверяем, действительно ли сущность зарегистрирована в этом мире.
-		// Если предмет в инвентаре, он удален из registry мира, и этот метод вернет nil.
+		// Проверка реестра (на случай рассинхрона)
 		if observerWorld.GetEntity(e.ID) == nil {
 			continue
 		}
@@ -118,13 +104,13 @@ func (s *GameService) BuildStateFor(observer *domain.Entity, activeID string) *a
 		}
 	}
 
-	// Копия логов, чтобы не было гонки данных
+	// Копия логов
 	logsCopy := make([]api.LogEntry, len(s.Logs))
 	copy(logsCopy, s.Logs)
 
 	return &api.ServerResponse{
 		Type:           "UPDATE",
-		Tick:           s.GlobalTick,
+		Tick:           0, // Tick теперь локальный для инстанса, можно передать instance.CurrentTick, если нужно
 		MyEntityID:     observer.ID,
 		ActiveEntityID: activeID,
 		Grid:           &api.GridMeta{Width: observerWorld.Width, Height: observerWorld.Height},

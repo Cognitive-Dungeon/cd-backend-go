@@ -7,6 +7,7 @@ import (
 	"cognitive-server/pkg/api"
 )
 
+// HandleDrop обрабатывает команду DROP - выброс предмета из инвентаря
 func HandleDrop(ctx handlers.Context, p api.ItemPayload) (handlers.Result, error) {
 	// Для Drop не нужен TargetingSystem, так как цель - предмет ВНУТРИ инвентаря, а не на карте.
 
