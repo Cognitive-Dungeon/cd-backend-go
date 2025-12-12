@@ -1,103 +1,223 @@
 package main
 
 import (
+	"cognitive-server/internal/domain"
 	"cognitive-server/internal/engine"
 	"cognitive-server/pkg/api"
+	"cognitive-server/pkg/dungeon" // Нужно для шаблонов при спавне
 	"cognitive-server/pkg/logger"
-	"log"
 	"net/http"
 	"os"
+	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
+)
 
-	"github.com/gorilla/websocket" // Исправлена возможная опечатка comcom -> com
+const (
+	// Конфигурация тайм-аутов
+	writeWait      = 10 * time.Second
+	pongWait       = 60 * time.Second
+	pingPeriod     = (pongWait * 9) / 10
+	maxMessageSize = 512
 )
 
 var upgrader = websocket.Upgrader{
-	// Разрешаем CORS запросы (нужно для разработки React на другом порту)
-	CheckOrigin: func(r *http.Request) bool { return true },
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin:     func(r *http.Request) bool { return true },
 }
 
 // Инициализируем игровой сервис (Арбитр).
 // NewService() теперь создает все уровни и сущности.
 var gameInstance *engine.GameService
 
-func wsHandler(w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		logger.Log.Errorln("Failed to upgrade connection:", err)
-		return
-	}
-	defer conn.Close()
+// Client - посредник между Websocket и GameService
+type Client struct {
+	game     *engine.GameService
+	conn     *websocket.Conn
+	send     chan api.ServerResponse
+	entityID string
+}
 
-	// 1. HANDSHAKE / LOGIN
-	// Читаем первое сообщение, ожидаем { "action": "LOGIN", "token": "entity_uuid" }
-	var loginCmd api.ClientCommand
-	if err := conn.ReadJSON(&loginCmd); err != nil {
-		logger.Log.Warnln("Handshake error:", err)
-		return
-	}
+// createNewPlayer генерирует структуру нового игрока
+func createNewPlayer(id string) *domain.Entity {
+	// Создаем героя на основе шаблона (можно вынести это в dungeon)
+	p := dungeon.EntityTemplate{
+		Name:        "Герой " + id[:4], // Берем первые 4 символа ID для краткости
+		Type:        domain.EntityTypePlayer,
+		Symbol:      "@",
+		Color:       "#22D3EE",
+		Description: "Храбрый исследователь подземелий.",
+		HP:          100,
+		Strength:    10,
+		Gold:        50,
+	}.SpawnEntity(domain.Position{}, 0)
 
-	entityID := loginCmd.Token
-	// --- ИЗМЕНЕНИЕ: Используем новый метод для поиска сущности ---
-	// Теперь нам не нужно знать, на каком уровне находится сущность при логине.
-	ent := gameInstance.GetEntity(entityID)
-	// -----------------------------------------------------------
-	if ent == nil {
-		logger.Log.WithField("entity_id", entityID).Warn("Login failed: unknown entity")
-		conn.WriteJSON(map[string]string{"error": "Entity not found"})
-		return
-	}
+	p.ID = id
+	// Инициализируем пустой инвентарь и экипировку
+	p.Inventory = &domain.InventoryComponent{Items: []*domain.Entity{}, MaxSlots: 20, MaxWeight: 100}
+	p.Equipment = &domain.EquipmentComponent{}
 
-	// Помечаем, что сущность управляется человеком
-	ent.ControllerID = "session_" + entityID[:4]
+	// Даем стартовое снаряжение
+	p.Inventory.AddItem(dungeon.IronSword.SpawnItem(domain.Position{}, 0))
+	p.Inventory.AddItem(dungeon.HealthPotion.SpawnItem(domain.Position{}, 0))
 
-	logger.Log.WithFields(logrus.Fields{
-		"component":   "network",
-		"entity_id":   entityID,
-		"entity_name": ent.Name,
-		"level":       ent.Level,
-	}).Info("Client connected and possessed entity")
+	return &p
+}
 
-	// 2. Регистрация в Хабе для получения обновлений
-	clientChan := gameInstance.Hub.Register(entityID)
+// readPump читает команды от клиента
+func (c *Client) readPump() {
 	defer func() {
-		gameInstance.Hub.Unregister(entityID)
-		ent.ControllerID = "" // Освобождаем сущность при дисконнекте
-		logger.Log.WithField("entity_id", entityID).Info("Client disconnected")
-	}()
-
-	// 3. Отправляем начальное состояние мира
-	// Команда INIT просто триггерит отправку ServerResponse без траты хода
-	gameInstance.ProcessCommand(api.ClientCommand{Action: "INIT", Token: entityID})
-
-	// 4. Запускаем горутины для чтения и записи сообщений
-	// Writer: читает из канала и отправляет в WebSocket
-	go func() {
-		for event := range clientChan {
-			if err := conn.WriteJSON(event); err != nil {
-				// Канал был закрыт или соединение разорвано
-				return
+		c.game.Hub.Unregister(c.entityID)
+		c.conn.Close()
+		// Освобождаем сущность, чтобы AI мог перехватить управление (если захотим)
+		// или просто чтобы пометить, что игрок оффлайн
+		if ent := c.game.GetEntity(c.entityID); ent != nil {
+			ent.ControllerID = ""
+			logger.Log.WithField("entity_id", c.entityID).Info("Client disconnected")
+			// Сообщаем движку, что игрок ушел, чтобы прервать его ход немедленно
+			// Используем select, чтобы не заблокировать readPump, если канал полон (маловероятно, но безопасно)
+			select {
+			case c.game.DisconnectChan <- c.entityID:
+			default:
 			}
 		}
 	}()
 
-	// Reader: читает из WebSocket и отправляет в движок
-	for {
-		var cmd api.ClientCommand
-		if err := conn.ReadJSON(&cmd); err != nil {
-			// Соединение разорвано
-			break
+	c.conn.SetReadLimit(maxMessageSize)
+	c.conn.SetReadDeadline(time.Now().Add(pongWait))
+	c.conn.SetPongHandler(func(string) error {
+		c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
+
+	// 1. HANDSHAKE (LOGIN)
+	var loginCmd api.ClientCommand
+	if err := c.conn.ReadJSON(&loginCmd); err != nil {
+		logger.Log.Warn("Handshake failed")
+		return
+	}
+
+	c.entityID = loginCmd.Token
+	if c.entityID == "" {
+		c.entityID = domain.GenerateID()
+	}
+
+	// 2. ПОИСК ИЛИ СОЗДАНИЕ ИГРОКА
+	ent := c.game.GetEntity(c.entityID)
+	if ent == nil {
+		logger.Log.Infof("Player %s not found. Spawning...", c.entityID)
+		newPlayer := createNewPlayer(c.entityID)
+
+		// Ищем место для спавна на уровне 0
+		world := c.game.Worlds[0]
+		placed := false
+		// Сканируем центр карты
+		for y := 10; y < 20; y++ {
+			for x := 15; x < 25; x++ {
+				if !world.Map[y][x].IsWall && len(world.GetEntitiesAt(x, y)) == 0 {
+					newPlayer.Pos = domain.Position{X: x, Y: y}
+					placed = true
+					goto Done
+				}
+			}
+		}
+	Done:
+		if !placed {
+			newPlayer.Pos = domain.Position{X: 1, Y: 1} // Fallback
 		}
 
-		// ВАЖНО: Принудительно устанавливаем ID сущности из контекста соединения.
-		// Это мера безопасности, чтобы клиент не мог управлять чужими персонажами.
-		cmd.Token = entityID
-		gameInstance.ProcessCommand(cmd)
+		// Отправляем в движок через канал
+		c.game.JoinChan <- newPlayer
+
+		// Даем движку мгновение на обработку
+		time.Sleep(50 * time.Millisecond)
+		ent = newPlayer
+	}
+
+	ent.ControllerID = "session_" + c.entityID
+	logger.Log.WithFields(logrus.Fields{
+		"entity_id": c.entityID,
+		"name":      ent.Name,
+	}).Info("Client logged in")
+
+	// 3. ПОДПИСКА НА ОБНОВЛЕНИЯ
+	gameUpdates := c.game.Hub.Register(c.entityID)
+
+	// Запускаем пересылку обновлений из Hub в writePump
+	go func() {
+		for msg := range gameUpdates {
+			c.send <- msg
+		}
+		close(c.send)
+	}()
+
+	// Отправляем INIT (триггер первой отрисовки)
+	c.game.ProcessCommand(api.ClientCommand{Action: "INIT", Token: c.entityID})
+
+	// 4. ЦИКЛ ЧТЕНИЯ КОМАНД
+	for {
+		var cmd api.ClientCommand
+		err := c.conn.ReadJSON(&cmd)
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				logger.Log.Errorf("WS Error: %v", err)
+			}
+			break
+		}
+		cmd.Token = c.entityID
+		c.game.ProcessCommand(cmd)
 	}
 }
 
-// init() вызывается автоматически перед main()
+// writePump отправляет данные клиенту + Ping
+func (c *Client) writePump() {
+	ticker := time.NewTicker(pingPeriod)
+	defer func() {
+		ticker.Stop()
+		c.conn.Close()
+	}()
+
+	for {
+		select {
+		case message, ok := <-c.send:
+			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if !ok {
+				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+			if err := c.conn.WriteJSON(message); err != nil {
+				return
+			}
+
+		case <-ticker.C:
+			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
+		}
+	}
+}
+
+func serveWs(w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		logger.Log.Error("Upgrade error:", err)
+		return
+	}
+
+	client := &Client{
+		game: gameInstance,
+		conn: conn,
+		send: make(chan api.ServerResponse, 256),
+	}
+
+	// Запускаем две горутины на каждое соединение
+	go client.writePump()
+	go client.readPump()
+}
+
 func init() {
 	logger.Init()
 }
@@ -121,12 +241,10 @@ func main() {
 	logger.Log.Info("Starting Game Loop...")
 	gameInstance.Start()
 
-	// 3. Настраиваем обработчик для WebSocket-подключений.
-	http.HandleFunc("/ws", wsHandler)
+	http.HandleFunc("/ws", serveWs)
 
-	// 4. Запускаем веб-сервер, который будет принимать подключения от игроков.
 	logger.Log.Infof("🛡️  Cognitive Dungeon Server running on :%s", port)
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
-		log.Fatal("ListenAndServe error:", err)
+		logger.Log.Fatal("ListenAndServe error:", err)
 	}
 }

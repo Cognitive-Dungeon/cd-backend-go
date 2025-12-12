@@ -35,6 +35,10 @@ type GameService struct {
 	CommandChan chan domain.InternalCommand
 	Hub         *network.Broadcaster
 
+	// Канал для безопасного добавления новых игроков в работающий цикл
+	JoinChan       chan *domain.Entity
+	DisconnectChan chan string
+
 	actionHandlers map[domain.ActionType]handlers.HandlerFunc
 	eventHandlers  map[domain.EventType]handlers.HandlerFunc
 
@@ -52,6 +56,8 @@ func NewService() *GameService {
 		GlobalTick:     0,
 		Logs:           []api.LogEntry{},
 		CommandChan:    make(chan domain.InternalCommand, 100),
+		JoinChan:       make(chan *domain.Entity, 10),
+		DisconnectChan: make(chan string, 10),
 		Hub:            network.NewBroadcaster(),
 		actionHandlers: make(map[domain.ActionType]handlers.HandlerFunc),
 		eventHandlers:  make(map[domain.EventType]handlers.HandlerFunc),
@@ -135,6 +141,18 @@ func (s *GameService) RunGameLoop() {
 	logger.Log.Info("Game loop started.")
 
 	for {
+		// 1. Проверяем, есть ли новые игроки
+		select {
+		case newEntity := <-s.JoinChan:
+			s.registerNewEntity(newEntity)
+		// Очищаем "зависшие" отключения, которые произошли не в свой ход
+		case <-s.DisconnectChan:
+			// Просто вычитываем, чтобы канал не забился.
+			// Если ход не этого игрока, нам все равно, Hub.Unregister уже сработал в main.go
+		default:
+			// Никого нет, продолжаем
+		}
+
 		// Если в хабе нет ни одного подписчика (ни игроков, ни ботов),
 		// ставим симуляцию на паузу, чтобы не тратить ресурсы и не "прокручивать" время.
 		hasSubscribers := s.Hub.SubscriberCount() > 0
@@ -171,17 +189,20 @@ func (s *GameService) RunGameLoop() {
 		activeActor := activeItem.Value
 
 		if activeActor.Stats != nil && activeActor.Stats.IsDead {
-			// Если чья-то очередь подошла, а он мертв — удаляем его из очереди навсегда.
+			// Удаляем из очереди ходов — мертвые не ходят, кем бы они ни были
 			s.TurnManager.RemoveEntity(activeActor.ID)
 
-			// Если умер Игрок - сообщаем об этом
-			if activeActor.Type == domain.EntityTypePlayer {
-				s.AddLog("ВЫ ПОГИБЛИ! (Обновите страницу для рестарта)", "ERROR")
-				// Принудительно отправляем апдейт, чтобы клиент увидел экран смерти/серый экран
+			// Логируем смерть. Это событие должно быть видно окружающим.
+			// Тип лога COMBAT, чтобы клиент мог выделить красным.
+			s.AddLog(fmt.Sprintf("%s погибает.", activeActor.Name), "COMBAT")
+
+			// Если у сущности есть "душа" (подписчик/контроллер), принудительно обновляем его состояние.
+			// Это нужно, чтобы клиент увидел HP: 0 и экран смерти, или микросервис получил сигнал о гибели.
+			if s.Hub.HasSubscriber(activeActor.ID) {
 				s.publishUpdate(activeActor.ID)
 			}
 
-			// Переходим к следующему в очереди, не давая мертвому сделать ход
+			// Пропускаем ход, переходим к следующему
 			continue
 		}
 
@@ -216,28 +237,57 @@ func (s *GameService) RunGameLoop() {
 
 			for !commandProcessed {
 				select {
+				// 1. ВАЖНО: Слушаем новых игроков ДАЖЕ пока ждем хода старого
+				case newEntity := <-s.JoinChan:
+					s.registerNewEntity(newEntity)
+					// Сразу отправляем новому игроку состояние мира, не дожидаясь конца хода текущего
+					if s.Hub.HasSubscriber(newEntity.ID) {
+						state := s.BuildStateFor(newEntity, activeActor.ID)
+						s.Hub.SendTo(newEntity.ID, *state)
+					}
+
+				case disconnectedID := <-s.DisconnectChan:
+					// Если отключился тот, чей сейчас ход - прерываем ожидание!
+					if disconnectedID == activeActor.ID {
+						logger.Log.WithField("actor", activeActor.Name).Info("Active player disconnected. Skipping turn.")
+
+						// Заставляем его ждать (или можно вообще ничего не делать, просто передать ход)
+						activeActor.AI.Wait(domain.TimeCostWait)
+
+						// Удаляем ControllerID, чтобы в следующем круге он считался AI (или просто стоял)
+						activeActor.ControllerID = ""
+
+						commandProcessed = true
+					}
+
+				// 2. Обработка команд
 				case cmd := <-s.CommandChan:
-					// Проверяем:
-					// 1. Команду прислал тот, чей сейчас ход (cmd.Token == activeActor.ID)
-					// 2. ИЛИ это системная команда (INIT), которую можно слать всегда
+					// Находим того, кто прислал команду (может быть не активный игрок, а тот, кто делает INIT)
+					requester := s.GetEntity(cmd.Token)
+					if requester == nil {
+						continue
+					}
+
 					isTurn := cmd.Token == activeActor.ID
 					isSystem := cmd.Action == domain.ActionInit
 
 					if isTurn || isSystem {
+						// Выполняем команду
+						s.executeCommand(cmd, requester)
+
+						// Если это INIT (реконнект или вход), принудительно шлем состояние
 						if isSystem {
-							// Init просто возвращает стейт, не тратит ход
-							s.executeCommand(cmd, activeActor)
+							if s.Hub.HasSubscriber(requester.ID) {
+								state := s.BuildStateFor(requester, activeActor.ID)
+								s.Hub.SendTo(requester.ID, *state)
+							}
 						} else {
-							// Игровое действие
-							s.executeCommand(cmd, activeActor)
+							// Если это был игровой ход - выходим из цикла ожидания
 							commandProcessed = true
 						}
-					} else {
-						// Если команду прислал кто-то другой не в свой ход
-						// Можно отправить ошибку этому клиенту, но пока просто игнорируем
-						// log.Printf("Out of turn command from %s", cmd.Token)
 					}
 
+				// 3. Тайм-аут
 				case <-timeout:
 					logger.Log.WithFields(logrus.Fields{
 						"actor_id":   activeActor.ID,
@@ -252,6 +302,31 @@ func (s *GameService) RunGameLoop() {
 		// В конце хода обновляем приоритет в очереди
 		s.TurnManager.UpdatePriority(activeActor.ID, activeActor.AI.NextActionTick)
 	}
+}
+
+// registerNewEntity безопасно добавляет сущность в структуры движка
+func (s *GameService) registerNewEntity(e *domain.Entity) {
+	world, ok := s.Worlds[e.Level]
+	if !ok {
+		logger.Log.Warnf("Cannot join entity %s: level %d not found", e.ID, e.Level)
+		return
+	}
+
+	// 1. Добавляем в глобальный список
+	s.Entities = append(s.Entities, e)
+
+	// 2. Добавляем в мир (Реестр + Карта)
+	world.RegisterEntity(e)
+	world.AddEntity(e)
+
+	// 3. Добавляем в очередь ходов (синхронизируя время)
+	if e.Stats != nil && !e.Stats.IsDead {
+		// Синхронизируем время, чтобы новичок не делал 100 ходов подряд
+		e.AI.NextActionTick = s.GlobalTick
+		s.TurnManager.AddEntity(e)
+	}
+
+	logger.Log.WithField("id", e.ID).Info("New entity joined the game loop")
 }
 
 // executeCommand выполняет хендлер и пишет логи

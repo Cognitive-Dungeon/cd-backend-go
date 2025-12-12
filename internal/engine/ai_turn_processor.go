@@ -10,6 +10,10 @@ import (
 
 // processAITurn обрабатывает логику NPC
 func (s *GameService) processAITurn(npc *domain.Entity) {
+	// Если моб мертв или не агрессивен - пропускаем ход
+	if npc.Stats != nil && npc.Stats.IsDead {
+		return
+	}
 	if !npc.AI.IsHostile {
 		npc.AI.Wait(domain.TimeCostWait)
 		return
@@ -18,43 +22,56 @@ func (s *GameService) processAITurn(npc *domain.Entity) {
 	var target *domain.Entity
 	minDist := 999.0
 
-	// 1. Ищем ближайшую цель на ТОМ ЖЕ УРОВНЕ
+	// 1. Поиск цели
 	for _, other := range s.Entities {
-		if other.Level != npc.Level {
-			continue // Игнорируем сущностей на других уровнях
-		}
-		if other.ID == npc.ID || (other.Stats != nil && other.Stats.IsDead) {
-			continue // Игнорируем себя и мертвых
+		// Пропускаем:
+		// - Себя
+		// - Мертвых
+		// - Тех, кто на другом уровне
+		if other.ID == npc.ID || other.Level != npc.Level || (other.Stats != nil && other.Stats.IsDead) {
+			continue
 		}
 
-		// Агрессия на Игроков
-		if other.Type == domain.EntityTypePlayer {
-			dist := npc.Pos.DistanceTo(other.Pos)
-			if dist < minDist {
-				minDist = dist
-				target = other
-			}
+		// Логика "Свой-Чужой"
+		// 1. Игнорируем неодушевленные предметы и выходы
+		isInanimate := other.Type == domain.EntityTypeItem || other.Type == domain.EntityTypeExit
+		if isInanimate {
+			continue
+		}
+
+		// 2. Игнорируем свой вид (Гоблины не бьют Гоблинов, Враги не бьют Врагов)
+		isSameType := other.Type == npc.Type
+		if isSameType {
+			continue
+		}
+
+		// Нашли кого-то чужого и живого. Проверяем расстояние.
+		dist := npc.Pos.DistanceTo(other.Pos)
+		if dist < minDist {
+			minDist = dist
+			target = other
 		}
 	}
 
-	// 2. Если целей на этом уровне нет, ждем
+	// 2. Если целей нет, ждем
 	if target == nil {
 		npc.AI.Wait(domain.TimeCostWait)
-		return // ВАЖНО: Выходим, если нет цели. Не вызываем AI.
+		return
 	}
 
-	// 3. Получаем мир, в котором находится NPC
+	// 3. Получаем мир
 	npcWorld, ok := s.Worlds[npc.Level]
 	if !ok {
+		// Перевести на logger
 		log.Printf("[ERROR] NPC %s is on a non-existent level %d. Waiting.", npc.ID, npc.Level)
 		npc.AI.Wait(domain.TimeCostWait)
 		return
 	}
 
-	// 4. Вычисляем действие
+	// 4. Вычисляем действие через System AI
 	action, _, dx, dy := systems.ComputeNPCAction(npc, target, npcWorld)
 
-	// 5. Конвертируем решение AI во внутреннюю команду
+	// 5. Выполняем
 	switch action {
 	case domain.ActionAttack:
 		payload, _ := json.Marshal(api.EntityPayload{TargetID: target.ID})
@@ -73,7 +90,6 @@ func (s *GameService) processAITurn(npc *domain.Entity) {
 		}, npc)
 
 	default:
-		// Wait
 		npc.AI.Wait(domain.TimeCostWait)
 	}
 }
