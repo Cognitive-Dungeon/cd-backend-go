@@ -11,23 +11,23 @@ func TestCalculateBuildID(t *testing.T) {
 	}{
 		{
 			name:     "epoch date",
-			date:     "1999-01-31",
+			date:     "2025-12-04",
 			expected: 0,
 		},
 		{
 			name:     "next day after epoch",
-			date:     "1999-02-01",
+			date:     "2025-12-05",
 			expected: 1,
 		},
 		{
 			name:     "one year later",
-			date:     "2000-01-31",
+			date:     "2026-12-04",
 			expected: 365,
 		},
 		{
 			name:     "date with leap years included",
-			date:     "2023-01-01",
-			expected: 8736,
+			date:     "2032-12-04",
+			expected: 2557,
 		},
 		{
 			name:      "invalid format",
@@ -41,7 +41,7 @@ func TestCalculateBuildID(t *testing.T) {
 		},
 		{
 			name:      "before epoch",
-			date:      "1999-01-01",
+			date:      "2025-12-03",
 			wantError: true,
 		},
 	}

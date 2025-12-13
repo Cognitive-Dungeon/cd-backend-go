@@ -13,7 +13,7 @@ var (
 )
 
 var buildEpoch = time.Date(
-	1999, time.January, 31,
+	2025, time.December, 4,
 	0, 0, 0, 0,
 	time.UTC,
 )
