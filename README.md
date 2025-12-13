@@ -32,9 +32,15 @@
     ```bash
     go mod tidy
     ```
-4.  **Запустите сервер:**
+4.  **Соберите сервер:**
     ```bash
-    go run cmd/server/main.go
+    (Unix): make build
+    (Windows): .\build.ps1
+    ```
+5.  **Запустите сервер:**
+    ```bash
+    (Unix): ./bin/cognitive-server
+    (Windows): .\bin\cognitive-server.exe
     ```
     *Вы увидите сообщение: `🛡️ Cognitive Dungeon Server running on :8080`*
 

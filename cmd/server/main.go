@@ -3,9 +3,11 @@ package main
 import (
 	"cognitive-server/internal/domain"
 	"cognitive-server/internal/engine"
+	"cognitive-server/internal/version"
 	"cognitive-server/pkg/api" // Нужно для шаблонов при спавне
 	"cognitive-server/pkg/dungeon"
 	"cognitive-server/pkg/logger"
+	"encoding/json"
 	"net/http"
 	"os"
 	"time"
@@ -192,12 +194,35 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 	go client.readPump()
 }
 
+func serveVersion(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	_ = json.NewEncoder(w).Encode(version.Info())
+}
+
+func serveHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("ok"))
+}
+
 func init() {
 	logger.Init()
 }
 
 func main() {
 	logger.Log.Info("Starting Cognitive Dungeon...")
+	logger.Log.Info(version.String())
 	port := os.Getenv("CD_PORT")
 	if port == "" {
 		port = "8080"
@@ -216,6 +241,8 @@ func main() {
 	gameInstance.Start()
 
 	http.HandleFunc("/ws", serveWs)
+	http.HandleFunc("/version", serveVersion)
+	http.HandleFunc("/health", serveHealth)
 
 	logger.Log.Infof("🛡️  Cognitive Dungeon Server running on :%s", port)
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
