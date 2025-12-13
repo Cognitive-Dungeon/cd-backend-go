@@ -3,6 +3,7 @@ package systems
 import (
 	"cognitive-server/internal/domain"
 	"cognitive-server/pkg/logger"
+
 	"github.com/sirupsen/logrus"
 )
 
@@ -27,30 +28,46 @@ func ComputeVisibleTiles(w *domain.GameWorld, pos domain.Position, vision *domai
 		return nil // Signal: Full Visibility
 	}
 
+	// 2. Проверка кэша
+	if !vision.IsDirty && vision.CachedVisibleTiles != nil {
+		return vision.CachedVisibleTiles
+	}
+
 	radius := 8 // Значение по умолчанию
 	if vision != nil {
 		radius = vision.Radius
 	}
 
-	fovLogger.WithField("radius", radius).Debug("Starting FOV calculation.")
-
-	visibleMap := make(map[int]bool)
-	if radius <= 0 {
-		fovLogger.Warn("FOV calculation skipped for blind observer (radius <= 0).")
-		return visibleMap // Слепой
+	// 3. Reuse map if possible
+	visibleMap := vision.CachedVisibleTiles
+	if visibleMap == nil {
+		visibleMap = make(map[int]bool)
+	} else {
+		// Clear map
+		for k := range visibleMap {
+			delete(visibleMap, k)
+		}
 	}
 
-	// 2. Центр всегда виден
+	if radius <= 0 {
+		vision.CachedVisibleTiles = visibleMap
+		vision.IsDirty = false
+		return visibleMap
+	}
+
+	// 4. Центр всегда виден
 	visibleMap[w.GetIndex(pos.X, pos.Y)] = true
 
-	// 3. Запускаем рекурсивный Shadowcasting для 8 октантов
+	// 5. Запускаем рекурсивный Shadowcasting
 	for i := 0; i < 8; i++ {
 		castLight(w, pos.X, pos.Y, 1, 1.0, 0.0, radius,
 			multipliers[0][i], multipliers[1][i],
 			multipliers[2][i], multipliers[3][i], visibleMap)
 	}
 
-	fovLogger.WithField("visible_tiles", len(visibleMap)).Debug("FOV calculation complete.")
+	// 6. Update Cache
+	vision.CachedVisibleTiles = visibleMap
+	vision.IsDirty = false
 
 	return visibleMap
 }

@@ -44,6 +44,10 @@ type NarrativeComponent struct {
 type VisionComponent struct {
 	Radius     int  `json:"radius"`
 	Omniscient bool `json:"omniscient"` // Всеведенье
+
+	// Caching Optimization
+	CachedVisibleTiles map[int]bool `json:"-"` // Не сериализуем кэш
+	IsDirty            bool         `json:"-"` // Флаг для пересчета
 }
 
 // MemoryComponent - туман войны

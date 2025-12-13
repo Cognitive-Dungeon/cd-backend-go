@@ -35,6 +35,11 @@ func HandleMove(ctx handlers.Context, p api.DirectionPayload) (handlers.Result, 
 			return handlers.Result{Msg: "Ошибка перемещения", MsgType: "ERROR"}, nil
 		}
 
+		// Invalidate FOV Cache
+		if ctx.Actor.Vision != nil {
+			ctx.Actor.Vision.IsDirty = true
+		}
+
 		ctx.Actor.AI.Wait(domain.TimeCostMove)
 		return handlers.EmptyResult(), nil
 	}

@@ -248,6 +248,12 @@ func (s *GameService) ChangeLevel(actor *domain.Entity, newLevelID int, targetPo
 		actor.AI.NextActionTick = newInstance.CurrentTick
 	}
 
+	// Invalidate FOV
+	if actor.Vision != nil {
+		actor.Vision.IsDirty = true
+		actor.Vision.CachedVisibleTiles = nil // Force clear old map
+	}
+
 	// 5. Обновляем Глобальный Индекс
 	s.EntityLocations[actor.ID] = newLevelID
 
