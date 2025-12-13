@@ -109,7 +109,7 @@ func (s *GameService) BuildStateFor(observer *domain.Entity, activeID string, in
 
 	return &api.ServerResponse{
 		Type:           "UPDATE",
-		Tick:           0, // Tick теперь локальный для инстанса, можно передать instance.CurrentTick, если нужно
+		Tick:           instance.CurrentTick,
 		MyEntityID:     observer.ID,
 		ActiveEntityID: activeID,
 		Grid:           &api.GridMeta{Width: observerWorld.Width, Height: observerWorld.Height},

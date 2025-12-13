@@ -3,6 +3,7 @@ package main
 import (
 	"cognitive-server/internal/domain"
 	"cognitive-server/internal/engine"
+	"cognitive-server/internal/server"
 	"cognitive-server/internal/version"
 	"cognitive-server/pkg/api" // Нужно для шаблонов при спавне
 	"cognitive-server/pkg/dungeon"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
+	_ "net/http/pprof"
 )
 
 const (
@@ -259,6 +261,9 @@ func main() {
 	http.HandleFunc("/ws", serveWs)
 	http.HandleFunc("/version", serveVersion)
 	http.HandleFunc("/health", serveHealth)
+
+	debugHandler := server.NewDebugHandler(gameInstance)
+	debugHandler.RegisterRoutes(http.DefaultServeMux)
 
 	logger.Log.Infof("🛡️  Cognitive Dungeon Server running on :%s", port)
 	if err := http.ListenAndServe(":"+port, nil); err != nil {

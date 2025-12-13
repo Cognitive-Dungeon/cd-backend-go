@@ -19,21 +19,31 @@ const (
 	ActionUse
 	ActionEquip
 	ActionUnequip
+	ActionAdminSpawn    ActionType = 200
+	ActionAdminTeleport ActionType = 201
+	ActionAdminHeal     ActionType = 202
+	ActionAdminKill     ActionType = 203
+	ActionAdminOmni     ActionType = 204
 )
 
 // Маппинг для конвертации JSON -> Domain
 var actionStringToCmd = map[string]ActionType{
-	"INIT":     ActionInit,
-	"MOVE":     ActionMove,
-	"ATTACK":   ActionAttack,
-	"WAIT":     ActionWait,
-	"TALK":     ActionTalk,
-	"INTERACT": ActionInteract,
-	"PICKUP":   ActionPickup,
-	"DROP":     ActionDrop,
-	"USE":      ActionUse,
-	"EQUIP":    ActionEquip,
-	"UNEQUIP":  ActionUnequip,
+	"INIT":              ActionInit,
+	"MOVE":              ActionMove,
+	"ATTACK":            ActionAttack,
+	"WAIT":              ActionWait,
+	"TALK":              ActionTalk,
+	"INTERACT":          ActionInteract,
+	"PICKUP":            ActionPickup,
+	"DROP":              ActionDrop,
+	"USE":               ActionUse,
+	"EQUIP":             ActionEquip,
+	"UNEQUIP":           ActionUnequip,
+	"ADMIN_SPAWN":       ActionAdminSpawn,
+	"ADMIN_TELEPORT":    ActionAdminTeleport,
+	"ADMIN_HEAL":        ActionAdminHeal,
+	"ADMIN_KILL":        ActionAdminKill,
+	"ADMIN_TOGGLE_OMNI": ActionAdminOmni,
 }
 
 // Маппинг для логов Domain -> String

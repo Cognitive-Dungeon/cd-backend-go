@@ -4,6 +4,7 @@ import (
 	"cognitive-server/internal/domain"
 	"cognitive-server/internal/engine/handlers"
 	"cognitive-server/internal/engine/handlers/actions"
+	"cognitive-server/internal/engine/handlers/admin"
 	"cognitive-server/internal/engine/handlers/events"
 	"cognitive-server/internal/network"
 	"cognitive-server/pkg/api"
@@ -105,6 +106,13 @@ func (s *GameService) registerHandlers() {
 	s.actionHandlers[domain.ActionUnequip] = handlers.WithPayload(actions.HandleUnequip)
 
 	s.eventHandlers[domain.EventLevelTransition] = handlers.WithPayload(events.HandleLevelTransition)
+
+	// Admin / Cheats
+	s.actionHandlers[domain.ActionAdminTeleport] = handlers.WithPayload(admin.HandleTeleport)
+	s.actionHandlers[domain.ActionAdminSpawn] = handlers.WithPayload(admin.HandleSpawn)
+	s.actionHandlers[domain.ActionAdminHeal] = handlers.WithEmptyPayload(admin.HandleHeal)
+	s.actionHandlers[domain.ActionAdminKill] = handlers.WithPayload(admin.HandleKill)
+	s.actionHandlers[domain.ActionAdminOmni] = handlers.WithEmptyPayload(admin.HandleToggleOmni)
 }
 
 // Start теперь запускает только диспетчер входов/выходов

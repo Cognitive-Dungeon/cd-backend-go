@@ -63,3 +63,19 @@ func (tm *TurnManager) RemoveEntity(entityID string) {
 func (tm *TurnManager) Len() int {
 	return tm.queue.Len()
 }
+
+// DebugDump возвращает снимок очереди для отладки
+func (tm *TurnManager) DebugDump() []map[string]interface{} {
+	// Инициализируем как пустой слайс, а не nil. Тогда в JSON это будет "[]", а не "null"
+	result := make([]map[string]interface{}, 0)
+
+	for _, item := range tm.queue {
+		result = append(result, map[string]interface{}{
+			"id":       item.Value.ID,
+			"name":     item.Value.Name,
+			"priority": item.Priority,
+			"index":    item.Index,
+		})
+	}
+	return result
+}
