@@ -46,7 +46,9 @@ type Client struct {
 func (c *Client) readPump() {
 	defer func() {
 		c.game.Hub.Unregister(c.entityID)
-		c.conn.Close()
+		if err := c.conn.Close(); err != nil {
+			logger.Log.WithError(err).Warn("failed to close websocket connection")
+		}
 		// Освобождаем сущность, чтобы AI мог перехватить управление (если захотим)
 		// или просто чтобы пометить, что игрок оффлайн
 		if ent := c.game.GetEntity(c.entityID); ent != nil {
@@ -62,9 +64,13 @@ func (c *Client) readPump() {
 	}()
 
 	c.conn.SetReadLimit(maxMessageSize)
-	c.conn.SetReadDeadline(time.Now().Add(pongWait))
+	if err := c.conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
+		logger.Log.WithError(err).Warn("failed to set read deadline")
+	}
 	c.conn.SetPongHandler(func(string) error {
-		c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		if err := c.conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
+			logger.Log.WithError(err).Warn("failed to set pong read deadline")
+		}
 		return nil
 	})
 
@@ -152,24 +158,34 @@ func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
-		c.conn.Close()
+		if err := c.conn.Close(); err != nil {
+			logger.Log.WithError(err).Warn("failed to close websocket connection in writePump")
+		}
 	}()
 
 	for {
 		select {
 		case message, ok := <-c.send:
-			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
+				logger.Log.WithError(err).Warn("failed to set write deadline")
+			}
 			if !ok {
-				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				if err := c.conn.WriteMessage(websocket.CloseMessage, []byte{}); err != nil {
+					logger.Log.WithError(err).Debug("write close message failed")
+				}
 				return
 			}
 			if err := c.conn.WriteJSON(message); err != nil {
+				logger.Log.WithError(err).Debug("write json message failed")
 				return
 			}
 
 		case <-ticker.C:
-			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
+				logger.Log.WithError(err).Warn("failed to set ping write deadline")
+			}
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				logger.Log.WithError(err).Debug("ping failed")
 				return
 			}
 		}

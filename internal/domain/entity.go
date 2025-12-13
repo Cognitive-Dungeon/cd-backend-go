@@ -68,7 +68,9 @@ type TriggerComponent struct {
 // GenerateID создает простой уникальный ID (замена UUID для снижения зависимостей)
 func GenerateID() string {
 	b := make([]byte, 8) // 16 символов hex
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		panic("failed to generate random ID: " + err.Error())
+	}
 	return hex.EncodeToString(b)
 }
 

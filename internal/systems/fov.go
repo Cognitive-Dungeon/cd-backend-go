@@ -80,7 +80,8 @@ func castLight(w *domain.GameWorld, cx, cy, row int, start, end float64, radius,
 	radiusSq := float64(radius * radius)
 
 	for j := row; j <= radius; j++ {
-		dx, dy := -j-1, -j
+		dx := -j - 1
+		var dy int
 		blocked := false
 		newStart := start
 
