@@ -12,8 +12,9 @@ type ReplayAction struct {
 
 // ReplaySession - полная запись партии
 type ReplaySession struct {
-	LevelID   int            `json:"levelId"`
-	Seed      int64          `json:"seed"` // Зерно генерации мира и рандома
-	Timestamp int64          `json:"timestamp"`
-	Actions   []ReplayAction `json:"actions"`
+	LevelID     int             `json:"levelId"`
+	Seed        int64           `json:"seed"` // Зерно генерации мира и рандома
+	Timestamp   int64           `json:"timestamp"`
+	PlayerState json.RawMessage `json:"playerState,omitempty"`
+	Actions     []ReplayAction  `json:"actions"`
 }

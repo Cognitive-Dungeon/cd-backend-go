@@ -7,6 +7,8 @@ import (
 	"cognitive-server/pkg/api"
 	"encoding/json"
 	"log"
+	"math/rand"
+	"time"
 )
 
 // Bot представляет собой "Игрока-компьютера" (Headless Agent).
@@ -24,15 +26,19 @@ type Bot struct {
 	EntityID string
 	Service  *engine.GameService // Прямая ссылка на движок (для простоты в этом проекте)
 	Inbox    chan api.ServerResponse
+	Rng      *rand.Rand
 }
 
 func NewBot(entityID string, service *engine.GameService) *Bot {
 	log.Printf("[BOT] Creating agent for entity %s", entityID)
+	seed := time.Now().UnixNano()
+	rng := rand.New(rand.NewSource(seed))
+
 	return &Bot{
 		EntityID: entityID,
 		Service:  service,
-		// Бот регистрируется в хабе как обычный клиент и получает свой канал для обновлений.
-		Inbox: service.Hub.Register(entityID),
+		Inbox:    service.Hub.Register(entityID),
+		Rng:      rng,
 	}
 }
 
@@ -87,7 +93,7 @@ func (b *Bot) makeMove(state api.ServerResponse) {
 	// --- ШАГ 4: ВЫЗОВ СИСТЕМЫ ПРИНЯТИЯ РЕШЕНИЙ (AI) ---
 	// Теперь, когда у нас есть локальный мир и акторы, мы можем использовать
 	// ту же самую систему AI, что и сервер, для вычисления следующего действия.
-	action, target, dx, dy := systems.ComputeNPCAction(me, targetPlayer, localWorld)
+	action, target, dx, dy := systems.ComputeNPCAction(me, targetPlayer, localWorld, b.Rng)
 
 	// --- ШАГ 5: ОТПРАВКА КОМАНДЫ НА СЕРВЕР ---
 	switch action {

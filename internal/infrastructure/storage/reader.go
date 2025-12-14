@@ -3,6 +3,7 @@ package storage
 import (
 	"cognitive-server/internal/domain"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -19,7 +20,7 @@ func (s *ReplayService) Load(path string) (*domain.ReplaySession, error) {
 }
 
 func readBinary(r io.Reader) (*domain.ReplaySession, error) {
-	// 1. Читаем заголовок
+	// 1. Читаем заголовок целиком
 	var header ReplayFileHeader
 	if err := binary.Read(r, binary.LittleEndian, &header); err != nil {
 		return nil, fmt.Errorf("failed to read header: %w", err)
@@ -30,10 +31,9 @@ func readBinary(r io.Reader) (*domain.ReplaySession, error) {
 		return nil, fmt.Errorf("invalid magic")
 	}
 	if header.Version != Version1 {
-		return nil, fmt.Errorf("unsupported version: %d", header.Version)
+		return nil, fmt.Errorf("unsupported version: %d (expected %d)", header.Version, Version1)
 	}
 
-	// Заполняем сессию
 	session := &domain.ReplaySession{
 		Seed:      header.Seed,
 		Timestamp: header.Timestamp,
@@ -41,9 +41,16 @@ func readBinary(r io.Reader) (*domain.ReplaySession, error) {
 		Actions:   make([]domain.ReplayAction, header.ActionCount),
 	}
 
-	// 2. Читаем действия
+	// 2. Читаем Snapshot
+	if header.PlayerStateLen > 0 {
+		session.PlayerState = make([]byte, header.PlayerStateLen)
+		if _, err := io.ReadFull(r, session.PlayerState); err != nil {
+			return nil, fmt.Errorf("failed to read player state: %w", err)
+		}
+	}
+
+	// 3. Читаем Actions
 	for i := 0; i < int(header.ActionCount); i++ {
-		// Читаем заголовок действия ЦЕЛИКОМ
 		var ah ActionHeader
 		if err := binary.Read(r, binary.LittleEndian, &ah); err != nil {
 			return nil, err
@@ -54,7 +61,6 @@ func readBinary(r io.Reader) (*domain.ReplaySession, error) {
 			Action: domain.ActionType(ah.ActionType),
 		}
 
-		// Читаем хвосты (строки и байты)
 		tokenBuf := make([]byte, ah.TokenLen)
 		if _, err := io.ReadFull(r, tokenBuf); err != nil {
 			return nil, err
@@ -66,6 +72,8 @@ func readBinary(r io.Reader) (*domain.ReplaySession, error) {
 			if _, err := io.ReadFull(r, act.Payload); err != nil {
 				return nil, err
 			}
+		} else {
+			act.Payload = json.RawMessage{}
 		}
 
 		session.Actions[i] = act

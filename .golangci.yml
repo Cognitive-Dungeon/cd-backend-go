@@ -1,22 +1,45 @@
 version: "2"
-
 run:
+  issues-exit-code: 1
   timeout: 5m
-
 linters:
-  enable:
-    - govet
-    - errcheck
-    - staticcheck
-    - ineffassign
-    - unused
-
-linters-settings:
-  govet:
-    enable:
-      - shadow
-
-issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
+  default: all
+  disable:
+    - exhaustruct
+    - gochecknoglobals
+    - godox
+    - ireturn
+    - mnd
+    - musttag
+    - paralleltest
+    - varnamelen
+    - wrapcheck
+  settings:
+    nlreturn:
+      block-size: 2
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    varnamelen:
+      max-distance: 20
+      min-name-length: 2
+    wsl:
+      force-err-cuddling: true
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

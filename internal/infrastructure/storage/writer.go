@@ -11,18 +11,19 @@ import (
 
 const (
 	MagicHeader string = `CDRP` // 4 байта
-	Version1    uint32 = 1
+	Version1    uint32 = 1      // 4 байта
 )
 
 // ReplayFileHeader — это точное представление заголовка файла в памяти.
 // binary.Write умеет писать это целиком, так как тут нет слайсов и строк, только массивы и числа.
 type ReplayFileHeader struct {
-	Magic       [4]byte // 4 байта
-	Version     uint32  // 4 байта
-	Seed        int64   // 8 байт
-	Timestamp   int64   // 8 байт
-	LevelID     int32   // 4 байта
-	ActionCount int32   // 4 байта
+	Magic          [4]byte // 4 байта
+	Version        uint32  // 4 байта
+	Seed           int64   // 8 байт
+	Timestamp      int64   // 8 байт
+	LevelID        int32   // 4 байта
+	PlayerStateLen uint32  // 4 байта
+	ActionCount    int32   // 4 байта
 }
 
 // ActionHeader — заголовок каждой записи действия.
@@ -61,23 +62,31 @@ func (s *ReplayService) Save(session *domain.ReplaySession) error {
 }
 
 func writeBinary(w io.Writer, s *domain.ReplaySession) error {
-	// 1. Подготавливаем и пишем ГЛОБАЛЬНЫЙ ЗАГОЛОВОК
-	header := ReplayFileHeader{
-		Version:     Version1,
-		Seed:        s.Seed,
-		Timestamp:   s.Timestamp,
-		LevelID:     int32(s.LevelID),
-		ActionCount: int32(len(s.Actions)),
-	}
-	copy(header.Magic[:], MagicHeader) // Копируем строку в массив [4]byte
+	stateBytes := []byte(s.PlayerState)
 
-	// ПИШЕМ СТРУКТУРУ ЦЕЛИКОМ
-	// Это заменило 6 вызовов binary.Write
+	// 1. Заполняем и пишем заголовок
+	header := ReplayFileHeader{
+		Version:        Version1,
+		Seed:           s.Seed,
+		Timestamp:      s.Timestamp,
+		LevelID:        int32(s.LevelID),
+		PlayerStateLen: uint32(len(stateBytes)),
+		ActionCount:    int32(len(s.Actions)),
+	}
+	copy(header.Magic[:], MagicHeader)
+
 	if err := binary.Write(w, binary.LittleEndian, &header); err != nil {
 		return fmt.Errorf("failed to write header: %w", err)
 	}
 
-	// 2. Пишем действия
+	// 2. Пишем Player Snapshot (если есть)
+	if len(stateBytes) > 0 {
+		if _, err := w.Write(stateBytes); err != nil {
+			return fmt.Errorf("failed to write player state: %w", err)
+		}
+	}
+
+	// 3. Пишем Actions
 	for _, act := range s.Actions {
 		tokenBytes := []byte(act.Token)
 		if len(tokenBytes) > 255 {
@@ -89,7 +98,6 @@ func writeBinary(w io.Writer, s *domain.ReplaySession) error {
 			return fmt.Errorf("payload too long: %d", payloadLen)
 		}
 
-		// Подготавливаем заголовок действия
 		actHeader := ActionHeader{
 			Tick:       int32(act.Tick),
 			ActionType: uint8(act.Action),
@@ -97,12 +105,10 @@ func writeBinary(w io.Writer, s *domain.ReplaySession) error {
 			PayloadLen: uint16(payloadLen),
 		}
 
-		// Пишем заголовок действия одной командой
 		if err := binary.Write(w, binary.LittleEndian, &actHeader); err != nil {
 			return err
 		}
 
-		// Пишем динамические данные (тело)
 		if _, err := w.Write(tokenBytes); err != nil {
 			return err
 		}

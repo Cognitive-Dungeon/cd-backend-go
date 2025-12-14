@@ -12,6 +12,7 @@ import (
 	"cognitive-server/pkg/dungeon"
 	"cognitive-server/pkg/logger"
 	"cognitive-server/pkg/utils"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 )
@@ -218,6 +219,15 @@ func (s *GameService) ChangeLevel(actor *domain.Entity, newLevelID int, targetPo
 
 	logger.Log.Infof("Transitioning entity %s from Level %d to %d", actor.ID, oldLevelID, newLevelID)
 
+	// Сохраняем состояние игрока ПЕРЕД тем, как он попадет в новый мир.
+	// Это состояние будет записано в заголовок реплея нового уровня.
+	var playerSnapshot json.RawMessage
+	if serialized, err := json.Marshal(actor); err == nil {
+		playerSnapshot = serialized
+	} else {
+		logger.Log.Errorf("Failed to snapshot player: %v", err)
+	}
+
 	// 1. Получаем (или создаем) целевой Инстанс
 	newInstance, ok := s.Instances[newLevelID]
 	if !ok {
@@ -229,6 +239,7 @@ func (s *GameService) ChangeLevel(actor *domain.Entity, newLevelID int, targetPo
 		newWorld, newEntities, _ := dungeon.Generate(newLevelID, rng)
 
 		newInstance = NewInstance(newLevelID, newWorld, s, levelSeed)
+		newInstance.Replay.PlayerState = playerSnapshot
 
 		for i := range newEntities {
 			newInstance.addEntity(&newEntities[i])
@@ -319,6 +330,8 @@ func (s *GameService) LoadReplay(path string) error {
 
 	// 4. Создаем Инстанс
 	instance := NewInstance(levelID, world, s, session.Seed)
+	// Важно: восстанавливаем actions и playerState в инстанс, чтобы если мы сохраним его снова, данные не потерялись
+	instance.Replay.PlayerState = session.PlayerState
 
 	// Загружаем сущности
 	for i := range entities {
@@ -331,11 +344,32 @@ func (s *GameService) LoadReplay(path string) error {
 	// ПОКА: Предполагаем, что игрок создается через CreatePlayer ("hero_1") и ставим его на старт.
 	// Это упрощение. В продакшене реплей должен содержать snapshot игрока на входе.
 	// TODO: Определиться откуда брать игрока и как это делать лучше всего
-	playerID := "hero_1" // Или берем из метаданных реплея, если сохраним туда PlayerID
-	playerSeed := utils.StringToSeed(playerID)
-	playerRng := rand.New(rand.NewSource(playerSeed))
 
-	player := dungeon.CreatePlayer(playerID, playerRng)
+	// --- ВОССТАНОВЛЕНИЕ ИГРОКА ---
+	var player *domain.Entity
+
+	if len(session.PlayerState) > 0 {
+		// ВАРИАНТ А: Снапшот есть (v2)
+		logger.Log.Info("Restoring player from snapshot...")
+		player = &domain.Entity{}
+		if err := json.Unmarshal(session.PlayerState, player); err != nil {
+			return fmt.Errorf("failed to restore player: %w", err)
+		}
+
+		// Принудительно ставим позицию, если она была записана криво, или доверяем снапшоту?
+		// В снапшоте позиция с ПРЕДЫДУЩЕГО уровня. Нам нужно её обновить на стартовую для ЭТОГО уровня.
+		player.Pos = startPos
+		player.Level = levelID // Обновляем уровень
+
+	} else {
+		// ВАРИАНТ Б: Снапшота нет (v1 или уровень 0)
+		logger.Log.Info("No snapshot found, creating fresh player...")
+		playerID := "hero_1"
+		playerSeed := utils.StringToSeed(playerID)
+		playerRng := rand.New(rand.NewSource(playerSeed))
+		player = dungeon.CreatePlayer(playerID, playerRng)
+		player.Pos = startPos
+	}
 	// Задаем фейковый ControllerID, чтобы движок знал: этим персонажем управляет "внешняя сила" (реплей), а не AI.
 	player.ControllerID = "replay_viewer"
 	// ... логика поиска старта ...
