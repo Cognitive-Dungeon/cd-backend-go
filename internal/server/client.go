@@ -8,6 +8,7 @@ import (
 	"cognitive-server/pkg/logger"
 	"cognitive-server/pkg/utils"
 	"github.com/sirupsen/logrus"
+	"math/rand"
 	"net/http"
 	"time"
 
@@ -92,7 +93,13 @@ func (c *Client) readPump() {
 	ent := c.Game.GetEntity(c.EntityID)
 	if ent == nil {
 		logger.Log.Infof("Player %s not found. Spawning...", c.EntityID)
-		newPlayer := dungeon.CreatePlayer(c.EntityID)
+		// Сид зависит только от имени игрока.
+		// Это гарантирует, что и в Live-режиме, и в Replay-режиме
+		// предметы в инвентаре получат одни и те же ID.
+		playerSeed := utils.StringToSeed(c.EntityID)
+		playerRng := rand.New(rand.NewSource(playerSeed))
+
+		newPlayer := dungeon.CreatePlayer(c.EntityID, playerRng)
 
 		// Ищем место для спавна на уровне 0
 		world := c.Game.Worlds[0]

@@ -44,6 +44,10 @@ type Instance struct {
 	Seed   int64                 // Сид, с которого начался уровень
 	Replay *domain.ReplaySession // Лента событий
 
+	IsPlayback      bool                  // Флаг режима воспроизведения
+	PlaybackActions []domain.ReplayAction // Очередь действий для исполнения
+	PlaybackCursor  int                   // Индекс текущего действия
+
 }
 
 func NewInstance(id int, world *domain.GameWorld, service *GameService, seed int64) *Instance {
@@ -294,4 +298,111 @@ func (i *Instance) processAITurn(npc *domain.Entity) {
 	default:
 		npc.AI.Wait(domain.TimeCostWait)
 	}
+}
+
+func (i *Instance) SaveReplay() {
+	if len(i.Replay.Actions) == 0 {
+		return // Не сохраняем пустые сессии
+	}
+
+	logger.Log.WithField("instance", i.ID).Info("Saving replay...")
+	if err := i.Service.Storage.Save(i.Replay); err != nil {
+		logger.Log.Error("Failed to save replay:", err)
+	} else {
+		logger.Log.Info("Replay saved successfully.")
+	}
+}
+
+// RunSimulation запускает инстанс в режиме воспроизведения реплея.
+// Он не ждет ввода от пользователя, а берет команды из PlaybackActions.
+func (i *Instance) RunSimulation() {
+	if len(i.PlaybackActions) == 0 {
+		logger.Log.WithField("instance", i.ID).Info("Skipping simulation (no actions)")
+		return
+	}
+
+	logger.Log.WithFields(logrus.Fields{
+		"instance": i.ID,
+		"actions":  len(i.PlaybackActions),
+		"seed":     i.Seed,
+	}).Info("⏯️  Starting Replay Simulation...")
+
+	startTime := time.Now()
+	steps := 0
+
+	for {
+		// Если команд больше нет, выходим СРАЗУ.
+		// Мы не хотим ждать, пока все гоблины походят еще 100 раз.
+		if i.PlaybackCursor >= len(i.PlaybackActions) {
+			logger.Log.Info("✅ Replay finished (all actions executed).")
+			break
+		}
+
+		// 1. Кто ходит?
+		item := i.TurnManager.PeekNext()
+		if item == nil {
+			break // Все умерли или пусто
+		}
+
+		activeActor := item.Value
+		i.CurrentTick = activeActor.AI.NextActionTick
+
+		// 2. Проверка смерти
+		if activeActor.Stats != nil && activeActor.Stats.IsDead {
+			i.TurnManager.RemoveEntity(activeActor.ID)
+			continue
+		}
+
+		// 3. Логика хода
+		// В симуляции мы смотрим на ControllerID. Если он есть — это был агент.
+		isPlayer := activeActor.ControllerID != ""
+
+		if !isPlayer {
+			// --- ХОД AI ---
+			// Используем ту же логику, что и в основной игре
+			i.processAITurn(activeActor)
+		} else {
+			// --- ХОД ИГРОКА (из записи) ---
+
+			// Ищем следующее действие в реплее
+			if i.PlaybackCursor >= len(i.PlaybackActions) {
+				logger.Log.Info("End of replay tape reached.")
+				break
+			}
+
+			action := i.PlaybackActions[i.PlaybackCursor]
+
+			// Валидация синхронизации
+			// В идеальном детерминированном мире тики должны совпадать.
+			// Но для начала просто проверим порядок: следующее действие должно быть от этого актора.
+			if action.Token != activeActor.ID {
+				logger.Log.Warnf("Desync detected at action %d! Expected actor %s, got action from %s",
+					i.PlaybackCursor, activeActor.ID, action.Token)
+				// В жестком режиме тут можно делать panic или return
+			}
+
+			// Выполняем команду
+			cmd := domain.InternalCommand{
+				Action:  action.Action,
+				Token:   action.Token,
+				Payload: action.Payload,
+			}
+
+			logger.Log.Debugf("[Replay] Act %d/%d: %s (%s)",
+				i.PlaybackCursor+1, len(i.PlaybackActions), action.Action, action.Token)
+
+			// Выполняем (важно: executeCommand сама запишет это в новый replay,
+			// если мы не отключим запись, но для симуляции это не страшно)
+			i.executeCommand(cmd, activeActor)
+
+			i.PlaybackCursor++
+		}
+
+		// Обновляем приоритет
+		i.TurnManager.UpdatePriority(activeActor.ID, activeActor.AI.NextActionTick)
+		steps++
+	}
+
+	duration := time.Since(startTime)
+	logger.Log.Infof("🏁 Simulation finished in %v. Steps: %d. Final Tick: %d", duration, steps, i.CurrentTick)
 }

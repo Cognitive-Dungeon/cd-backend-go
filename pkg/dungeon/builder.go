@@ -160,7 +160,7 @@ func (b *LevelBuilder) SpawnEnemy(templateName string, count int) *LevelBuilder 
 		scaledTemplate.HP += b.level * 2
 		scaledTemplate.Strength += b.level / 2
 
-		enemy := scaledTemplate.SpawnEntity(pos, b.level)
+		enemy := scaledTemplate.SpawnEntity(pos, b.level, b.rng)
 		b.entities = append(b.entities, enemy)
 	}
 
@@ -200,7 +200,7 @@ func (b *LevelBuilder) SpawnItem(templateName string, count int) *LevelBuilder {
 		}
 
 		pos := domain.Position{X: x, Y: y}
-		item := template.SpawnItem(pos, b.level)
+		item := template.SpawnItem(pos, b.level, b.rng)
 		b.entities = append(b.entities, *item)
 	}
 

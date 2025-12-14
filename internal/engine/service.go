@@ -6,10 +6,12 @@ import (
 	"cognitive-server/internal/engine/handlers/actions"
 	"cognitive-server/internal/engine/handlers/admin"
 	"cognitive-server/internal/engine/handlers/events"
+	"cognitive-server/internal/infrastructure/storage"
 	"cognitive-server/internal/network"
 	"cognitive-server/pkg/api"
 	"cognitive-server/pkg/dungeon"
 	"cognitive-server/pkg/logger"
+	"cognitive-server/pkg/utils"
 	"fmt"
 	"math/rand"
 )
@@ -25,6 +27,8 @@ type GameService struct {
 
 	// Индекс: где находится сущность? (EntityID -> LevelID)
 	EntityLocations map[string]int
+
+	Storage *storage.ReplayService
 
 	// Каналы для main.go (входная точка)
 	JoinChan       chan *domain.Entity
@@ -46,6 +50,8 @@ func NewService(cfg Config) *GameService {
 		Instances:       make(map[int]*Instance),
 		EntityLocations: make(map[string]int),
 
+		Storage: storage.NewReplayService("./replays"),
+
 		JoinChan:       make(chan *domain.Entity, 10),
 		DisconnectChan: make(chan string, 10),
 
@@ -61,7 +67,6 @@ func NewService(cfg Config) *GameService {
 		// Используем прекалькулированный сид
 		instance := NewInstance(id, world, s, seeds[id])
 		s.Instances[id] = instance
-		go instance.Run()
 	}
 
 	// 2. Распределяем начальные сущности по инстансам
@@ -71,6 +76,10 @@ func NewService(cfg Config) *GameService {
 			// Напрямую добавляем, так как циклы только запустились
 			instance.addEntity(e)
 		}
+	}
+
+	for _, instance := range s.Instances {
+		go instance.Run()
 	}
 
 	return s
@@ -272,4 +281,85 @@ func (s *GameService) ChangeLevel(actor *domain.Entity, newLevelID int, targetPo
 	newInstance.JoinChan <- actor
 
 	newInstance.AddLog(fmt.Sprintf("%s переходит на уровень %d.", actor.Name, newLevelID), "INFO")
+}
+
+// LoadReplay инициализирует сервис и один инстанс на основе файла реплея
+func (s *GameService) LoadReplay(path string) error {
+	// 1. Читаем файл
+	session, err := s.Storage.Load(path)
+	if err != nil {
+		return err
+	}
+
+	logger.Log.Infof("Loaded replay: Seed=%d, Level=%d, Actions=%d", session.Seed, session.LevelID, len(session.Actions))
+
+	// 2. Обновляем конфиг сервиса (чтобы MasterSeed совпадал)
+	// В текущей реализации мы храним Seed в Instance, но глобальный тоже полезно обновить
+	s.Config.Seed = session.Seed
+
+	// 3. Воссоздаем мир с ТЕМ ЖЕ сидом
+	// Важно: мы должны использовать логику генерации, аналогичную ChangeLevel/NewService
+	// Для простоты предположим, что реплей записан для Dungeon (Level 1)
+	// Если replay для Level 0 - logic similar.
+
+	levelID := session.LevelID
+
+	// Генерируем мир детерминировано
+	rng := rand.New(rand.NewSource(session.Seed))
+
+	var world *domain.GameWorld
+	var entities []domain.Entity
+	var startPos domain.Position
+
+	if levelID == 0 {
+		world, entities, startPos = dungeon.GenerateSurface()
+	} else {
+		world, entities, startPos = dungeon.Generate(levelID, rng)
+	}
+
+	// 4. Создаем Инстанс
+	instance := NewInstance(levelID, world, s, session.Seed)
+
+	// Загружаем сущности
+	for i := range entities {
+		instance.addEntity(&entities[i])
+	}
+
+	// Если в entities нет игрока (он приходит извне), его нужно создать.
+	// В реплее actions[0] обычно содержит логин или первое действие игрока.
+	// Для полной корректности нужно сохранять состояние игрока при входе в уровень.
+	// ПОКА: Предполагаем, что игрок создается через CreatePlayer ("hero_1") и ставим его на старт.
+	// Это упрощение. В продакшене реплей должен содержать snapshot игрока на входе.
+	// TODO: Определиться откуда брать игрока и как это делать лучше всего
+	playerID := "hero_1" // Или берем из метаданных реплея, если сохраним туда PlayerID
+	playerSeed := utils.StringToSeed(playerID)
+	playerRng := rand.New(rand.NewSource(playerSeed))
+
+	player := dungeon.CreatePlayer(playerID, playerRng)
+	// Задаем фейковый ControllerID, чтобы движок знал: этим персонажем управляет "внешняя сила" (реплей), а не AI.
+	player.ControllerID = "replay_viewer"
+	// ... логика поиска старта ...
+
+	player.Pos = startPos
+	player.Level = levelID
+	instance.addEntity(player)
+	s.EntityLocations[player.ID] = levelID
+
+	// 5. Настраиваем режим воспроизведения
+	instance.IsPlayback = true
+	instance.PlaybackActions = session.Actions
+
+	// Регистрируем инстанс
+	s.Instances[levelID] = instance
+
+	return nil
+}
+
+// StartPlayback запускает симуляцию загруженного инстанса
+func (s *GameService) StartPlayback(levelID int) {
+	if instance, ok := s.Instances[levelID]; ok {
+		instance.RunSimulation()
+	} else {
+		logger.Log.Error("Instance not found for playback")
+	}
 }

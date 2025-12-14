@@ -3,6 +3,7 @@ package engine
 import (
 	"cognitive-server/internal/domain"
 	"cognitive-server/pkg/dungeon"
+	"cognitive-server/pkg/utils"
 	"math/rand"
 )
 
@@ -44,7 +45,9 @@ func buildInitialWorld(masterSeed int64) (map[int]*domain.GameWorld, []*domain.E
 	worlds[1] = dungeonWorld1
 
 	// --- ИГРОК ---
-	player := dungeon.CreatePlayer("hero_1")
+	playerSeed := utils.StringToSeed("hero_1")
+	rngPlayer := rand.New(rand.NewSource(playerSeed))
+	player := dungeon.CreatePlayer("hero_1", rngPlayer)
 	player.Pos = startPos
 	player.Level = 0
 	allEntities = append(allEntities, player)

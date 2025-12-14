@@ -51,7 +51,7 @@ func HandleSpawn(ctx handlers.Context, p SpawnPayload) (handlers.Result, error) 
 			pos = ctx.Actor.Pos // Fallback под ноги
 		}
 
-		enemy := tmpl.SpawnEntity(pos, ctx.Actor.Level)
+		enemy := tmpl.SpawnEntity(pos, ctx.Actor.Level, ctx.Rng)
 		ctx.AddGlobalEntity(&enemy)
 		return handlers.Result{Msg: fmt.Sprintf("Spawned %s", p.Template), MsgType: "INFO"}, nil
 	}
@@ -59,7 +59,7 @@ func HandleSpawn(ctx handlers.Context, p SpawnPayload) (handlers.Result, error) 
 	// Ищем предмет
 	if tmpl, ok := dungeon.ItemTemplates[p.Template]; ok {
 		pos := ctx.Actor.Pos // Под ноги
-		item := tmpl.SpawnItem(pos, ctx.Actor.Level)
+		item := tmpl.SpawnItem(pos, ctx.Actor.Level, ctx.Rng)
 		ctx.AddGlobalEntity(item)
 		return handlers.Result{Msg: fmt.Sprintf("Spawned item %s", p.Template), MsgType: "INFO"}, nil
 	}
