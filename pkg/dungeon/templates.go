@@ -1,6 +1,9 @@
 package dungeon
 
-import "cognitive-server/internal/domain"
+import (
+	"cognitive-server/internal/domain"
+	"cognitive-server/pkg/utils"
+)
 
 // EntityTemplate определяет шаблон для создания сущности
 type EntityTemplate struct {
@@ -23,7 +26,7 @@ type EntityTemplate struct {
 // SpawnEntity создает сущность из шаблона на заданной позиции
 func (t EntityTemplate) SpawnEntity(pos domain.Position, level int) domain.Entity {
 	entity := domain.Entity{
-		ID:    domain.GenerateID(),
+		ID:    utils.GenerateID(),
 		Type:  t.Type,
 		Name:  t.Name,
 		Pos:   pos,
@@ -159,7 +162,7 @@ type ItemTemplate struct {
 // SpawnItem создаёт Entity-предмет из шаблона
 func (t ItemTemplate) SpawnItem(pos domain.Position, level int) *domain.Entity {
 	entity := &domain.Entity{
-		ID:    domain.GenerateID(),
+		ID:    utils.GenerateID(),
 		Type:  domain.EntityTypeItem,
 		Name:  t.Name,
 		Pos:   pos,

@@ -3,6 +3,7 @@ package systems
 import (
 	"cognitive-server/internal/domain"
 	"cognitive-server/pkg/logger"
+	"cognitive-server/pkg/utils"
 	"fmt"
 
 	"github.com/sirupsen/logrus"
@@ -113,7 +114,7 @@ func CreateLootBag(deadEntity *domain.Entity) *domain.Entity {
 	}
 
 	return &domain.Entity{
-		ID:    domain.GenerateID(),
+		ID:    utils.GenerateID(),
 		Type:  domain.EntityTypeItem,
 		Name:  "Останки " + deadEntity.Name,
 		Pos:   deadEntity.Pos,

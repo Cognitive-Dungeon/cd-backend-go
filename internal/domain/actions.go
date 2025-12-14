@@ -2,9 +2,6 @@ package domain
 
 import "strings"
 
-// ActionType - Внутренний числовой идентификатор действия
-type ActionType uint8
-
 const (
 	ActionUnknown ActionType = iota
 	ActionInit

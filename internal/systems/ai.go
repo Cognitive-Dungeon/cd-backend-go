@@ -22,7 +22,7 @@ func ComputeNPCAction(npc *domain.Entity, player *domain.Entity, w *domain.GameW
 
 	aiLogger.Debug("--- AI Turn Start ---")
 
-	// --- ШАГ 2: aПроверка базовых условий ---
+	// --- ШАГ 2: Проверка базовых условий ---
 	if npc.AI == nil || npc.Stats == nil || npc.Stats.IsDead || !npc.AI.IsHostile {
 		aiLogger.Debug("Pre-computation check failed (dead, not hostile, etc). Action: WAIT")
 		return domain.ActionWait, nil, 0, 0
@@ -77,20 +77,21 @@ func ComputeNPCAction(npc *domain.Entity, player *domain.Entity, w *domain.GameW
 // Внутренние утилиты (приватные для пакета systems)
 
 func calculateSmartMove(npc, target *domain.Entity, w *domain.GameWorld) (int, int) {
-	dxRaw := target.Pos.X - npc.Pos.X
-	dyRaw := target.Pos.Y - npc.Pos.Y
+	// 1. Получаем направление шага (-1, 0, 1)
+	stepX, stepY := npc.Pos.DirectionTo(target.Pos)
 
-	stepX := sign(dxRaw)
-	stepY := sign(dyRaw)
+	// 2. Получаем "сырой" вектор разницы для определения приоритета осей
+	diff := target.Pos.Sub(npc.Pos)
 
-	// Попытка 1: Идеальный путь
+	// Попытка 1: Идеальный путь (по диагонали)
 	res := CalculateMove(npc, stepX, stepY, w)
 	if res.HasMoved {
 		return stepX, stepY
 	}
 
 	// Попытка 2: Smart Sliding (выбор приоритетной оси)
-	tryXFirst := math.Abs(float64(dxRaw)) > math.Abs(float64(dyRaw))
+	// Если по X мы дальше от цели, чем по Y, то сначала пробуем шагать по X
+	tryXFirst := math.Abs(float64(diff.X)) > math.Abs(float64(diff.Y))
 
 	if tryXFirst {
 		if stepX != 0 && checkMove(npc, stepX, 0, w) {
@@ -114,14 +115,4 @@ func calculateSmartMove(npc, target *domain.Entity, w *domain.GameWorld) (int, i
 func checkMove(e *domain.Entity, dx, dy int, w *domain.GameWorld) bool {
 	res := CalculateMove(e, dx, dy, w)
 	return res.HasMoved
-}
-
-func sign(x int) int {
-	if x > 0 {
-		return 1
-	}
-	if x < 0 {
-		return -1
-	}
-	return 0
 }

@@ -14,9 +14,7 @@ func HandleUnequip(ctx handlers.Context, p api.ItemPayload) (handlers.Result, er
 		return handlers.Result{Msg: err.Error(), MsgType: "ERROR"}, nil
 	}
 
-	if ctx.Actor.AI != nil {
-		ctx.Actor.AI.Wait(domain.TimeCostUnequip)
-	}
+	handlers.SpendActionPoints(ctx.Actor, domain.TimeCostUnequip)
 
 	return handlers.Result{Msg: msg, MsgType: "INFO"}, nil
 }

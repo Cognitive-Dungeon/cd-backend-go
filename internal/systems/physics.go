@@ -35,21 +35,14 @@ func HasLineOfSight(w *domain.GameWorld, p1, p2 domain.Position) bool {
 		dy = -dy
 	}
 
-	sx := 1
-	if x0 > x1 {
-		sx = -1
-	}
-	sy := 1
-	if y0 > y1 {
-		sy = -1
-	}
+	sx, sy := p1.DirectionTo(p2)
 
 	err := dx - dy
 
 	for {
 		// Проверяем препятствия, ИСКЛЮЧАЯ стартовую и конечную точки.
-		isStartPoint := (x0 == p1.X && y0 == p1.Y)
-		isEndPoint := (x0 == p2.X && y0 == p2.Y)
+		isStartPoint := x0 == p1.X && y0 == p1.Y
+		isEndPoint := x0 == p2.X && y0 == p2.Y
 
 		if !isStartPoint && !isEndPoint {
 			// 1. Проверка границ карты

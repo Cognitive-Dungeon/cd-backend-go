@@ -1,14 +1,5 @@
 package domain
 
-// Типы сущностей
-const (
-	EntityTypePlayer = "PLAYER"
-	EntityTypeNPC    = "NPC"
-	EntityTypeEnemy  = "ENEMY"
-	EntityTypeItem   = "ITEM"
-	EntityTypeExit   = "EXIT"
-)
-
 // Стоимость действий в тиках (Time Units)
 const (
 	TimeCostMove        = 100
@@ -29,12 +20,14 @@ const (
 	AggroRadius  = 10
 )
 
-// Категории предметов
-const (
-	ItemCategoryWeapon    = "weapon"
-	ItemCategoryArmor     = "armor"
-	ItemCategoryPotion    = "potion"
-	ItemCategoryFood      = "food"
-	ItemCategoryMisc      = "misc"
-	ItemCategoryContainer = "container"
+var (
+	DirNorth = Position{X: 0, Y: -1}
+	DirSouth = Position{X: 0, Y: 1}
+	DirWest  = Position{X: -1, Y: 0}
+	DirEast  = Position{X: 1, Y: 0}
+
+	DirNorthWest = Position{X: -1, Y: -1}
+	DirNorthEast = Position{X: 1, Y: -1}
+	DirSouthWest = Position{X: -1, Y: 1}
+	DirSouthEast = Position{X: 1, Y: 1}
 )

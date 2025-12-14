@@ -8,9 +8,7 @@ import (
 
 func HandleWait(ctx handlers.Context) (handlers.Result, error) {
 	// Тратим время (для всех одинаково)
-	if ctx.Actor.AI != nil {
-		ctx.Actor.AI.Wait(domain.TimeCostWait)
-	}
+	handlers.SpendActionPoints(ctx.Actor, domain.TimeCostWait)
 
 	// Возвращаем результат для ВСЕХ сущностей.
 	return handlers.Result{

@@ -13,9 +13,7 @@ func HandleUse(ctx handlers.Context, p api.ItemPayload) (handlers.Result, error)
 		return handlers.Result{Msg: err.Error(), MsgType: "ERROR"}, nil
 	}
 
-	if ctx.Actor.AI != nil {
-		ctx.Actor.AI.Wait(domain.TimeCostUse)
-	}
+	handlers.SpendActionPoints(ctx.Actor, domain.TimeCostUse)
 
 	return handlers.Result{Msg: msg, MsgType: "INFO"}, nil
 }

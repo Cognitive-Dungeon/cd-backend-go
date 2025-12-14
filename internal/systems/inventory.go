@@ -2,6 +2,7 @@ package systems
 
 import (
 	"cognitive-server/internal/domain"
+	"cognitive-server/pkg/utils"
 	"fmt"
 )
 
@@ -46,7 +47,7 @@ func TryDrop(actor *domain.Entity, itemID string, count int, world *domain.GameW
 		// Создаем копию для выброса
 		droppedItem := *item // Shallow copy структуры Entity
 		// Глубокая копия компонентов, которые меняются
-		droppedItem.ID = domain.GenerateID()
+		droppedItem.ID = utils.GenerateID()
 		droppedItem.Item = &domain.ItemComponent{}
 		*droppedItem.Item = *item.Item // Copy Item data
 		droppedItem.Item.StackSize = count

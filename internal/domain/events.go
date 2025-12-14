@@ -2,9 +2,6 @@ package domain
 
 import "strings"
 
-// EventType - Внутренний числовой идентификатор события
-type EventType uint8
-
 // Event types constants
 const (
 	EventUnknown EventType = iota

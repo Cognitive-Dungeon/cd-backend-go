@@ -29,9 +29,7 @@ func HandleTalk(ctx handlers.Context, p api.EntityPayload) (handlers.Result, err
 	target := res.Target
 
 	// 2. Трата времени
-	if ctx.Actor.AI != nil {
-		ctx.Actor.AI.Wait(domain.TimeCostInteract)
-	}
+	handlers.SpendActionPoints(ctx.Actor, domain.TimeCostInteract)
 
 	return handlers.Result{
 		Msg:     fmt.Sprintf("Вы говорите с %s (ИИ пока спит).", target.Name),

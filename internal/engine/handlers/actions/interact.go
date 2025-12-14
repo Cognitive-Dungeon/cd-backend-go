@@ -29,9 +29,7 @@ func HandleInteract(ctx handlers.Context, p api.EntityPayload) (handlers.Result,
 	}
 
 	// 3. Трата времени
-	if ctx.Actor.AI != nil {
-		ctx.Actor.AI.Wait(domain.TimeCostInteract)
-	}
+	handlers.SpendActionPoints(ctx.Actor, domain.TimeCostInteract)
 
 	return handlers.Result{
 		Event: target.Trigger.OnInteract,

@@ -22,9 +22,7 @@ func HandleAttack(ctx handlers.Context, p api.EntityPayload) (handlers.Result, e
 	logMsg := systems.ApplyAttack(ctx.Actor, target)
 
 	// 3. Трата времени
-	if ctx.Actor.AI != nil {
-		ctx.Actor.AI.Wait(domain.TimeCostAttackLight)
-	}
+	handlers.SpendActionPoints(ctx.Actor, domain.TimeCostAttackLight)
 
 	return handlers.Result{
 		Msg:     logMsg,

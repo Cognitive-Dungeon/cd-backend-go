@@ -14,9 +14,7 @@ func HandleEquip(ctx handlers.Context, p api.ItemPayload) (handlers.Result, erro
 		return handlers.Result{Msg: err.Error(), MsgType: "ERROR"}, nil
 	}
 
-	if ctx.Actor.AI != nil {
-		ctx.Actor.AI.Wait(domain.TimeCostEquip)
-	}
+	handlers.SpendActionPoints(ctx.Actor, domain.TimeCostEquip)
 
 	return handlers.Result{Msg: msg, MsgType: "INFO"}, nil
 }

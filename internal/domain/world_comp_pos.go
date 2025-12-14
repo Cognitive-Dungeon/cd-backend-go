@@ -33,3 +33,28 @@ func (p Position) IsAdjacent(other Position) bool {
 func (p Position) Shift(dx, dy int) Position {
 	return Position{X: p.X + dx, Y: p.Y + dy}
 }
+
+// Add возвращает сумму векторов (для сложения позиции и направления)
+func (p Position) Add(other Position) Position {
+	return Position{X: p.X + other.X, Y: p.Y + other.Y}
+}
+
+// Sub возвращает разницу векторов (для вычитания позиции и направления
+func (p Position) Sub(other Position) Position {
+	return Position{X: p.X - other.X, Y: p.Y - other.Y}
+}
+
+// DirectionTo возвращает нормализованный вектор направления к цели (-1, 0, 1)
+func (p Position) DirectionTo(target Position) (dx, dy int) {
+	if target.X > p.X {
+		dx = 1
+	} else if target.X < p.X {
+		dx = -1
+	}
+	if target.Y > p.Y {
+		dy = 1
+	} else if target.Y < p.Y {
+		dy = -1
+	}
+	return
+}

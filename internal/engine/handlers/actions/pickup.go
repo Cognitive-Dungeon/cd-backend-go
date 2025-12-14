@@ -22,9 +22,7 @@ func HandlePickup(ctx handlers.Context, p api.ItemPayload) (handlers.Result, err
 	}
 
 	// 3. Время
-	if ctx.Actor.AI != nil {
-		ctx.Actor.AI.Wait(domain.TimeCostPickup)
-	}
+	handlers.SpendActionPoints(ctx.Actor, domain.TimeCostPickup)
 
 	return handlers.Result{Msg: msg, MsgType: "INFO"}, nil
 }

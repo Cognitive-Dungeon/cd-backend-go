@@ -44,3 +44,10 @@ type HandlerFunc func(ctx Context, payload json.RawMessage) (Result, error)
 func EmptyResult() Result {
 	return Result{}
 }
+
+// SpendActionPoints тратит время актора, если это применимо
+func SpendActionPoints(actor *domain.Entity, cost int) {
+	if actor.AI != nil {
+		actor.AI.Wait(cost)
+	}
+}
