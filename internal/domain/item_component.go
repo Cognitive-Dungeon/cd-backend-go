@@ -4,9 +4,9 @@ package domain
 // Любая Entity с этим компонентом становится предметом.
 type ItemComponent struct {
 	// Базовые характеристики
-	Category    string `json:"category"`    // "weapon", "armor", "potion", "food", "misc", "container"
-	IsStackable bool   `json:"isStackable"` // можно ли складывать в стаки
-	StackSize   int    `json:"stackSize"`   // текущее количество в стаке
+	Category    ItemCategory `json:"category"`    // "weapon", "armor", "potion", "food", "misc", "container"
+	IsStackable bool         `json:"isStackable"` // можно ли складывать в стаки
+	StackSize   int          `json:"stackSize"`   // текущее количество в стаке
 
 	// Характеристики оружия
 	Damage      int `json:"damage,omitempty"`      // урон оружия
@@ -14,16 +14,16 @@ type ItemComponent struct {
 
 	// Характеристики брони
 	Defense   int    `json:"defense,omitempty"`   // защита брони
-	ArmorSlot string `json:"armorSlot,omitempty"` // "head", "body", "legs"
+	ArmorSlot string `json:"armorSlot,omitempty"` // "head", "body", "legs" // TODO: Переделать в enum
 
 	// Характеристики расходуемых предметов (зелья, еда)
-	EffectType   string `json:"effectType,omitempty"`   // "heal", "buff_strength", "restore_stamina"
+	EffectType   string `json:"effectType,omitempty"`   // "heal", "buff_strength", "restore_stamina" // TODO: Переделать в enum
 	EffectValue  int    `json:"effectValue,omitempty"`  // величина эффекта
 	IsConsumable bool   `json:"isConsumable,omitempty"` // должен ли предмет исчезнуть после использования
 
 	// Физические свойства
-	Weight int `json:"weight"` // вес предмета
-	Value  int `json:"value"`  // стоимость в золоте
+	Weight uint `json:"weight"` // вес предмета
+	Price  uint `json:"price"`  // стоимость в золоте
 
 	// Взаимодействие
 	InteractionRange int  `json:"interactionRange,omitempty"` // радиус взаимодействия (default: 1)
@@ -40,8 +40,8 @@ type ItemComponent struct {
 type InventoryComponent struct {
 	Items         []*Entity `json:"items"`         // ссылки на Entity с ItemComponent
 	MaxSlots      int       `json:"maxSlots"`      // максимальное количество слотов
-	MaxWeight     int       `json:"maxWeight"`     // максимальный вес
-	CurrentWeight int       `json:"currentWeight"` // текущий вес
+	MaxWeight     uint      `json:"maxWeight"`     // максимальный вес
+	CurrentWeight uint      `json:"currentWeight"` // текущий вес
 }
 
 // EquipmentComponent хранит экипированные предметы.

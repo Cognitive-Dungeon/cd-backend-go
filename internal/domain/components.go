@@ -6,9 +6,8 @@ import "encoding/json"
 
 // RenderComponent - Визуализация (Клиент)
 type RenderComponent struct {
-	Symbol string `json:"symbol"` // Символ отображения (g-гоблин, $-монетка)
+	Symbol byte   `json:"symbol"` // Символ отображения (g-гоблин, $-монетка)
 	Color  string `json:"color"`
-	Label  string `json:"label"` // Метка для таргетинга (A, B, @)
 }
 
 // StatsComponent - Характеристики и Ресурсы
@@ -25,10 +24,10 @@ type StatsComponent struct {
 // AIComponent - Мозги, Поведение и Время
 // Примечание: У игрока тоже есть этот компонент, чтобы хранить NextActionTick
 type AIComponent struct {
-	IsHostile      bool   `json:"isHostile"`
-	State          string `json:"state,omitempty"`       // "IDLE"
-	NextActionTick int    `json:"nextActionTick"`        // <-- Очередь ходов
-	Personality    string `json:"personality,omitempty"` // "Cowardly"
+	IsHostile      bool        `json:"isHostile"`
+	State          AIStateType `json:"state,omitempty"`       // "IDLE"
+	NextActionTick int         `json:"nextActionTick"`        // <-- Очередь ходов
+	Personality    string      `json:"personality,omitempty"` // "Cowardly"
 }
 
 // NarrativeComponent - Данные для LLM и Осмотра

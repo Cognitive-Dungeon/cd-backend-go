@@ -4,9 +4,9 @@ package domain
 
 type Entity struct {
 	// Идентификация
-	ID   string `json:"id"`
-	Type string `json:"type"`
-	Name string `json:"name"`
+	ID   string     `json:"id"`
+	Type EntityType `json:"type"`
+	Name string     `json:"name"`
 
 	// ControllerID - ID сессии/пользователя, который управляет этой сущностью.
 	// Если пусто - управляется AI.

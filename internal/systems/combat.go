@@ -94,7 +94,7 @@ func ApplyAttack(attacker, target *domain.Entity, rng *rand.Rand) string {
 	if died {
 		// Визуально меняем труп
 		if target.Render != nil {
-			target.Render.Symbol = "%"
+			target.Render.Symbol = '%'
 			target.Render.Color = "text-gray-500"
 		}
 		// "Успокаиваем" ИИ трупа
@@ -121,7 +121,7 @@ func CreateLootBag(deadEntity *domain.Entity) *domain.Entity {
 		Pos:   deadEntity.Pos,
 		Level: deadEntity.Level,
 		Render: &domain.RenderComponent{
-			Symbol: "☠",
+			Symbol: ',',
 			Color:  "#8B4513",
 		},
 		Item: &domain.ItemComponent{

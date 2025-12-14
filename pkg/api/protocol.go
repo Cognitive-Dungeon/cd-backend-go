@@ -123,8 +123,8 @@ type ItemView struct {
 	StackSize   int    `json:"stackSize,omitempty"`
 	Damage      int    `json:"damage,omitempty"`
 	Defense     int    `json:"defense,omitempty"`
-	Weight      int    `json:"weight,omitempty"`
-	Value       int    `json:"value,omitempty"`
+	Weight      uint   `json:"weight,omitempty"`
+	Price       uint   `json:"price,omitempty"`
 	IsSentient  bool   `json:"isSentient,omitempty"`
 }
 
@@ -132,8 +132,8 @@ type ItemView struct {
 type InventoryView struct {
 	Items         []ItemView `json:"items"`
 	MaxSlots      int        `json:"maxSlots"`
-	CurrentWeight int        `json:"currentWeight"`
-	MaxWeight     int        `json:"maxWeight,omitempty"`
+	CurrentWeight uint       `json:"currentWeight"`
+	MaxWeight     uint       `json:"maxWeight,omitempty"`
 }
 
 // EquipmentView представляет экипированные предметы

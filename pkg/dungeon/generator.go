@@ -37,14 +37,14 @@ func Generate(level int, r *rand.Rand) (*domain.GameWorld, []domain.Entity, doma
 
 	// 3. Настраиваем сложность (Количество врагов)
 	// Чем глубже, тем больше врагов
-	baseMobCount := 3 + (level / 2)
+	baseMobCount := 3 + level/2
 
 	// Спавним Гоблинов (есть всегда)
 	builder.SpawnEnemy("goblin", baseMobCount)
 
 	// Спавним Орков (начиная со 2-го уровня)
 	if level >= 2 {
-		orcCount := 1 + (level / 3)
+		orcCount := 1 + level/3
 		builder.SpawnEnemy("orc", orcCount)
 	}
 

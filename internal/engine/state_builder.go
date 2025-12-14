@@ -123,14 +123,14 @@ func (s *GameService) BuildStateFor(observer *domain.Entity, activeID string, in
 func (s *GameService) toEntityView(target *domain.Entity, observer *domain.Entity) api.EntityView {
 	view := api.EntityView{
 		ID:   target.ID,
-		Type: target.Type,
+		Type: target.Type.String(),
 		Name: target.Name,
 	}
 	view.Pos.X = target.Pos.X
 	view.Pos.Y = target.Pos.Y
 
 	if target.Render != nil {
-		view.Render.Symbol = target.Render.Symbol
+		view.Render.Symbol = string(target.Render.Symbol)
 		view.Render.Color = target.Render.Color
 	} else {
 		view.Render.Symbol = "?"
@@ -179,18 +179,18 @@ func (s *GameService) toEntityView(target *domain.Entity, observer *domain.Entit
 					itemView := api.ItemView{
 						ID:          item.ID,
 						Name:        item.Name,
-						Category:    item.Item.Category,
+						Category:    item.Item.Category.String(),
 						IsStackable: item.Item.IsStackable,
 						StackSize:   item.Item.StackSize,
 						Damage:      item.Item.Damage,
 						Defense:     item.Item.Defense,
 						Weight:      item.Item.Weight,
-						Value:       item.Item.Value,
+						Price:       item.Item.Price,
 						IsSentient:  item.Item.IsSentient,
 					}
 
 					if item.Render != nil {
-						itemView.Symbol = item.Render.Symbol
+						itemView.Symbol = string(item.Render.Symbol)
 						itemView.Color = item.Render.Color
 					}
 
@@ -210,13 +210,13 @@ func (s *GameService) toEntityView(target *domain.Entity, observer *domain.Entit
 				weaponView := api.ItemView{
 					ID:       w.ID,
 					Name:     w.Name,
-					Category: w.Item.Category,
+					Category: w.Item.Category.String(),
 					Damage:   w.Item.Damage,
 					Weight:   w.Item.Weight,
-					Value:    w.Item.Value,
+					Price:    w.Item.Price,
 				}
 				if w.Render != nil {
-					weaponView.Symbol = w.Render.Symbol
+					weaponView.Symbol = string(w.Render.Symbol)
 					weaponView.Color = w.Render.Color
 				}
 				eqView.Weapon = &weaponView
@@ -227,13 +227,13 @@ func (s *GameService) toEntityView(target *domain.Entity, observer *domain.Entit
 				armorView := api.ItemView{
 					ID:       a.ID,
 					Name:     a.Name,
-					Category: a.Item.Category,
+					Category: a.Item.Category.String(),
 					Defense:  a.Item.Defense,
 					Weight:   a.Item.Weight,
-					Value:    a.Item.Value,
+					Price:    a.Item.Price,
 				}
 				if a.Render != nil {
-					armorView.Symbol = a.Render.Symbol
+					armorView.Symbol = string(a.Render.Symbol)
 					armorView.Color = a.Render.Color
 				}
 				eqView.Armor = &armorView

@@ -42,7 +42,7 @@ func GenerateSurface() (*domain.GameWorld, []domain.Entity, domain.Position) {
 		Name:      "Спуск в подземелье",
 		Pos:       startPos,
 		Level:     0,
-		Render:    &domain.RenderComponent{Symbol: ">", Color: "#FFFFFF", Label: ">"},
+		Render:    &domain.RenderComponent{Symbol: '>', Color: "#FFFFFF"},
 		Narrative: &domain.NarrativeComponent{Description: "Темный проход, ведущий вглубь подземелья."},
 		Trigger: &domain.TriggerComponent{
 			OnInteract: eventPayload,

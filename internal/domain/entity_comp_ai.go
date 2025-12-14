@@ -1,11 +1,5 @@
 package domain
 
-const (
-	AIStateIdle    = "IDLE"
-	AIStateCombat  = "COMBAT"
-	AIStateFleeing = "FLEEING"
-)
-
 // Wait добавляет задержку к следующему действию
 func (a *AIComponent) Wait(ticks int) {
 	a.NextActionTick += ticks

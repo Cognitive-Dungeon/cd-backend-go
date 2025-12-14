@@ -157,8 +157,8 @@ func (b *LevelBuilder) SpawnEnemy(templateName string, count int) *LevelBuilder 
 
 		// Масштабируем статы по уровню
 		scaledTemplate := template
-		scaledTemplate.HP += b.level * 2
-		scaledTemplate.Strength += b.level / 2
+		scaledTemplate.Stats.HP += int(b.level * 2)
+		scaledTemplate.Stats.Strength += int(b.level / 2)
 
 		enemy := scaledTemplate.SpawnEntity(pos, b.level, b.rng)
 		b.entities = append(b.entities, enemy)
@@ -214,18 +214,18 @@ func (b *LevelBuilder) PlaceExit(direction string, targetLevel int) *LevelBuilde
 	}
 
 	var room Rect
-	var symbol string
+	var symbol byte
 	var name string
 	var description string
 
 	if direction == "up" {
 		room = b.rooms[0] // Первая комната
-		symbol = "<"
+		symbol = '<'
 		name = "Лестница вверх"
 		description = "Старая каменная лестница, ведущая на поверхность."
 	} else {
 		room = b.rooms[len(b.rooms)-1] // Последняя комната
-		symbol = ">"
+		symbol = '>'
 		name = "Лестница вниз"
 		description = "Темный проход, ведущий вглубь подземелья."
 	}
@@ -247,7 +247,6 @@ func (b *LevelBuilder) PlaceExit(direction string, targetLevel int) *LevelBuilde
 		Render: &domain.RenderComponent{
 			Symbol: symbol,
 			Color:  "#FFFFFF",
-			Label:  symbol,
 		},
 		Narrative: &domain.NarrativeComponent{
 			Description: description,

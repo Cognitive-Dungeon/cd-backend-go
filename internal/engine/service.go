@@ -274,7 +274,7 @@ func (s *GameService) ChangeLevel(actor *domain.Entity, newLevelID int, targetPo
 	actor.Pos = targetPos
 
 	if actor.AI != nil {
-		actor.AI.State = "IDLE"
+		actor.AI.State = domain.AIStateIdle
 		// Синхронизация времени
 		actor.AI.NextActionTick = newInstance.CurrentTick
 	}
