@@ -5,11 +5,12 @@ import (
 	"cognitive-server/pkg/logger"
 	"cognitive-server/pkg/utils"
 	"fmt"
+	"math/rand"
 
 	"github.com/sirupsen/logrus"
 )
 
-func ApplyAttack(attacker, target *domain.Entity) string {
+func ApplyAttack(attacker, target *domain.Entity, rng *rand.Rand) string {
 	combatLogger := logger.Log.WithFields(logrus.Fields{
 		"component":     "combat_system",
 		"attacker_id":   attacker.ID,

@@ -7,6 +7,7 @@ import (
 	"cognitive-server/pkg/api"
 	"cognitive-server/pkg/logger"
 	"encoding/json"
+	"math/rand"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -39,9 +40,15 @@ type Instance struct {
 
 	Logs []api.LogEntry // Локальные логи уровня
 
+	Rng    *rand.Rand            // Локальный генератор
+	Seed   int64                 // Сид, с которого начался уровень
+	Replay *domain.ReplaySession // Лента событий
+
 }
 
-func NewInstance(id int, world *domain.GameWorld, service *GameService) *Instance {
+func NewInstance(id int, world *domain.GameWorld, service *GameService, seed int64) *Instance {
+	rngSource := rand.NewSource(seed)
+	rng := rand.New(rngSource)
 	return &Instance{
 		ID:          id,
 		World:       world,
@@ -53,6 +60,14 @@ func NewInstance(id int, world *domain.GameWorld, service *GameService) *Instanc
 		Service:     service,
 		CurrentTick: 0,
 		Logs:        []api.LogEntry{},
+		Seed:        seed,
+		Rng:         rng,
+		Replay: &domain.ReplaySession{
+			LevelID:   id,
+			Seed:      seed,
+			Timestamp: time.Now().Unix(),
+			Actions:   make([]domain.ReplayAction, 0),
+		},
 	}
 }
 
@@ -184,7 +199,12 @@ func (i *Instance) removeEntity(id string) {
 
 // executeCommand выполняет команду в контексте уровня
 func (i *Instance) executeCommand(cmd domain.InternalCommand, actor *domain.Entity) {
-	handler, ok := i.Service.actionHandlers[cmd.Action] // Хендлеры пока берем из сервиса
+	// Проверяем, управляется ли актор агентом
+	if actor.ControllerID != "" {
+		i.recordAction(cmd, i.CurrentTick)
+	}
+
+	handler, ok := i.Service.actionHandlers[cmd.Action]
 	if !ok {
 		return
 	}
@@ -201,6 +221,7 @@ func (i *Instance) executeCommand(cmd domain.InternalCommand, actor *domain.Enti
 			i.addEntity(e)
 		},
 		Switcher: i.Service,
+		Rng:      i.Rng,
 	}
 
 	result, _ := handler(ctx, cmd.Payload)
@@ -214,6 +235,15 @@ func (i *Instance) executeCommand(cmd domain.InternalCommand, actor *domain.Enti
 	if result.Event != nil {
 		i.Service.processEvent(actor, result.Event)
 	}
+}
+
+func (i *Instance) recordAction(cmd domain.InternalCommand, tick int) {
+	i.Replay.Actions = append(i.Replay.Actions, domain.ReplayAction{
+		Tick:    tick,
+		Token:   cmd.Token,
+		Action:  cmd.Action,
+		Payload: cmd.Payload,
+	})
 }
 
 // processAITurn копия логики ИИ, адаптированная под Instance
@@ -252,7 +282,7 @@ func (i *Instance) processAITurn(npc *domain.Entity) {
 		return
 	}
 
-	action, _, dx, dy := systems.ComputeNPCAction(npc, target, i.World)
+	action, _, dx, dy := systems.ComputeNPCAction(npc, target, i.World, i.Rng)
 
 	switch action {
 	case domain.ActionAttack:

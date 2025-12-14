@@ -48,8 +48,8 @@ func createVCorridor(gameMap [][]domain.Tile, y1, y2, x int) {
 	}
 }
 
-func randRange(min, max int) int {
-	return rand.Intn(max-min+1) + min
+func (b *LevelBuilder) randRange(min, max int) int {
+	return b.rng.Intn(max-min+1) + min
 }
 
 // LevelBuilder предоставляет fluent API для создания уровней
@@ -65,10 +65,6 @@ type LevelBuilder struct {
 
 // NewLevel создает новый builder для уровня
 func NewLevel(level int, rng *rand.Rand) *LevelBuilder {
-	if rng == nil {
-		rng = rand.New(rand.NewSource(rand.Int63()))
-	}
-
 	return &LevelBuilder{
 		level:    level,
 		width:    MapWidth,
@@ -102,10 +98,10 @@ func (b *LevelBuilder) WithRooms(maxRooms int) *LevelBuilder {
 	// Генерируем комнаты
 	b.rooms = make([]Rect, 0, maxRooms)
 	for i := 0; i < maxRooms; i++ {
-		w := randRange(MinSize, MaxSize)
-		h := randRange(MinSize, MaxSize)
-		x := randRange(1, b.width-w-1)
-		y := randRange(1, b.height-h-1)
+		w := b.randRange(MinSize, MaxSize)
+		h := b.randRange(MinSize, MaxSize)
+		x := b.randRange(1, b.width-w-1)
+		y := b.randRange(1, b.height-h-1)
 
 		newRoom := Rect{X: x, Y: y, W: w, H: h}
 
@@ -155,8 +151,8 @@ func (b *LevelBuilder) SpawnEnemy(templateName string, count int) *LevelBuilder 
 		cx, cy := room.Center()
 
 		pos := domain.Position{
-			X: cx + randRange(-1, 1),
-			Y: cy + randRange(-1, 1),
+			X: cx + b.randRange(-1, 1),
+			Y: cy + b.randRange(-1, 1),
 		}
 
 		// Масштабируем статы по уровню

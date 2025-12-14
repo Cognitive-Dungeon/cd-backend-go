@@ -2,6 +2,7 @@ package dungeon
 
 import (
 	"cognitive-server/internal/domain"
+	"cognitive-server/pkg/logger"
 	"math/rand"
 	"time"
 )
@@ -20,6 +21,7 @@ const (
 func Generate(level int, r *rand.Rand) (*domain.GameWorld, []domain.Entity, domain.Position) {
 	// Если рандом не передан, создаем свой (хотя лучше передавать извне)
 	if r == nil {
+		logger.Log.Warn("[Level Generator] : Seed not setted")
 		r = rand.New(rand.NewSource(time.Now().UnixNano()))
 	}
 

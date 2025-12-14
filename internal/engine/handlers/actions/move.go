@@ -23,7 +23,7 @@ func HandleMove(ctx handlers.Context, p api.DirectionPayload) (handlers.Result, 
 		}
 
 		if actorHostile != targetHostile {
-			logMsg := systems.ApplyAttack(ctx.Actor, res.BlockedBy)
+			logMsg := systems.ApplyAttack(ctx.Actor, res.BlockedBy, ctx.Rng)
 			ctx.Actor.AI.Wait(domain.TimeCostAttackLight)
 			return handlers.Result{Msg: logMsg, MsgType: "COMBAT"}, nil
 		}

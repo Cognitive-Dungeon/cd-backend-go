@@ -19,7 +19,7 @@ func HandleAttack(ctx handlers.Context, p api.EntityPayload) (handlers.Result, e
 	target := res.Target
 
 	// 2. Вызов Системы Боя
-	logMsg := systems.ApplyAttack(ctx.Actor, target)
+	logMsg := systems.ApplyAttack(ctx.Actor, target, ctx.Rng)
 
 	// 3. Трата времени
 	handlers.SpendActionPoints(ctx.Actor, domain.TimeCostAttackLight)

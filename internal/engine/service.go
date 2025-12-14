@@ -12,10 +12,11 @@ import (
 	"cognitive-server/pkg/logger"
 	"fmt"
 	"math/rand"
-	"time"
 )
 
 type GameService struct {
+	Config Config
+
 	// Храним данные всех уровней (статические данные GameWorld)
 	Worlds map[int]*domain.GameWorld
 
@@ -36,10 +37,11 @@ type GameService struct {
 	eventHandlers  map[domain.EventType]handlers.HandlerFunc
 }
 
-func NewService() *GameService {
-	worlds, allEntities := buildInitialWorld()
+func NewService(cfg Config) *GameService {
+	worlds, allEntities, seeds := buildInitialWorld(cfg.Seed)
 
 	s := &GameService{
+		Config:          cfg,
 		Worlds:          worlds,
 		Instances:       make(map[int]*Instance),
 		EntityLocations: make(map[string]int),
@@ -56,10 +58,9 @@ func NewService() *GameService {
 
 	// 1. Создаем и запускаем Инстансы для каждого мира
 	for id, world := range worlds {
-		instance := NewInstance(id, world, s)
+		// Используем прекалькулированный сид
+		instance := NewInstance(id, world, s, seeds[id])
 		s.Instances[id] = instance
-
-		// Запускаем игровой цикл этого уровня в отдельной горутине
 		go instance.Run()
 	}
 
@@ -213,10 +214,12 @@ func (s *GameService) ChangeLevel(actor *domain.Entity, newLevelID int, targetPo
 	if !ok {
 		logger.Log.Infof("Generating new level %d on the fly...", newLevelID)
 
-		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		levelSeed := s.Config.Seed + int64(newLevelID)
+
+		rng := rand.New(rand.NewSource(levelSeed))
 		newWorld, newEntities, _ := dungeon.Generate(newLevelID, rng)
 
-		newInstance = NewInstance(newLevelID, newWorld, s)
+		newInstance = NewInstance(newLevelID, newWorld, s, levelSeed)
 
 		for i := range newEntities {
 			newInstance.addEntity(&newEntities[i])

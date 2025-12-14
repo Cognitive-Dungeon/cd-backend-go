@@ -3,6 +3,7 @@ package handlers
 import (
 	"cognitive-server/internal/domain"
 	"encoding/json"
+	"math/rand"
 )
 
 // EntityFinder описывает любую структуру, которая может находить сущность по ID.
@@ -27,6 +28,7 @@ type Context struct {
 	Worlds          map[int]*domain.GameWorld // Доступ ко всем мирам (нужен для переходов)
 	AddGlobalEntity func(*domain.Entity)      // Коллбэк для регистрации новой сущности в глобальном стейте
 	Switcher        WorldSwitcher
+	Rng             *rand.Rand
 }
 
 // Result - возвращает результат выполнения команды.

@@ -4,13 +4,14 @@ import (
 	"cognitive-server/internal/domain"
 	"cognitive-server/pkg/logger"
 	"math"
+	"math/rand"
 
 	"github.com/sirupsen/logrus"
 )
 
 // ComputeNPCAction решает, что делать NPC.
 // Возвращает (команда, цель_атаки_если_есть, dx, dy)
-func ComputeNPCAction(npc *domain.Entity, player *domain.Entity, w *domain.GameWorld) (action domain.ActionType, target *domain.Entity, dx, dy int) {
+func ComputeNPCAction(npc *domain.Entity, player *domain.Entity, w *domain.GameWorld, rng *rand.Rand) (action domain.ActionType, target *domain.Entity, dx, dy int) {
 	aiLogger := logger.Log.WithFields(logrus.Fields{
 		"component":  "ai_system",
 		"npc_id":     npc.ID,
