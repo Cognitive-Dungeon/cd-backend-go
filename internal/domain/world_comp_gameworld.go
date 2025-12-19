@@ -1,10 +1,13 @@
 package domain
 
-import "errors"
+import (
+	"cognitive-server/internal/core/types"
+	"errors"
+)
 
 // --- REGISTRY (Поиск по ID) ---
 
-func (w *GameWorld) GetEntity(id string) *Entity {
+func (w *GameWorld) GetEntity(id types.EntityID) *Entity {
 	if w.EntityRegistry == nil {
 		return nil
 	}
@@ -13,12 +16,12 @@ func (w *GameWorld) GetEntity(id string) *Entity {
 
 func (w *GameWorld) RegisterEntity(e *Entity) {
 	if w.EntityRegistry == nil {
-		w.EntityRegistry = make(map[string]*Entity)
+		w.EntityRegistry = make(map[types.EntityID]*Entity)
 	}
 	w.EntityRegistry[e.ID] = e
 }
 
-func (w *GameWorld) UnregisterEntity(id string) {
+func (w *GameWorld) UnregisterEntity(id types.EntityID) {
 	if w.EntityRegistry != nil {
 		delete(w.EntityRegistry, id)
 	}

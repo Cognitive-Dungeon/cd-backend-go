@@ -1,12 +1,14 @@
 package domain
 
+import "cognitive-server/internal/core/types"
+
 // --- СУЩНОСТЬ ---
 
 type Entity struct {
 	// Идентификация
-	ID   string     `json:"id"`
-	Type EntityType `json:"type"`
-	Name string     `json:"name"`
+	ID   types.EntityID `json:"id"`
+	Type EntityType     `json:"type"`
+	Name string         `json:"name"`
 
 	// ControllerID - ID сессии/пользователя, который управляет этой сущностью.
 	// Если пусто - управляется AI.
