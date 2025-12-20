@@ -1,169 +1,171 @@
 package types
 
 import (
-	"errors"
-	"hash/fnv"
+	"fmt"
 	"strconv"
-	"sync"
-	"time"
 )
 
-// EntityID - это 64-битный уникальный идентификатор.
-// Структура: [ Timestamp (41) | ShardID (8) | TypeID (5) | Sequence (10) ]
+// EntityID — 64-битный идентификатор сущности.
+//
+// EntityID является value-type и предназначен для дешёвого копирования,
+// сериализации и сравнения.
+//
+// Формат битов (от старших к младшим):
+//
+//	[ Shard (8) | Type (8) | Generation (16) | Index (32) ]
+//
+// Где:
+//   - Shard — идентификатор мира / сервера
+//   - Type — тип сущности (Player, NPC, Item и т.д.)
+//   - Generation — версия слота сущности (защита от устаревших ссылок)
+//   - Index — индекс сущности в ECS-массиве
+//
+// Такой формат позволяет:
+//   - быстро адресовать сущности в ECS
+//   - определять принадлежность сущности миру
+//   - безопасно обнаруживать stale references
 type EntityID uint64
 
+// NilEntityID — нулевой идентификатор сущности.
+//
+// Используется как аналог nil для случаев, когда сущность отсутствует
+// или ссылка ещё не инициализирована.
+const NilEntityID EntityID = 0
+
+// Конфигурация битов EntityID.
+//
+// Общее количество бит — 64.
 const (
-	// Конфигурация битов
-	bitsSeq   = 10
-	bitsType  = 5
+	// bitsIndex — количество бит, выделенных под индекс сущности.
+	// Позволяет адресовать до ~4.29 миллиарда сущностей в рамках одного шарда.
+	bitsIndex = 32
+
+	// bitsGen — количество бит для поколения слота.
+	// Используется для защиты от использования устаревших ссылок.
+	bitsGen = 16
+
+	// bitsType — количество бит для типа сущности.
+	// Позволяет определить до 256 различных типов сущностей.
+	bitsType = 8
+
+	// bitsShard — количество бит для идентификатора шарда (мира).
+	// Позволяет использовать до 256 миров / серверов.
 	bitsShard = 8
-	bitsTime  = 41
 
-	// Сдвиги
-	shiftType  = bitsSeq
-	shiftShard = bitsSeq + bitsType
-	shiftTime  = bitsSeq + bitsType + bitsShard
+	// Сдвиги битов
+	shiftGen   = bitsIndex
+	shiftType  = bitsIndex + bitsGen
+	shiftShard = bitsIndex + bitsGen + bitsType
 
-	// Маски
-	maskSeq   = (1 << bitsSeq) - 1
+	// Маски для извлечения значений
+	maskIndex = (1 << bitsIndex) - 1
+	maskGen   = (1 << bitsGen) - 1
 	maskType  = (1 << bitsType) - 1
 	maskShard = (1 << bitsShard) - 1
-
-	// Эпоха: 4 Декабря 2025 года
-	customEpoch = 1764806400000
 )
 
-// NilID - нулевой идентификатор (аналог nil)
-const NilID EntityID = 0
-
-// --- ГЕНЕРАТОР ---
-
-type IDGenerator struct {
-	mu       sync.Mutex
-	shardID  uint64
-	lastTime uint64
-	sequence uint64
+// PackEntityID собирает EntityID из составных частей.
+//
+// Параметры:
+//   - shardID — идентификатор текущего мира / сервера
+//   - typeID — тип сущности
+//   - gen — поколение слота сущности
+//   - index — индекс сущности в ECS-массиве
+//
+// Функция не выполняет проверок диапазонов значений и предполагает,
+// что входные данные валидны.
+func PackEntityID(
+	shardID uint8,
+	typeID uint8,
+	gen uint16,
+	index uint32,
+) EntityID {
+	return EntityID(
+		(uint64(shardID) << shiftShard) |
+			(uint64(typeID) << shiftType) |
+			(uint64(gen) << shiftGen) |
+			uint64(index),
+	)
 }
 
-// NewGenerator создает генератор для конкретного шарда (сервера)
-func NewGenerator(shardID uint8) *IDGenerator {
-	return &IDGenerator{
-		shardID: uint64(shardID),
-	}
+// Index возвращает индекс сущности в ECS-массиве.
+func (id EntityID) Index() uint32 {
+	return uint32(id & maskIndex)
 }
 
-// NextID создает новый уникальный ID указанного типа
-func (g *IDGenerator) NextID(typeID uint8) (EntityID, error) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-
-	now := uint64(time.Now().UnixMilli()) - customEpoch
-
-	if now < g.lastTime {
-		return 0, errors.New("clock moved backwards")
-	}
-
-	if now == g.lastTime {
-		g.sequence = (g.sequence + 1) & maskSeq
-		if g.sequence == 0 {
-			// Ждем следующую миллисекунду при переполнении
-			for now <= g.lastTime {
-				now = uint64(time.Now().UnixMilli()) - customEpoch
-			}
-		}
-	} else {
-		g.sequence = 0
-		g.lastTime = now
-	}
-
-	id := (now << shiftTime) |
-		(g.shardID << shiftShard) |
-		(uint64(typeID&uint8(maskType)) << shiftType) |
-		(g.sequence)
-
-	return EntityID(id), nil
+// Generation возвращает поколение слота сущности.
+//
+// Используется для обнаружения устаревших ссылок на уничтоженные сущности.
+func (id EntityID) Generation() uint16 {
+	return uint16((id >> shiftGen) & maskGen)
 }
 
-// --- МЕТОДЫ EntityID ---
-
-// Sequence возвращает порядковый номер ID в пределах миллисекунды.
-// Возвращает значение в диапазоне 0-1023.
-func (id EntityID) Sequence() uint16 {
-	return uint16(id & maskSeq)
-}
-
+// Type возвращает тип сущности.
 func (id EntityID) Type() uint8 {
 	return uint8((id >> shiftType) & maskType)
 }
 
+// Shard возвращает идентификатор шарда, которому принадлежит сущность.
 func (id EntityID) Shard() uint8 {
 	return uint8((id >> shiftShard) & maskShard)
 }
 
-func (id EntityID) Time() time.Time {
-	ts := (uint64(id) >> shiftTime) + customEpoch
-	return time.UnixMilli(int64(ts))
-}
-
+// IsNil проверяет, является ли идентификатор нулевым.
 func (id EntityID) IsNil() bool {
-	return id == 0
+	return id == NilEntityID
 }
 
-// String возвращает строковое представление (для логов)
+// IsLocal проверяет, принадлежит ли сущность текущему шарду.
+func (id EntityID) IsLocal(currentShard uint8) bool {
+	return id.Shard() == currentShard
+}
+
+// String возвращает человекочитаемое строковое представление EntityID.
+//
+// Предназначено для логирования и отладки.
 func (id EntityID) String() string {
-	return strconv.FormatUint(uint64(id), 10)
+	if id.IsNil() {
+		return "<nil>"
+	}
+
+	return fmt.Sprintf(
+		"[shard=%d type=%d gen=%d idx=%d]",
+		id.Shard(),
+		// TODO: Взять код из types/enums/entities
+		id.Type(),
+		id.Generation(),
+		id.Index(),
+	)
 }
 
-// --- JSON INTERFACE ---
-
-// MarshalJSON превращает uint64 в string для JSON (JS safe)
+// MarshalJSON сериализует EntityID в JSON как строку.
+//
+// Это необходимо для предотвращения потери точности при работе с
+// JavaScript и другими средами, не поддерживающими uint64.
 func (id EntityID) MarshalJSON() ([]byte, error) {
-	return []byte(`"` + id.String() + `"`), nil
+	return []byte(`"` + strconv.FormatUint(uint64(id), 10) + `"`), nil
 }
 
-// UnmarshalJSON парсит строку или число из JSON
+// UnmarshalJSON десериализует EntityID из JSON.
+//
+// Поддерживаются как строковое, так и числовое представление.
 func (id *EntityID) UnmarshalJSON(data []byte) error {
 	s := string(data)
-	// Убираем кавычки, если есть
-	if len(s) > 1 && s[0] == '"' && s[len(s)-1] == '"' {
+
+	if len(s) > 1 && s[0] == '"' {
 		s = s[1 : len(s)-1]
 	}
-	// Обработка пустой строки
+
 	if s == "" {
-		*id = EntityID(0)
+		*id = NilEntityID
 		return nil
 	}
-	val, err := strconv.ParseUint(s, 10, 64)
+
+	v, err := strconv.ParseUint(s, 10, 64)
 	if err != nil {
 		return err
 	}
-	*id = EntityID(val)
+
+	*id = EntityID(v)
 	return nil
-}
-
-// GenerateDeterministicID генерирует ID на основе строки.
-// Это нужно для статических объектов (выходы, ключевые NPC), ID которых
-// должны быть известны до их создания.
-func GenerateDeterministicID(seed string, typeID uint8) EntityID {
-	// 1. Хешируем строку в uint64
-	h := fnv.New64a()
-	h.Write([]byte(seed))
-	hash := h.Sum64()
-
-	// 2. Накладываем маску, чтобы сохранить структуру нашего Snowflake ID
-	// Очищаем биты типа
-	hash &^= uint64(maskType) << shiftType
-	// Устанавливаем биты типа
-	hash |= uint64(typeID&maskType) << shiftType
-
-	return EntityID(hash)
-}
-
-// GenerateRandomID генерирует случайный ID,
-// используя внешний RNG, чтобы сохранить детерминизм генерации уровня.
-func GenerateRandomID(rngUint64 uint64, typeID uint8) EntityID {
-	id := rngUint64
-	id &^= (uint64(maskType) << shiftType)
-	id |= (uint64(typeID&maskType) << shiftType)
-	return EntityID(id)
 }
