@@ -26,9 +26,9 @@ func (s *Server) Run() error {
 	mux := http.DefaultServeMux
 
 	// Регистрируем роуты
-	mux.HandleFunc("/ws", s.handleWS)
-	mux.HandleFunc("/health", s.handleHealth)
-	mux.HandleFunc("/version", s.handleVersion)
+	mux.HandleFunc("/ws", enableCORS(s.handleWS))
+	mux.HandleFunc("/health", enableCORS(s.handleHealth))
+	mux.HandleFunc("/version", enableCORS(s.handleVersion))
 
 	// Debug Routes (из вашего debug.go, который теперь часть пакета server)
 	debugHandler := NewDebugHandler(s.Engine)
@@ -36,6 +36,17 @@ func (s *Server) Run() error {
 
 	logger.Log.Infof("🛡️  Cognitive Dungeon Server running on :%s", s.Port)
 	return http.ListenAndServe(":"+s.Port, mux)
+}
+
+func enableCORS(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Разрешаем запросы с фронтенда
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		// Разрешаем заголовки, если фронт шлет что-то нестандартное
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+		next(w, r)
+	}
 }
 
 // handleWS обрабатывает подключение по WebSocket
