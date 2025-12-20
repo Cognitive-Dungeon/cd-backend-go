@@ -1,7 +1,5 @@
 package domain
 
-import "cognitive-server/internal/core/types"
-
 type Position struct {
 	X int `json:"x"`
 	Y int `json:"y"`
@@ -25,6 +23,6 @@ type GameWorld struct {
 	// SpatialHash: Индекс позиции -> Список сущностей
 	// Ключ: Y * Width + X
 	// json:"-" означает, что мы НЕ отправляем этот индекс клиенту (экономия трафика)
-	SpatialHash    map[int][]*Entity          `json:"-"`
-	EntityRegistry map[types.EntityID]*Entity `json:"-"`
+	SpatialHash    map[int][]*Entity  `json:"-"`
+	EntityRegistry map[string]*Entity `json:"-"`
 }

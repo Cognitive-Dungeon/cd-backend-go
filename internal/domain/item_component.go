@@ -1,7 +1,5 @@
 package domain
 
-import "cognitive-server/internal/core/types"
-
 // ItemComponent описывает предмет в игре.
 // Любая Entity с этим компонентом становится предметом.
 type ItemComponent struct {
@@ -90,7 +88,7 @@ func (inv *InventoryComponent) AddItem(item *Entity) bool {
 }
 
 // RemoveItem удаляет предмет из инвентаря.
-func (inv *InventoryComponent) RemoveItem(itemID types.EntityID) *Entity {
+func (inv *InventoryComponent) RemoveItem(itemID string) *Entity {
 	if inv == nil {
 		return nil
 	}
@@ -110,7 +108,7 @@ func (inv *InventoryComponent) RemoveItem(itemID types.EntityID) *Entity {
 }
 
 // FindItem ищет предмет по ID.
-func (inv *InventoryComponent) FindItem(itemID types.EntityID) *Entity {
+func (inv *InventoryComponent) FindItem(itemID string) *Entity {
 	if inv == nil {
 		return nil
 	}
