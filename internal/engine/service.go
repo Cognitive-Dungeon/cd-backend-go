@@ -5,7 +5,6 @@ import (
 	"cognitive-server/internal/engine/handlers"
 	"cognitive-server/internal/engine/handlers/actions"
 	"cognitive-server/internal/engine/handlers/admin"
-	"cognitive-server/internal/engine/handlers/events"
 	"cognitive-server/internal/infrastructure/storage"
 	"cognitive-server/internal/network"
 	"cognitive-server/pkg/api"
@@ -116,8 +115,6 @@ func (s *GameService) registerHandlers() {
 	s.actionHandlers[domain.ActionEquip] = handlers.WithPayload(actions.HandleEquip)
 	s.actionHandlers[domain.ActionUnequip] = handlers.WithPayload(actions.HandleUnequip)
 
-	s.eventHandlers[domain.EventLevelTransition] = handlers.WithPayload(events.HandleLevelTransition)
-
 	// Admin / Cheats
 	s.actionHandlers[domain.ActionAdminTeleport] = handlers.WithPayload(admin.HandleTeleport)
 	s.actionHandlers[domain.ActionAdminSpawn] = handlers.WithPayload(admin.HandleSpawn)
@@ -214,84 +211,80 @@ func (s *GameService) ProcessCommand(cmd api.ClientCommand) {
 	}
 }
 
-func (s *GameService) ChangeLevel(actor *domain.Entity, newLevelID int, targetPosID domain.EntityID) {
+// GetWorld гарантирует, что уровень существует и возвращает данные мира.
+// Это безопасно для чтения из горутины логики (если мы только читаем компоненты).
+func (s *GameService) GetWorld(levelID int) *domain.GameWorld {
+	// 1. Если инстанс уже запущен — возвращаем мир
+	if inst, ok := s.Instances[levelID]; ok {
+		return inst.World
+	}
+
+	// 2. Если нет — генерируем на лету (как раньше было в ChangeLevel)
+	// Важно: здесь мы создаем инстанс, но пока не запускаем его цикл, если это просто "подглядывание".
+	// Но для простоты запустим сразу.
+
+	logger.Log.Infof("Lazy generating level %d...", levelID)
+
+	// Детерминированный сид
+	levelSeed := s.Config.Seed + int64(levelID)
+
+	// Генерация
+	rng := rand.New(rand.NewSource(levelSeed))
+	newWorld, newEntities, _ := dungeon.Generate(levelID, rng) // <-- Ваш генератор
+
+	newInstance := NewInstance(levelID, newWorld, s, levelSeed)
+
+	// Загрузка сущностей
+	for i := range newEntities {
+		newInstance.addEntity(&newEntities[i])
+	}
+
+	s.Instances[levelID] = newInstance
+	go newInstance.Run() // Запускаем жизнь на уровне
+
+	return newInstance.World
+}
+
+// Teleport выполняет "грязную работу" по переносу данных между инстансами.
+func (s *GameService) Teleport(actor *domain.Entity, targetLevel int, targetPos domain.Position) {
 	oldLevelID := actor.Level
+	logger.Log.Infof("Teleporting %s: L%d -> L%d [%d,%d]", actor.ID, oldLevelID, targetLevel, targetPos.X, targetPos.Y)
 
-	logger.Log.Infof("Transitioning entity %s from Level %d to %d", actor.ID, oldLevelID, newLevelID)
-
-	// Сохраняем состояние игрока ПЕРЕД тем, как он попадет в новый мир.
-	// Это состояние будет записано в заголовок реплея нового уровня.
-	var playerSnapshot json.RawMessage
-	if serialized, err := json.Marshal(actor); err == nil {
-		playerSnapshot = serialized
-	} else {
-		logger.Log.Errorf("Failed to snapshot player: %v", err)
-	}
-
-	// 1. Получаем (или создаем) целевой Инстанс
-	newInstance, ok := s.Instances[newLevelID]
-	if !ok {
-		logger.Log.Infof("Generating new level %d on the fly...", newLevelID)
-
-		levelSeed := s.Config.Seed + int64(newLevelID)
-
-		rng := rand.New(rand.NewSource(levelSeed))
-		newWorld, newEntities, _ := dungeon.Generate(newLevelID, rng)
-
-		newInstance = NewInstance(newLevelID, newWorld, s, levelSeed)
-		newInstance.Replay.PlayerState = playerSnapshot
-
-		for i := range newEntities {
-			newInstance.addEntity(&newEntities[i])
-		}
-
-		s.Instances[newLevelID] = newInstance
-		go newInstance.Run()
-	}
-
-	// 2. Удаляем актора из СТАРОГО инстанса
+	// 1. Удаляем из старого инстанса (Thread-safe via Channel)
 	if oldInstance, ok := s.Instances[oldLevelID]; ok {
 		oldInstance.LeaveChan <- actor.ID
 	}
 
-	// 3. Вычисляем позицию в НОВОМ инстансе
-	targetPos := domain.Position{X: 1, Y: 1}
-
-	// Ищем в реестре мира (это безопасно, т.к. GameWorld - это данные)
-	targetEntity := newInstance.World.GetEntity(targetPosID)
-	if targetEntity != nil {
-		targetPos = targetEntity.Pos
-	} else {
-		// Fallback: центр карты
-		cx, cy := newInstance.World.Width/2, newInstance.World.Height/2
-		if !newInstance.World.Map[cy][cx].IsWall {
-			targetPos = domain.Position{X: cx, Y: cy}
-		}
-	}
-
-	// 4. Обновляем данные актора
-	actor.Level = newLevelID
+	// 2. Обновляем данные сущности
+	// Важно: мы меняем данные "на лету", пока сущность "в лимбе" между каналами.
+	actor.Level = targetLevel
 	actor.Pos = targetPos
 
+	// Сброс состояния AI и кэша зрения
 	if actor.AI != nil {
 		actor.AI.State = domain.AIStateIdle
-		// Синхронизация времени
-		actor.AI.NextActionTick = newInstance.CurrentTick
+		// В новом инстансе будет свое время (Tick), нужно синхронизироваться
+		// Это сделает addEntity внутри инстанса
 	}
-
-	// Invalidate FOV
 	if actor.Vision != nil {
 		actor.Vision.IsDirty = true
-		actor.Vision.CachedVisibleTiles = nil // Force clear old map
+		actor.Vision.CachedVisibleTiles = nil
 	}
 
-	// 5. Обновляем Глобальный Индекс
-	s.EntityLocations[actor.ID] = newLevelID
+	// 3. Обновляем глобальный индекс
+	s.EntityLocations[actor.ID] = targetLevel
 
-	// 6. Добавляем актора в НОВЫЙ инстанс
-	newInstance.JoinChan <- actor
-
-	newInstance.AddLog(fmt.Sprintf("%s переходит на уровень %d.", actor.Name, newLevelID), "INFO")
+	// 4. Добавляем в новый инстанс
+	// (GetWorld здесь уже не нужен, т.к. мы знаем, что он есть — Rule его вызывало)
+	if newInstance, ok := s.Instances[targetLevel]; ok {
+		newInstance.JoinChan <- actor
+		newInstance.AddLog(fmt.Sprintf("%s прибывает на уровень.", actor.Name), "INFO")
+	} else {
+		// Edge case: Если Rule вызвал GetWorld, а инстанс исчез (маловероятно)
+		// Восстанавливаем через GetWorld
+		s.GetWorld(targetLevel)
+		s.Instances[targetLevel].JoinChan <- actor
+	}
 }
 
 // LoadReplay инициализирует сервис и один инстанс на основе файла реплея

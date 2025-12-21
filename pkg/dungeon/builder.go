@@ -219,16 +219,20 @@ func (b *LevelBuilder) PlaceExit(direction string, targetLevel int) *LevelBuilde
 	var name string
 	var description string
 
+	var dir domain.TransitionDirection
+
 	if direction == "up" {
 		room = b.rooms[0] // Первая комната
 		symbol = '<'
 		name = "Лестница вверх"
 		description = "Старая каменная лестница, ведущая на поверхность."
+		dir = domain.TransitionDirectionUp
 	} else {
 		room = b.rooms[len(b.rooms)-1] // Последняя комната
 		symbol = '>'
 		name = "Лестница вниз"
 		description = "Темный проход, ведущий вглубь подземелья."
+		dir = domain.TransitionDirectionDown
 	}
 
 	cx, cy := room.Center()
@@ -249,8 +253,8 @@ func (b *LevelBuilder) PlaceExit(direction string, targetLevel int) *LevelBuilde
 	}
 
 	domain.SetComponent(b.components, exit.ID, domain.TransitionComponent{
-		TargetLevel: targetLevel,
-		TargetPosID: domain.EntityID(fmt.Sprintf("exit_%s_from_%d", oppositeDirection(direction), targetLevel)),
+		Type:      domain.TransitionTypeStairs,
+		Direction: dir,
 	})
 
 	b.entities = append(b.entities, exit)

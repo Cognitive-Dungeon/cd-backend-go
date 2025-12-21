@@ -13,7 +13,8 @@ type EntityFinder interface {
 }
 
 type WorldSwitcher interface {
-	ChangeLevel(entity *domain.Entity, targetLevel int, targetPosID domain.EntityID)
+	GetWorld(levelID int) *domain.GameWorld
+	Teleport(actor *domain.Entity, levelID int, pos domain.Position)
 }
 
 // Context передает хендлеру состояние мира.

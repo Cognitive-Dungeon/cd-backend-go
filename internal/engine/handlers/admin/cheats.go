@@ -15,25 +15,18 @@ type TeleportPayload struct {
 }
 
 func HandleTeleport(ctx handlers.Context, p TeleportPayload) (handlers.Result, error) {
-	// 1. Смена уровня, если нужно
-	if p.Level != 0 && p.Level != ctx.Actor.Level {
-		ctx.Switcher.ChangeLevel(ctx.Actor, p.Level, "") // "" targetPosID -> force coords later
-		// Координаты обновятся в следующем цикле или тут же, если Switcher синхронный.
-		// Но в нашей архитектуре ChangeLevel перемещает в дефолтную точку.
-		// Для точного телепорта лучше реализовать метод ForcePosition в GameService.
+	// Определяем целевой уровень
+	targetLevel := ctx.Actor.Level
+	if p.Level != 0 {
+		targetLevel = p.Level
 	}
 
-	// 2. Перемещение внутри уровня
-	err := ctx.World.UpdateEntityPos(ctx.Actor, p.X, p.Y)
-	if err != nil {
-		return handlers.Result{Msg: fmt.Sprintf("Teleport failed: %v", err), MsgType: "ERROR"}, nil
-	}
+	// Определяем целевую позицию
+	targetPos := domain.Position{X: p.X, Y: p.Y}
 
-	// Сброс кэша видимости
-	if ctx.Actor.Vision != nil {
-		ctx.Actor.Vision.IsDirty = true
-		ctx.Actor.Vision.CachedVisibleTiles = nil
-	}
+	// Используем новый примитив Teleport
+	// Он сам разберется с удалением из старого мира, добавлением в новый и ECS
+	ctx.Switcher.Teleport(ctx.Actor, targetLevel, targetPos)
 
 	return handlers.Result{Msg: "⚡ Teleported via Admin Magic", MsgType: "INFO"}, nil
 }

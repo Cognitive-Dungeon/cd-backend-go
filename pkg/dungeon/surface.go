@@ -40,8 +40,8 @@ func GenerateSurface() (*domain.GameWorld, []domain.Entity, domain.Position) {
 	}
 
 	domain.SetComponent(world.Components, exit.ID, domain.TransitionComponent{
-		TargetLevel: 1,
-		TargetPosID: domain.EntityID("exit_up_from_1"),
+		Type:      domain.TransitionTypeStairs,
+		Direction: domain.TransitionDirectionDown,
 	})
 
 	entities = append(entities, exit)
