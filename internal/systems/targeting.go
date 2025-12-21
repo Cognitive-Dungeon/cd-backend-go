@@ -6,7 +6,7 @@ import (
 
 // EntityProvider — интерфейс для поиска сущностей (чтобы не зависеть от GameService напрямую)
 type EntityProvider interface {
-	GetEntity(id string) *domain.Entity
+	GetEntity(id domain.EntityID) *domain.Entity
 }
 
 // ValidationResult — результат проверки цели
@@ -21,7 +21,7 @@ type ValidationResult struct {
 // Параметры:
 // - rangeLimit: максимальная дистанция (1.5 для соседней клетки/диагонали).
 // - needLOS: нужна ли прямая видимость (true для атаки, false для рычагов под ногами).
-func ValidateInteraction(actor *domain.Entity, targetID string, rangeLimit float64, needLOS bool, finder EntityProvider, w *domain.GameWorld) ValidationResult {
+func ValidateInteraction(actor *domain.Entity, targetID domain.EntityID, rangeLimit float64, needLOS bool, finder EntityProvider, w *domain.GameWorld) ValidationResult {
 	// 1. Поиск цели
 	target := finder.GetEntity(targetID)
 	if target == nil {

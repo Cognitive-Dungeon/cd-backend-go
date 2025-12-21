@@ -29,7 +29,7 @@ func TryPickup(actor *domain.Entity, item *domain.Entity, world *domain.GameWorl
 
 // --- DROP ---
 
-func TryDrop(actor *domain.Entity, itemID string, count int, world *domain.GameWorld) (string, error) {
+func TryDrop(actor *domain.Entity, itemID domain.EntityID, count int, world *domain.GameWorld) (string, error) {
 	if actor.Inventory == nil {
 		return "", fmt.Errorf("нет инвентаря")
 	}
@@ -72,7 +72,7 @@ func placeOnGround(actor *domain.Entity, item *domain.Entity, world *domain.Game
 
 // --- EQUIP ---
 
-func TryEquip(actor *domain.Entity, itemID string) (string, error) {
+func TryEquip(actor *domain.Entity, itemID domain.EntityID) (string, error) {
 	if actor.Inventory == nil || actor.Equipment == nil {
 		return "", fmt.Errorf("невозможно экипировать")
 	}
@@ -113,7 +113,7 @@ func TryEquip(actor *domain.Entity, itemID string) (string, error) {
 
 // --- UNEQUIP ---
 
-func TryUnequip(actor *domain.Entity, itemID string) (string, error) {
+func TryUnequip(actor *domain.Entity, itemID domain.EntityID) (string, error) {
 	if actor.Equipment == nil {
 		return "", fmt.Errorf("нет слотов экипировки")
 	}
@@ -135,7 +135,7 @@ func TryUnequip(actor *domain.Entity, itemID string) (string, error) {
 
 // --- USE (Consumables) ---
 
-func TryUse(actor *domain.Entity, itemID string) (string, error) {
+func TryUse(actor *domain.Entity, itemID domain.EntityID) (string, error) {
 	if actor.Inventory == nil {
 		return "", fmt.Errorf("нет инвентаря")
 	}

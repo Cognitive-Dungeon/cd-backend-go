@@ -1,6 +1,7 @@
 package network
 
 import (
+	"cognitive-server/internal/domain"
 	"cognitive-server/pkg/api"
 	"sync"
 )
@@ -19,37 +20,37 @@ func NewBroadcaster() *Broadcaster {
 }
 
 // Register создает личный канал для сущности (Игрока или Бота)
-func (b *Broadcaster) Register(entityID string) chan api.ServerResponse {
+func (b *Broadcaster) Register(entityID domain.EntityID) chan api.ServerResponse {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
 	// Если канал был, закрываем
-	if old, ok := b.subscribers[entityID]; ok {
+	if old, ok := b.subscribers[entityID.String()]; ok {
 		close(old)
 	}
 
 	ch := make(chan api.ServerResponse, 100)
-	b.subscribers[entityID] = ch
+	b.subscribers[entityID.String()] = ch
 	return ch
 }
 
 // Unregister удаляет подписчика
-func (b *Broadcaster) Unregister(entityID string) {
+func (b *Broadcaster) Unregister(entityID domain.EntityID) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if ch, ok := b.subscribers[entityID]; ok {
+	if ch, ok := b.subscribers[entityID.String()]; ok {
 		close(ch)
-		delete(b.subscribers, entityID)
+		delete(b.subscribers, entityID.String())
 	}
 }
 
 // SendTo отправляет сообщение конкретному ID (Unicast)
-func (b *Broadcaster) SendTo(entityID string, msg api.ServerResponse) {
+func (b *Broadcaster) SendTo(entityID domain.EntityID, msg api.ServerResponse) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
-	if ch, ok := b.subscribers[entityID]; ok {
+	if ch, ok := b.subscribers[entityID.String()]; ok {
 		select {
 		case ch <- msg:
 		default:
@@ -73,10 +74,10 @@ func (b *Broadcaster) Broadcast(msg api.ServerResponse) {
 
 // HasSubscriber проверяет, управляется ли сущность кем-то
 // Используется для оптимизации (чтобы не считать AI для тех, кого нет)
-func (b *Broadcaster) HasSubscriber(entityID string) bool {
+func (b *Broadcaster) HasSubscriber(entityID domain.EntityID) bool {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	_, ok := b.subscribers[entityID]
+	_, ok := b.subscribers[entityID.String()]
 	return ok
 }
 

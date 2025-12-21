@@ -11,7 +11,7 @@ import (
 func HandleDrop(ctx handlers.Context, p api.ItemPayload) (handlers.Result, error) {
 	// Для Drop не нужен TargetingSystem, так как цель - предмет ВНУТРИ инвентаря, а не на карте.
 
-	msg, err := systems.TryDrop(ctx.Actor, p.ItemID, p.Count, ctx.World)
+	msg, err := systems.TryDrop(ctx.Actor, domain.EntityID(p.ItemID), p.Count, ctx.World)
 	if err != nil {
 		return handlers.Result{Msg: err.Error(), MsgType: "ERROR"}, nil
 	}

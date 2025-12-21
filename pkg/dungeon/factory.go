@@ -6,10 +6,10 @@ import (
 )
 
 // CreatePlayer generates a new player entity with default starting gear
-func CreatePlayer(id string, rng *rand.Rand) *domain.Entity {
+func CreatePlayer(id domain.EntityID, rng *rand.Rand) *domain.Entity {
 	// Создаем героя на основе шаблона
 	p := EntityTemplate{
-		Name: "Герой " + id[:4], // Берем первые 4 символа ID для краткости
+		Name: "Герой " + id.String()[:4], // Берем первые 4 символа ID для краткости
 		Type: domain.EntityTypePlayer,
 		Render: domain.RenderComponent{
 			Symbol: '@',
@@ -25,7 +25,7 @@ func CreatePlayer(id string, rng *rand.Rand) *domain.Entity {
 		},
 	}.SpawnEntity(domain.Position{}, 0, rng)
 
-	p.ID = id
+	p.ID = domain.EntityID(id)
 	// Инициализируем пустой инвентарь и экипировку
 	p.Inventory = &domain.InventoryComponent{Items: []*domain.Entity{}, MaxSlots: 20, MaxWeight: 100}
 	p.Equipment = &domain.EquipmentComponent{}

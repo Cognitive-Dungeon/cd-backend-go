@@ -7,10 +7,11 @@ import (
 	"cognitive-server/pkg/dungeon"
 	"cognitive-server/pkg/logger"
 	"cognitive-server/pkg/utils"
-	"github.com/sirupsen/logrus"
 	"math/rand"
 	"net/http"
 	"time"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/gorilla/websocket"
 )
@@ -34,7 +35,7 @@ type Client struct {
 	Game     *engine.GameService
 	Conn     *websocket.Conn
 	Send     chan api.ServerResponse
-	EntityID string
+	EntityID domain.EntityID
 }
 
 func NewClient(game *engine.GameService, conn *websocket.Conn) *Client {
@@ -84,7 +85,7 @@ func (c *Client) readPump() {
 		return
 	}
 
-	c.EntityID = loginCmd.Token
+	c.EntityID = domain.EntityID(loginCmd.Token)
 	if c.EntityID == "" {
 		c.EntityID = utils.GenerateID()
 	}
@@ -96,7 +97,7 @@ func (c *Client) readPump() {
 		// Сид зависит только от имени игрока.
 		// Это гарантирует, что и в Live-режиме, и в Replay-режиме
 		// предметы в инвентаре получат одни и те же ID.
-		playerSeed := utils.StringToSeed(c.EntityID)
+		playerSeed := utils.StringToSeed(c.EntityID.String())
 		playerRng := rand.New(rand.NewSource(playerSeed))
 
 		newPlayer := dungeon.CreatePlayer(c.EntityID, playerRng)
@@ -127,7 +128,7 @@ func (c *Client) readPump() {
 		ent = newPlayer
 	}
 
-	ent.ControllerID = "session_" + c.EntityID
+	ent.ControllerID = "session_" + c.EntityID.String()
 	logger.Log.WithFields(logrus.Fields{
 		"entity_id": c.EntityID,
 		"name":      ent.Name,
@@ -145,7 +146,7 @@ func (c *Client) readPump() {
 	}()
 
 	// Отправляем INIT (триггер первой отрисовки)
-	c.Game.ProcessCommand(api.ClientCommand{Action: "INIT", Token: c.EntityID})
+	c.Game.ProcessCommand(api.ClientCommand{Action: "INIT", Token: c.EntityID.String()})
 
 	// 4. ЦИКЛ ЧТЕНИЯ КОМАНД
 	for {
@@ -157,7 +158,7 @@ func (c *Client) readPump() {
 			}
 			break
 		}
-		cmd.Token = c.EntityID
+		cmd.Token = c.EntityID.String()
 		c.Game.ProcessCommand(cmd)
 	}
 }

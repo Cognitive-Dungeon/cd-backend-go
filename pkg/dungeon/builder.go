@@ -239,7 +239,7 @@ func (b *LevelBuilder) PlaceExit(direction string, targetLevel int) *LevelBuilde
 	})
 
 	exit := domain.Entity{
-		ID:    fmt.Sprintf("exit_%s_from_%d", direction, b.level),
+		ID:    domain.EntityID(fmt.Sprintf("exit_%s_from_%d", direction, b.level)),
 		Type:  domain.EntityTypeExit,
 		Name:  name,
 		Pos:   domain.Position{X: cx, Y: cy},
@@ -277,7 +277,7 @@ func (b *LevelBuilder) Build() (*domain.GameWorld, []domain.Entity, domain.Posit
 		Height:         b.height,
 		Level:          b.level,
 		SpatialHash:    make(map[int][]*domain.Entity),
-		EntityRegistry: make(map[string]*domain.Entity),
+		EntityRegistry: make(map[domain.EntityID]*domain.Entity),
 	}
 
 	return world, b.entities, b.GetStartPos()

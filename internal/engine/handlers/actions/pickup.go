@@ -10,7 +10,7 @@ import (
 // HandlePickup обрабатывает команду PICKUP - подбор предмета с земли
 func HandlePickup(ctx handlers.Context, p api.ItemPayload) (handlers.Result, error) {
 	// 1. Валидация цели (TargetingSystem)
-	res := systems.ValidateInteraction(ctx.Actor, p.ItemID, 1.5, true, ctx.Finder, ctx.World)
+	res := systems.ValidateInteraction(ctx.Actor, domain.EntityID(p.ItemID), 1.5, true, ctx.Finder, ctx.World)
 	if !res.Valid {
 		return handlers.Result{Msg: res.Message, MsgType: "ERROR"}, nil
 	}

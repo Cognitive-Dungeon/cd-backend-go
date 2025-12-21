@@ -1,6 +1,7 @@
 package events
 
 import (
+	"cognitive-server/internal/domain"
 	"cognitive-server/internal/engine/handlers"
 	"cognitive-server/pkg/logger"
 	"encoding/json"
@@ -8,8 +9,8 @@ import (
 
 func HandleLevelTransition(ctx handlers.Context, eventData json.RawMessage) (handlers.Result, error) {
 	var transitionEvent struct {
-		TargetLevel int    `json:"targetLevel"`
-		TargetPosId string `json:"targetPosId"`
+		TargetLevel int             `json:"targetLevel"`
+		TargetPosId domain.EntityID `json:"targetPosId"`
 	}
 	if err := json.Unmarshal(eventData, &transitionEvent); err != nil {
 		logger.Log.Errorf("Error parsing LEVEL_TRANSITION event: %v", err)

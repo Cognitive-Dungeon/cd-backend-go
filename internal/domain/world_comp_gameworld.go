@@ -6,7 +6,7 @@ import (
 
 // --- REGISTRY (Поиск по ID) ---
 
-func (w *GameWorld) GetEntity(id string) *Entity {
+func (w *GameWorld) GetEntity(id EntityID) *Entity {
 	if w.EntityRegistry == nil {
 		return nil
 	}
@@ -15,12 +15,12 @@ func (w *GameWorld) GetEntity(id string) *Entity {
 
 func (w *GameWorld) RegisterEntity(e *Entity) {
 	if w.EntityRegistry == nil {
-		w.EntityRegistry = make(map[string]*Entity)
+		w.EntityRegistry = make(map[EntityID]*Entity)
 	}
 	w.EntityRegistry[e.ID] = e
 }
 
-func (w *GameWorld) UnregisterEntity(id string) {
+func (w *GameWorld) UnregisterEntity(id EntityID) {
 	if w.EntityRegistry != nil {
 		delete(w.EntityRegistry, id)
 	}

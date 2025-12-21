@@ -27,13 +27,13 @@ type GameService struct {
 	Instances map[int]*Instance
 
 	// Индекс: где находится сущность? (EntityID -> LevelID)
-	EntityLocations map[string]int
+	EntityLocations map[domain.EntityID]int
 
 	Storage *storage.ReplayService
 
 	// Каналы для main.go (входная точка)
 	JoinChan       chan *domain.Entity
-	DisconnectChan chan string
+	DisconnectChan chan domain.EntityID
 
 	Hub *network.Broadcaster
 
@@ -49,12 +49,12 @@ func NewService(cfg Config) *GameService {
 		Config:          cfg,
 		Worlds:          worlds,
 		Instances:       make(map[int]*Instance),
-		EntityLocations: make(map[string]int),
+		EntityLocations: make(map[domain.EntityID]int),
 
 		Storage: storage.NewReplayService("./replays"),
 
 		JoinChan:       make(chan *domain.Entity, 10),
-		DisconnectChan: make(chan string, 10),
+		DisconnectChan: make(chan domain.EntityID, 10),
 
 		Hub:            network.NewBroadcaster(),
 		actionHandlers: make(map[domain.ActionType]handlers.HandlerFunc),
@@ -87,7 +87,7 @@ func NewService(cfg Config) *GameService {
 }
 
 // GetEntity ищет сущность. Использует быстрый индекс EntityLocations.
-func (s *GameService) GetEntity(id string) *domain.Entity {
+func (s *GameService) GetEntity(id domain.EntityID) *domain.Entity {
 	// 1. Узнаем уровень
 	levelID, ok := s.EntityLocations[id]
 	if !ok {
@@ -178,7 +178,7 @@ func (s *GameService) AddPlayerToLevel(e *domain.Entity) {
 // ProcessCommand маршрутизирует команды в нужный инстанс
 func (s *GameService) ProcessCommand(cmd api.ClientCommand) {
 	// 1. Где игрок?
-	levelID, ok := s.EntityLocations[cmd.Token]
+	levelID, ok := s.EntityLocations[domain.EntityID(cmd.Token)]
 	if !ok {
 		// Игрока нет в индексе (возможно, только зашел и шлет INIT).
 		// В этом случае игнорируем, так как INIT при входе отправляется автоматически из main.go,
@@ -196,13 +196,13 @@ func (s *GameService) ProcessCommand(cmd api.ClientCommand) {
 	// 3. Формируем команду
 	internalCmd := domain.InternalCommand{
 		Action:  domain.ParseAction(cmd.Action),
-		Token:   cmd.Token,
+		Token:   domain.EntityID(cmd.Token),
 		Payload: cmd.Payload,
 	}
 
 	// 4. Находим объект актора (чтобы передать указатель, а не искать его снова внутри хода)
 	// Используем быстрый поиск по миру
-	actor := instance.World.GetEntity(cmd.Token)
+	actor := instance.World.GetEntity(domain.EntityID(cmd.Token))
 	if actor == nil {
 		return
 	}
@@ -214,7 +214,7 @@ func (s *GameService) ProcessCommand(cmd api.ClientCommand) {
 	}
 }
 
-func (s *GameService) ChangeLevel(actor *domain.Entity, newLevelID int, targetPosID string) {
+func (s *GameService) ChangeLevel(actor *domain.Entity, newLevelID int, targetPosID domain.EntityID) {
 	oldLevelID := actor.Level
 
 	logger.Log.Infof("Transitioning entity %s from Level %d to %d", actor.ID, oldLevelID, newLevelID)
@@ -367,7 +367,7 @@ func (s *GameService) LoadReplay(path string) error {
 		playerID := "hero_1"
 		playerSeed := utils.StringToSeed(playerID)
 		playerRng := rand.New(rand.NewSource(playerSeed))
-		player = dungeon.CreatePlayer(playerID, playerRng)
+		player = dungeon.CreatePlayer(domain.EntityID(playerID), playerRng)
 		player.Pos = startPos
 	}
 	// Задаем фейковый ControllerID, чтобы движок знал: этим персонажем управляет "внешняя сила" (реплей), а не AI.

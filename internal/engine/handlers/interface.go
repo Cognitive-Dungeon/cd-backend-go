@@ -9,11 +9,11 @@ import (
 // EntityFinder описывает любую структуру, которая может находить сущность по ID.
 // GameService неявно реализует этот интерфейс.
 type EntityFinder interface {
-	GetEntity(id string) *domain.Entity
+	GetEntity(id domain.EntityID) *domain.Entity
 }
 
 type WorldSwitcher interface {
-	ChangeLevel(entity *domain.Entity, targetLevel int, targetPosID string)
+	ChangeLevel(entity *domain.Entity, targetLevel int, targetPosID domain.EntityID)
 }
 
 // Context передает хендлеру состояние мира.

@@ -65,7 +65,7 @@ func readBinary(r io.Reader) (*domain.ReplaySession, error) {
 		if _, err := io.ReadFull(r, tokenBuf); err != nil {
 			return nil, err
 		}
-		act.Token = string(tokenBuf)
+		act.Token = domain.EntityID(tokenBuf)
 
 		if ah.PayloadLen > 0 {
 			act.Payload = make([]byte, ah.PayloadLen)

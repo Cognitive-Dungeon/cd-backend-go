@@ -9,7 +9,7 @@ import (
 
 // HandleUnequip обрабатывает команду UNEQUIP - снятие экипировки
 func HandleUnequip(ctx handlers.Context, p api.ItemPayload) (handlers.Result, error) {
-	msg, err := systems.TryUnequip(ctx.Actor, p.ItemID)
+	msg, err := systems.TryUnequip(ctx.Actor, domain.EntityID(p.ItemID))
 	if err != nil {
 		return handlers.Result{Msg: err.Error(), MsgType: "ERROR"}, nil
 	}

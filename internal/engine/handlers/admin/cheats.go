@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"cognitive-server/internal/domain"
 	"cognitive-server/internal/engine/handlers"
 	"cognitive-server/pkg/dungeon"
 	"fmt"
@@ -81,7 +82,7 @@ type KillPayload struct {
 }
 
 func HandleKill(ctx handlers.Context, p KillPayload) (handlers.Result, error) {
-	target := ctx.Finder.GetEntity(p.TargetID)
+	target := ctx.Finder.GetEntity(domain.EntityID(p.TargetID))
 	if target == nil {
 		return handlers.Result{Msg: "Target not found", MsgType: "ERROR"}, nil
 	}

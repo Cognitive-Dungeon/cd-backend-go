@@ -31,7 +31,7 @@ type Instance struct {
 	// Каналы коммуникации
 	CommandChan chan InstanceCommand // Команды от игроков
 	JoinChan    chan *domain.Entity  // Вход новых игроков
-	LeaveChan   chan string          // Выход/Смерть игроков
+	LeaveChan   chan domain.EntityID // Выход/Смерть игроков
 
 	// Ссылка на Service для доступа к Hub и глобальным настройкам
 	Service *GameService
@@ -60,7 +60,7 @@ func NewInstance(id int, world *domain.GameWorld, service *GameService, seed int
 		TurnManager: NewTurnManager(),
 		CommandChan: make(chan InstanceCommand, 100),
 		JoinChan:    make(chan *domain.Entity, 10),
-		LeaveChan:   make(chan string, 10),
+		LeaveChan:   make(chan domain.EntityID, 10),
 		Service:     service,
 		CurrentTick: 0,
 		Logs:        []api.LogEntry{},
@@ -182,7 +182,7 @@ func (i *Instance) addEntity(e *domain.Entity) {
 }
 
 // removeEntity удаляет сущность из уровня
-func (i *Instance) removeEntity(id string) {
+func (i *Instance) removeEntity(id domain.EntityID) {
 	// Удаляем из TurnManager
 	i.TurnManager.RemoveEntity(id)
 
@@ -290,7 +290,7 @@ func (i *Instance) processAITurn(npc *domain.Entity) {
 
 	switch action {
 	case domain.ActionAttack:
-		payload, _ := json.Marshal(api.EntityPayload{TargetID: target.ID})
+		payload, _ := json.Marshal(api.EntityPayload{TargetID: target.ID.String()})
 		i.executeCommand(domain.InternalCommand{Action: domain.ActionAttack, Token: npc.ID, Payload: payload}, npc)
 	case domain.ActionMove:
 		payload, _ := json.Marshal(api.DirectionPayload{Dx: dx, Dy: dy})

@@ -88,7 +88,7 @@ func (inv *InventoryComponent) AddItem(item *Entity) bool {
 }
 
 // RemoveItem удаляет предмет из инвентаря.
-func (inv *InventoryComponent) RemoveItem(itemID string) *Entity {
+func (inv *InventoryComponent) RemoveItem(itemID EntityID) *Entity {
 	if inv == nil {
 		return nil
 	}
@@ -108,7 +108,7 @@ func (inv *InventoryComponent) RemoveItem(itemID string) *Entity {
 }
 
 // FindItem ищет предмет по ID.
-func (inv *InventoryComponent) FindItem(itemID string) *Entity {
+func (inv *InventoryComponent) FindItem(itemID EntityID) *Entity {
 	if inv == nil {
 		return nil
 	}

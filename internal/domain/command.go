@@ -6,6 +6,6 @@ import "encoding/json"
 // Использует ActionType вместо string.
 type InternalCommand struct {
 	Action  ActionType      // Число! Быстро и безопасно.
-	Token   string          // ID сущности (Actor)
+	Token   EntityID        // ID сущности (Actor)
 	Payload json.RawMessage // Сырые данные (парсятся хендлером)
 }

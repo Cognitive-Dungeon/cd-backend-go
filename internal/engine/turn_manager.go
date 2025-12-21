@@ -9,13 +9,13 @@ import (
 // TurnManager manages the priority queue of entity turns.
 type TurnManager struct {
 	queue   TurnQueue
-	itemMap map[string]*TurnItem
+	itemMap map[domain.EntityID]*TurnItem
 }
 
 func NewTurnManager() *TurnManager {
 	return &TurnManager{
 		queue:   make(TurnQueue, 0),
-		itemMap: make(map[string]*TurnItem),
+		itemMap: make(map[domain.EntityID]*TurnItem),
 	}
 }
 
@@ -38,7 +38,7 @@ func (tm *TurnManager) AddEntity(e *domain.Entity) {
 }
 
 // UpdatePriority updates an entity's position in the queue (e.g. after they acted).
-func (tm *TurnManager) UpdatePriority(entityID string, newTick int) {
+func (tm *TurnManager) UpdatePriority(entityID domain.EntityID, newTick int) {
 	if item, ok := tm.itemMap[entityID]; ok {
 		tm.queue.Update(item, newTick)
 	}
@@ -53,7 +53,7 @@ func (tm *TurnManager) PeekNext() *TurnItem {
 }
 
 // RemoveEntity removed an entity from the turn system (e.g. death).
-func (tm *TurnManager) RemoveEntity(entityID string) {
+func (tm *TurnManager) RemoveEntity(entityID domain.EntityID) {
 	if item, ok := tm.itemMap[entityID]; ok {
 		heap.Remove(&tm.queue, item.Index)
 		delete(tm.itemMap, entityID)

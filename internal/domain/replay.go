@@ -5,7 +5,7 @@ import "encoding/json"
 // ReplayAction - это запись одного действия извне (от игрока)
 type ReplayAction struct {
 	Tick    int             `json:"tick"`
-	Token   string          `json:"token"`   // Кто сделал
+	Token   EntityID        `json:"token"`   // Кто сделал
 	Action  ActionType      `json:"action"`  // Что сделал
 	Payload json.RawMessage `json:"payload"` // С какими параметрами
 }

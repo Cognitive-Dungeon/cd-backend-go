@@ -9,7 +9,7 @@ import (
 
 // HandleEquip обрабатывает команду EQUIP - экипировка оружия/брони
 func HandleEquip(ctx handlers.Context, p api.ItemPayload) (handlers.Result, error) {
-	msg, err := systems.TryEquip(ctx.Actor, p.ItemID)
+	msg, err := systems.TryEquip(ctx.Actor, domain.EntityID(p.ItemID))
 	if err != nil {
 		return handlers.Result{Msg: err.Error(), MsgType: "ERROR"}, nil
 	}

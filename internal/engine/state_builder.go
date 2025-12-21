@@ -7,7 +7,7 @@ import (
 )
 
 // publishUpdate рассылает актуальное состояние мира всем активным подписчикам КОНКРЕТНОГО инстанса.
-func (s *GameService) publishUpdate(activeID string, instance *Instance) {
+func (s *GameService) publishUpdate(activeID domain.EntityID, instance *Instance) {
 	// Пробегаем по сущностям ТОЛЬКО этого уровня
 	for _, e := range instance.Entities {
 		if s.Hub.HasSubscriber(e.ID) {
@@ -21,7 +21,7 @@ func (s *GameService) publishUpdate(activeID string, instance *Instance) {
 }
 
 // BuildStateFor создает персональный "снимок" мира для конкретной сущности-наблюдателя.
-func (s *GameService) BuildStateFor(observer *domain.Entity, activeID string, instance *Instance) *api.ServerResponse {
+func (s *GameService) BuildStateFor(observer *domain.Entity, activeID domain.EntityID, instance *Instance) *api.ServerResponse {
 	// Используем мир из инстанса
 	observerWorld := instance.World
 
@@ -110,8 +110,8 @@ func (s *GameService) BuildStateFor(observer *domain.Entity, activeID string, in
 	return &api.ServerResponse{
 		Type:           "UPDATE",
 		Tick:           instance.CurrentTick,
-		MyEntityID:     observer.ID,
-		ActiveEntityID: activeID,
+		MyEntityID:     observer.ID.String(),
+		ActiveEntityID: activeID.String(),
 		Grid:           &api.GridMeta{Width: observerWorld.Width, Height: observerWorld.Height},
 		Map:            mapDTO,
 		Entities:       viewEntities,
@@ -122,7 +122,7 @@ func (s *GameService) BuildStateFor(observer *domain.Entity, activeID string, in
 // toEntityView конвертирует доменную сущность в DTO для отправки клиенту.
 func (s *GameService) toEntityView(target *domain.Entity, observer *domain.Entity) api.EntityView {
 	view := api.EntityView{
-		ID:   target.ID,
+		ID:   target.ID.String(),
 		Type: target.Type.String(),
 		Name: target.Name,
 	}
@@ -177,7 +177,7 @@ func (s *GameService) toEntityView(target *domain.Entity, observer *domain.Entit
 			for _, item := range target.Inventory.Items {
 				if item != nil && item.Item != nil {
 					itemView := api.ItemView{
-						ID:          item.ID,
+						ID:          item.ID.String(),
 						Name:        item.Name,
 						Category:    item.Item.Category.String(),
 						IsStackable: item.Item.IsStackable,
@@ -208,7 +208,7 @@ func (s *GameService) toEntityView(target *domain.Entity, observer *domain.Entit
 			if target.Equipment.Weapon != nil && target.Equipment.Weapon.Item != nil {
 				w := target.Equipment.Weapon
 				weaponView := api.ItemView{
-					ID:       w.ID,
+					ID:       w.ID.String(),
 					Name:     w.Name,
 					Category: w.Item.Category.String(),
 					Damage:   w.Item.Damage,
@@ -225,7 +225,7 @@ func (s *GameService) toEntityView(target *domain.Entity, observer *domain.Entit
 			if target.Equipment.Armor != nil && target.Equipment.Armor.Item != nil {
 				a := target.Equipment.Armor
 				armorView := api.ItemView{
-					ID:       a.ID,
+					ID:       a.ID.String(),
 					Name:     a.Name,
 					Category: a.Item.Category.String(),
 					Defense:  a.Item.Defense,

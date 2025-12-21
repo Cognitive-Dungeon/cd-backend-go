@@ -1,10 +1,19 @@
 package domain
 
+type EntityID string
+
+const NilEntityID EntityID = ""
+
+// String позволяет легко логировать ID, но не позволяет неявно использовать его как строку в логике
+func (id EntityID) String() string {
+	return string(id)
+}
+
 // --- СУЩНОСТЬ ---
 
 type Entity struct {
 	// Идентификация
-	ID   string     `json:"id"`
+	ID   EntityID   `json:"id"`
 	Type EntityType `json:"type"`
 	Name string     `json:"name"`
 

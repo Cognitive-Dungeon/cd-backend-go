@@ -37,7 +37,7 @@ func GenerateSurface() (*domain.GameWorld, []domain.Entity, domain.Position) {
 
 	// Лестница, ведущая вниз с уровня 0.
 	entities = append(entities, domain.Entity{
-		ID:        fmt.Sprintf("exit_down_from_%d", 0),
+		ID:        domain.EntityID(fmt.Sprintf("exit_down_from_%d", 0)),
 		Type:      domain.EntityTypeExit,
 		Name:      "Спуск в подземелье",
 		Pos:       startPos,
