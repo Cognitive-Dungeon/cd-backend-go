@@ -25,4 +25,6 @@ type GameWorld struct {
 	// json:"-" означает, что мы НЕ отправляем этот индекс клиенту (экономия трафика)
 	SpatialHash    map[int][]*Entity    `json:"-"`
 	EntityRegistry map[EntityID]*Entity `json:"-"`
+
+	Components *WorldComponents `json:"-"`
 }

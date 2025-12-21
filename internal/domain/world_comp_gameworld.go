@@ -72,6 +72,9 @@ func (w *GameWorld) removeFromSpatial(e *Entity) {
 func (w *GameWorld) RemoveEntity(e *Entity) {
 	w.removeFromSpatial(e)
 	w.UnregisterEntity(e.ID)
+	if w.Components != nil {
+		w.Components.RemoveEntityComponents(e.ID)
+	}
 }
 
 // UpdateEntityPos обрабатывает перемещение.
@@ -93,4 +96,16 @@ func (w *GameWorld) UpdateEntityPos(e *Entity, newX, newY int) error {
 	w.AddEntity(e)
 
 	return nil
+}
+
+func NewGameWorld(width, height, level int) *GameWorld {
+	return &GameWorld{
+		Width:          width,
+		Height:         height,
+		Level:          level,
+		Map:            make([][]Tile, height),
+		SpatialHash:    make(map[int][]*Entity),
+		EntityRegistry: make(map[EntityID]*Entity),
+		Components:     NewWorldComponents(),
+	}
 }

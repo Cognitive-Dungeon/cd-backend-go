@@ -4,8 +4,9 @@ import (
 	"cognitive-server/internal/domain"
 	"cognitive-server/internal/engine/handlers"
 	"cognitive-server/internal/systems"
+	"cognitive-server/internal/systems/interaction"
+	_ "cognitive-server/internal/systems/interaction/rules"
 	"cognitive-server/pkg/api"
-	"fmt"
 )
 
 func HandleInteract(ctx handlers.Context, p api.EntityPayload) (handlers.Result, error) {
@@ -18,20 +19,5 @@ func HandleInteract(ctx handlers.Context, p api.EntityPayload) (handlers.Result,
 		return handlers.Result{Msg: res.Message, MsgType: "ERROR"}, nil
 	}
 
-	target := res.Target
-
-	// 2. Проверка наличия триггера (специфика Interact)
-	if target.Trigger == nil || target.Trigger.OnInteract == nil {
-		return handlers.Result{
-			Msg:     fmt.Sprintf("Ничего не происходит при взаимодействии с %s.", target.Name),
-			MsgType: "INFO",
-		}, nil
-	}
-
-	// 3. Трата времени
-	handlers.SpendActionPoints(ctx.Actor, domain.TimeCostInteract)
-
-	return handlers.Result{
-		Event: target.Trigger.OnInteract,
-	}, nil
+	return interaction.Resolve(ctx, res.Target)
 }

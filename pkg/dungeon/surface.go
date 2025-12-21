@@ -2,7 +2,6 @@ package dungeon
 
 import (
 	"cognitive-server/internal/domain"
-	"encoding/json"
 	"fmt"
 )
 
@@ -14,6 +13,7 @@ func GenerateSurface() (*domain.GameWorld, []domain.Entity, domain.Position) {
 		Height:      MapHeight,
 		Level:       0, // Поверхность - это уровень 0
 		SpatialHash: make(map[int][]*domain.Entity),
+		Components:  domain.NewWorldComponents(),
 	}
 	// ... (здесь можно создать более сложную карту для города)
 	// А пока просто сделаем пустую комнату
@@ -28,15 +28,8 @@ func GenerateSurface() (*domain.GameWorld, []domain.Entity, domain.Position) {
 	startPos := domain.Position{X: MapWidth / 2, Y: MapHeight / 2}
 	var entities []domain.Entity
 
-	// Создаем событие для спуска в подземелье
-	eventPayload, _ := json.Marshal(map[string]interface{}{
-		"event":       "LEVEL_TRANSITION",
-		"targetLevel": 1,
-		"targetPosId": fmt.Sprintf("exit_up_from_%d", 1),
-	})
-
 	// Лестница, ведущая вниз с уровня 0.
-	entities = append(entities, domain.Entity{
+	exit := domain.Entity{
 		ID:        domain.EntityID(fmt.Sprintf("exit_down_from_%d", 0)),
 		Type:      domain.EntityTypeExit,
 		Name:      "Спуск в подземелье",
@@ -44,10 +37,14 @@ func GenerateSurface() (*domain.GameWorld, []domain.Entity, domain.Position) {
 		Level:     0,
 		Render:    &domain.RenderComponent{Symbol: '>', Color: "#FFFFFF"},
 		Narrative: &domain.NarrativeComponent{Description: "Темный проход, ведущий вглубь подземелья."},
-		Trigger: &domain.TriggerComponent{
-			OnInteract: eventPayload,
-		},
+	}
+
+	domain.SetComponent(world.Components, exit.ID, domain.TransitionComponent{
+		TargetLevel: 1,
+		TargetPosID: domain.EntityID("exit_up_from_1"),
 	})
+
+	entities = append(entities, exit)
 
 	return world, entities, startPos
 }

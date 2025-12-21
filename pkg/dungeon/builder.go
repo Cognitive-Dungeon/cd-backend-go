@@ -2,7 +2,6 @@ package dungeon
 
 import (
 	"cognitive-server/internal/domain"
-	"encoding/json"
 	"fmt"
 	"math/rand"
 )
@@ -54,23 +53,25 @@ func (b *LevelBuilder) randRange(min, max int) int {
 
 // LevelBuilder предоставляет fluent API для создания уровней
 type LevelBuilder struct {
-	level    int
-	width    int
-	height   int
-	rooms    []Rect
-	gameMap  [][]domain.Tile
-	entities []domain.Entity
-	rng      *rand.Rand
+	level      int
+	width      int
+	height     int
+	rooms      []Rect
+	gameMap    [][]domain.Tile
+	entities   []domain.Entity
+	rng        *rand.Rand
+	components *domain.WorldComponents
 }
 
 // NewLevel создает новый builder для уровня
 func NewLevel(level int, rng *rand.Rand) *LevelBuilder {
 	return &LevelBuilder{
-		level:    level,
-		width:    MapWidth,
-		height:   MapHeight,
-		entities: make([]domain.Entity, 0),
-		rng:      rng,
+		level:      level,
+		width:      MapWidth,
+		height:     MapHeight,
+		entities:   make([]domain.Entity, 0),
+		rng:        rng,
+		components: domain.NewWorldComponents(),
 	}
 }
 
@@ -232,12 +233,6 @@ func (b *LevelBuilder) PlaceExit(direction string, targetLevel int) *LevelBuilde
 
 	cx, cy := room.Center()
 
-	eventPayload, _ := json.Marshal(map[string]interface{}{
-		"event":       "LEVEL_TRANSITION",
-		"targetLevel": targetLevel,
-		"targetPosId": fmt.Sprintf("exit_%s_from_%d", oppositeDirection(direction), targetLevel),
-	})
-
 	exit := domain.Entity{
 		ID:    domain.EntityID(fmt.Sprintf("exit_%s_from_%d", direction, b.level)),
 		Type:  domain.EntityTypeExit,
@@ -251,10 +246,12 @@ func (b *LevelBuilder) PlaceExit(direction string, targetLevel int) *LevelBuilde
 		Narrative: &domain.NarrativeComponent{
 			Description: description,
 		},
-		Trigger: &domain.TriggerComponent{
-			OnInteract: eventPayload,
-		},
 	}
+
+	domain.SetComponent(b.components, exit.ID, domain.TransitionComponent{
+		TargetLevel: targetLevel,
+		TargetPosID: domain.EntityID(fmt.Sprintf("exit_%s_from_%d", oppositeDirection(direction), targetLevel)),
+	})
 
 	b.entities = append(b.entities, exit)
 	return b
@@ -271,15 +268,9 @@ func (b *LevelBuilder) GetStartPos() domain.Position {
 
 // Build собирает и возвращает готовый мир
 func (b *LevelBuilder) Build() (*domain.GameWorld, []domain.Entity, domain.Position) {
-	world := &domain.GameWorld{
-		Map:            b.gameMap,
-		Width:          b.width,
-		Height:         b.height,
-		Level:          b.level,
-		SpatialHash:    make(map[int][]*domain.Entity),
-		EntityRegistry: make(map[domain.EntityID]*domain.Entity),
-	}
-
+	world := domain.NewGameWorld(b.width, b.height, b.level)
+	world.Map = b.gameMap
+	world.Components = b.components
 	return world, b.entities, b.GetStartPos()
 }
 
