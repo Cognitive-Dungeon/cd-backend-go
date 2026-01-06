@@ -220,6 +220,8 @@ func (i *Instance) executeCommand(cmd domain.InternalCommand, actor *domain.Enti
 		Actor:    actor,
 		Worlds:   i.Service.Worlds, // Для переходов (пока ссылаемся на глобальную мапу)
 
+		EventBus: i.Service.EventBus,
+
 		// Для спавна новых сущностей (стрелы, суммоны)
 		AddGlobalEntity: func(e *domain.Entity) {
 			i.addEntity(e)

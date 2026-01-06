@@ -1,31 +1,28 @@
 package actions
 
 import (
+	"cognitive-server/internal/core/types/enums"
 	"cognitive-server/internal/domain"
 	"cognitive-server/internal/engine/handlers"
-	"cognitive-server/internal/systems" // Импортируем системы
+	"cognitive-server/internal/eventbus"
 	"cognitive-server/pkg/api"
 )
 
 func HandleAttack(ctx handlers.Context, p api.EntityPayload) (handlers.Result, error) {
-	// 1. Валидация через TargetingSystem
-	// Дистанция 1.5 (ближний бой), Нужен LOS (сквозь стены бить нельзя)
-	res := systems.ValidateInteraction(ctx.Actor, domain.EntityID(p.TargetID), 1.5, true, ctx.Finder, ctx.World)
-
-	if !res.Valid {
-		return handlers.Result{Msg: res.Message, MsgType: "ERROR"}, nil
+	// 1. Предварительный поиск цели (дешевая операция)
+	// Мы не проверяем дистанцию здесь, это дело Системы Боя.
+	target := ctx.Finder.GetEntity(domain.EntityID(p.TargetID))
+	if target == nil {
+		return handlers.Result{Msg: "Цель не найдена.", MsgType: "ERROR"}, nil
 	}
 
-	target := res.Target
+	// 2. Публикуем событие
+	ctx.EventBus.Publish(eventbus.EventType(enums.EventTypeAttackRequested), domain.AttackRequested{
+		Attacker: ctx.Actor,
+		Target:   target,
+		World:    ctx.World,
+	})
 
-	// 2. Вызов Системы Боя
-	logMsg := systems.ApplyAttack(ctx.Actor, target, ctx.Rng)
-
-	// 3. Трата времени
-	handlers.SpendActionPoints(ctx.Actor, domain.TimeCostAttackLight)
-
-	return handlers.Result{
-		Msg:     logMsg,
-		MsgType: "COMBAT",
-	}, nil
+	// Пустой результат, так как логи атаки придут асинхронно через систему
+	return handlers.EmptyResult(), nil
 }

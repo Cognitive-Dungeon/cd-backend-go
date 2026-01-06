@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"cognitive-server/internal/domain"
+	"cognitive-server/internal/eventbus"
 	"encoding/json"
 	"math/rand"
 )
@@ -24,6 +25,7 @@ type Context struct {
 	World    *domain.GameWorld
 	Entities []*domain.Entity // Слайс сущностей
 	Actor    *domain.Entity   // Тот, кто выполняет команду (Игрок или NPC)
+	EventBus *eventbus.EventBus
 
 	// --- Global Context for Events ---
 	Worlds          map[int]*domain.GameWorld // Доступ ко всем мирам (нужен для переходов)

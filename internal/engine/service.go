@@ -1,12 +1,15 @@
 package engine
 
 import (
+	"cognitive-server/internal/core/types/enums"
 	"cognitive-server/internal/domain"
 	"cognitive-server/internal/engine/handlers"
 	"cognitive-server/internal/engine/handlers/actions"
 	"cognitive-server/internal/engine/handlers/admin"
+	"cognitive-server/internal/eventbus"
 	"cognitive-server/internal/infrastructure/storage"
 	"cognitive-server/internal/network"
+	"cognitive-server/internal/systems"
 	"cognitive-server/pkg/api"
 	"cognitive-server/pkg/dungeon"
 	"cognitive-server/pkg/logger"
@@ -34,6 +37,8 @@ type GameService struct {
 	JoinChan       chan *domain.Entity
 	DisconnectChan chan domain.EntityID
 
+	EventBus *eventbus.EventBus
+
 	Hub *network.Broadcaster
 
 	// Реестр хендлеров (общий для всех инстансов)
@@ -42,6 +47,7 @@ type GameService struct {
 }
 
 func NewService(cfg Config) *GameService {
+	bus := eventbus.New(int(enums.EventTypeCount), eventbus.PanicRecovery())
 	worlds, allEntities, seeds := buildInitialWorld(cfg.Seed)
 
 	s := &GameService{
@@ -54,6 +60,7 @@ func NewService(cfg Config) *GameService {
 
 		JoinChan:       make(chan *domain.Entity, 10),
 		DisconnectChan: make(chan domain.EntityID, 10),
+		EventBus:       bus,
 
 		Hub:            network.NewBroadcaster(),
 		actionHandlers: make(map[domain.ActionType]handlers.HandlerFunc),
@@ -61,6 +68,7 @@ func NewService(cfg Config) *GameService {
 	}
 
 	s.registerHandlers()
+	s.registerSystems()
 
 	// 1. Создаем и запускаем Инстансы для каждого мира
 	for id, world := range worlds {
@@ -83,6 +91,22 @@ func NewService(cfg Config) *GameService {
 	}
 
 	return s
+}
+
+func (s *GameService) registerSystems() {
+	// 1. Создаем системы
+	moveSys := &systems.MovementSystem{}
+	combatSys := &systems.CombatSystem{}
+
+	// 2. Инициализируем их (подписка на события)
+	moveSys.Init(s.EventBus)
+	combatSys.Init(s.EventBus)
+
+	// 3. Регистрируем слушатель для ЛОГОВ
+	// Системы кидает EventTypeLogMessage, нам нужно поймать его и положить в нужный Instance
+	eventbus.Subscribe(s.EventBus, eventbus.EventType(enums.EventTypeLogMessage), s.handleLogMessage)
+
+	logger.Log.Info("Systems registered: Movement, Combat, Logging")
 }
 
 // GetEntity ищет сущность. Использует быстрый индекс EntityLocations.
@@ -389,4 +413,21 @@ func (s *GameService) StartPlayback(levelID int) {
 	} else {
 		logger.Log.Error("Instance not found for playback")
 	}
+}
+
+func (s *GameService) handleLogMessage(ev domain.LogMessage) {
+	// Нам нужно понять, к какому инстансу относится этот мир
+	// Так как World внутри Instance уникален, ищем по LevelID
+	if ev.World == nil {
+		return
+	}
+
+	instance, ok := s.Instances[ev.World.Level]
+	if !ok {
+		// Если инстанс не активен (редкий кейс), просто пишем в консоль
+		logger.Log.Warnf("[Orphan Log] %s: %s", ev.Type, ev.Text)
+		return
+	}
+
+	instance.AddLog(ev.Text, ev.Type)
 }

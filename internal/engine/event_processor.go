@@ -38,6 +38,7 @@ func (s *GameService) processEvent(actor *domain.Entity, eventData json.RawMessa
 		Entities: instance.Entities,
 		Actor:    actor,
 		Switcher: s,
+		EventBus: s.EventBus,
 	}
 
 	// Выполняем хендлер

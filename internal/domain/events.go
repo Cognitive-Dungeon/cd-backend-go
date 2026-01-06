@@ -41,3 +41,68 @@ func (a EventType) String() string {
 	}
 	return "UNKNOWN"
 }
+
+// AttackRequested Запрос события нанесения атаки
+type AttackRequested struct {
+	Attacker *Entity
+	Target   *Entity
+	World    *GameWorld
+}
+
+// DamageInflicted Урон был рассчитан и нанесен.
+type DamageInflicted struct {
+	Target   *Entity
+	Attacker *Entity
+	Amount   int
+	IsFatal  bool
+	World    *GameWorld
+}
+
+// EntityDied Сущность погибла.
+type EntityDied struct {
+	Entity *Entity
+	Killer *Entity
+	World  *GameWorld
+}
+
+// LogMessage Нужно записать что-то в лог инстанса.
+type LogMessage struct {
+	World *GameWorld
+	Text  string
+	Type  string // "INFO", "COMBAT", "ERROR"
+}
+
+type MoveRequested struct {
+	Actor *Entity
+	Position
+	World *GameWorld
+}
+
+type EntityMoved struct {
+	Actor        *Entity
+	FromPosition Position
+	ToPosition   Position
+	World        *GameWorld
+}
+
+// --- Inventory ---
+type InventoryActionPayload struct { // Общая структура для простых действий
+	Actor  *Entity
+	ItemID EntityID
+	World  *GameWorld
+	Count  int // Для Drop (опционально)
+}
+
+// --- Interaction ---
+type InteractRequested struct {
+	Actor    *Entity
+	TargetID EntityID
+	World    *GameWorld
+}
+
+// Событие для смены уровня (результат лестницы)
+type LevelTransition struct {
+	Actor       *Entity
+	TargetLevel int
+	TargetPos   Position
+}

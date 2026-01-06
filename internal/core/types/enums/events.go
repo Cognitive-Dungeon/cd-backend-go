@@ -10,9 +10,21 @@ const (
 	EventTypeDamageInflicted
 	EventTypeEntityDied
 
-	// World
-	EventTypeEntityMoved
-	EventTypeItemPickedUp
+	// Movement
+	EventTypeMoveRequested
+	EventTypeEntityMoved // Для триггеров ловушек или обновления тумана войны
+
+	// Inventory
+	EventTypePickupRequested
+	EventTypeDropRequested
+	EventTypeEquipRequested
+	EventTypeUnequipRequested
+	EventTypeUseRequested
+	EventTypeItemUsed // Факт использования (для логов/квестов)
+
+	// Interaction
+	EventTypeInteractRequested
+	EventTypeLevelTransition // Для лестниц
 
 	// System
 	EventTypeLogMessage
