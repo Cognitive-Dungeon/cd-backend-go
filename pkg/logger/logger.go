@@ -1,8 +1,8 @@
 package logger
 
 import (
+	"cognitive-server/internal/config"
 	"os"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 )
@@ -12,34 +12,20 @@ var Log *logrus.Logger
 
 // Init инициализирует глобальный логгер.
 // Эта функция должна быть вызвана один раз при старте приложения в main.go.
-func Init() {
+func Init(cfg config.LogConfig) {
 	Log = logrus.New()
 
-	// 1. Устанавливаем уровень логирования из переменной окружения.
-	// По умолчанию - "info". Для отладки можно выставить "debug".
-	logLevel, ok := os.LookupEnv("LOG_LEVEL")
-	if !ok {
-		logLevel = "info"
-	}
-	level, err := logrus.ParseLevel(logLevel)
-	if err != nil {
-		level = logrus.InfoLevel
-	}
-	Log.SetLevel(level)
+	Log.SetLevel(cfg.Level)
 
-	// 2. Устанавливаем форматтер.
-	// "json" - для продакшена и сбора логов.
-	// "text" - для удобной разработки.
-	logFormat := strings.ToLower(os.Getenv("LOG_FORMAT"))
-	if logFormat == "json" {
+	switch cfg.Format {
+	case config.LogJSON:
 		Log.SetFormatter(&logrus.JSONFormatter{})
-	} else {
+	case config.LogText:
 		Log.SetFormatter(&logrus.TextFormatter{
 			FullTimestamp: true,
 			ForceColors:   true,
 		})
 	}
 
-	// 3. Устанавливаем, куда писать логи (в стандартный вывод).
 	Log.SetOutput(os.Stdout)
 }

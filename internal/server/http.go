@@ -7,14 +7,15 @@ import (
 	"encoding/json"
 	"net/http"
 	_ "net/http/pprof" // Profiling
+	"strconv"
 )
 
 type Server struct {
 	Engine *engine.GameService
-	Port   string
+	Port   uint16
 }
 
-func New(engine *engine.GameService, port string) *Server {
+func New(engine *engine.GameService, port uint16) *Server {
 	return &Server{
 		Engine: engine,
 		Port:   port,
@@ -34,8 +35,8 @@ func (s *Server) Run() error {
 	debugHandler := NewDebugHandler(s.Engine)
 	debugHandler.RegisterRoutes(mux)
 
-	logger.Log.Infof("🛡️  Cognitive Dungeon Server running on :%s", s.Port)
-	return http.ListenAndServe(":"+s.Port, mux)
+	logger.Log.Info("🛡️  Cognitive Dungeon Server running on :" + strconv.Itoa(int(s.Port)))
+	return http.ListenAndServe(":"+strconv.Itoa(int(s.Port)), mux)
 }
 
 func enableCORS(next http.HandlerFunc) http.HandlerFunc {
