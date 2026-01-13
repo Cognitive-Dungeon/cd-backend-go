@@ -18,6 +18,8 @@ type Client struct {
 
 	// GUID сущности. Если 0 (Nil), значит клиент еще не залогинился.
 	objectGuid types.ObjectGuid
+
+	sendChan chan interface{}
 }
 
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
@@ -28,8 +30,9 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	client := &Client{
-		conn:   conn,
-		server: s,
+		conn:     conn,
+		server:   s,
+		sendChan: make(chan interface{}, 64),
 	}
 
 	// Мы НЕ спавним игрока сразу. Мы ждем команду LOGIN.
@@ -93,6 +96,13 @@ func (c *Client) handleMessage(msg api.InboundMessage) {
 			logger.Log.Errorf("CAST Unmarshal Error: %v. Payload: %s", err, string(msg.Payload))
 		}
 
+	case "CHAT":
+		var payload api.ChatPayload
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return
+		}
+		c.server.Gateway.HandleChat(c.objectGuid, payload)
+
 	default:
 		logger.Log.Warnf("Unknown Action: %s", msg.Action)
 	}
@@ -108,6 +118,7 @@ func (c *Client) writeLoop() {
 
 	for {
 		select {
+		// 🔁 Мир
 		case <-ticker.C:
 			// Получаем снапшот через Gateway
 			snapshot := c.server.Gateway.GetSnapshot(c.objectGuid)
@@ -116,6 +127,11 @@ func (c *Client) writeLoop() {
 			if err := c.conn.WriteJSON(snapshot); err != nil {
 				return
 			}
+
+		// 💬 Асинхронные сообщения (чат, нотификации)
+		case msg := <-c.sendChan:
+			c.conn.WriteJSON(msg)
+
 		}
 	}
 }

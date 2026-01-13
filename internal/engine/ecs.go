@@ -202,6 +202,14 @@ func (w *Instance) GetSpells(guid ObjectGuid) *SpellbookComponent {
 	return w.Spells[chunk][slot]
 }
 
+func (w *Instance) GetController(guid ObjectGuid) *ControllerComponent {
+	if !w.IsValid(guid) {
+		return nil
+	}
+	chunk, slot := w.locate(guid.Index())
+	return w.Controllers[chunk][slot]
+}
+
 type EntityBuilder struct {
 	inst  *Instance
 	id    ObjectGuid

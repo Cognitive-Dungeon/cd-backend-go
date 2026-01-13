@@ -8,12 +8,14 @@ import (
 	"cognitive-server/internal/engine/view"
 	"cognitive-server/pkg/eventbus"
 	"cognitive-server/pkg/logger"
+	"strings"
 )
 
 // GameGateway — фасад для взаимодействия внешнего мира с движком.
 type GameGateway struct {
-	engine *engine.Engine
-	view   *view.SnapshotBuilder
+	engine  *engine.Engine
+	view    *view.SnapshotBuilder
+	network NetworkCallback
 }
 
 func New(eng *engine.Engine) *GameGateway {
@@ -94,6 +96,49 @@ func (g *GameGateway) HandleCast(casterGuid engine.ObjectGuid, payload api.CastP
 			Target:  payload.TargetID,
 			SpellID: payload.SpellID,
 		})
+	})
+}
+
+func (g *GameGateway) HandleChat(sourceGuid engine.ObjectGuid, p api.ChatPayload) {
+	text := strings.TrimSpace(p.Message)
+	if text == "" {
+		return
+	}
+
+	msgType := types.ChatTypeSay
+	target := engine.ObjectGuid(0)
+
+	if strings.HasPrefix(text, "/") {
+		parts := strings.SplitN(text, " ", 2)
+		cmd := strings.ToLower(parts[0])
+		if len(parts) > 1 {
+			text = parts[1]
+		}
+
+		switch cmd {
+		case "/s", "/say":
+			msgType = types.ChatTypeSay
+		case "/y", "/yell":
+			msgType = types.ChatTypeYell
+		case "/e", "/emote":
+			msgType = types.ChatTypeEmote
+		}
+	}
+
+	g.engine.PushCommand(func() {
+		if !g.engine.Instance.IsValid(sourceGuid) {
+			return
+		}
+
+		g.engine.Bus.Publish(
+			eventbus.EventType(enums.EventChatRequest),
+			enums.ChatRequestEvent{
+				Source:  sourceGuid,
+				Type:    msgType,
+				Target:  target,
+				Message: text,
+			},
+		)
 	})
 }
 

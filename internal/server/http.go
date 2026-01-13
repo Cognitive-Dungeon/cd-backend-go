@@ -9,6 +9,7 @@ import (
 	"net/http"
 	_ "net/http/pprof" // Profiling
 	"strconv"
+	"sync"
 
 	"github.com/gorilla/websocket"
 )
@@ -17,6 +18,8 @@ type Server struct {
 	Gateway  *gateway.GameGateway // <--- Заменили Engine на Gateway
 	Port     uint16
 	upgrader websocket.Upgrader
+	clients  map[string]*Client
+	mu       sync.RWMutex
 }
 
 func New(gw *gateway.GameGateway, port uint16) *Server {
@@ -62,4 +65,20 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(version.Info())
+}
+
+func (s *Server) SendToAgent(agentID string, msg interface{}) {
+	s.mu.RLock()
+	client := s.clients[agentID]
+	s.mu.RUnlock()
+
+	if client == nil {
+		return
+	}
+
+	select {
+	case client.sendChan <- msg:
+	default:
+		// Канал забит — можно дропнуть
+	}
 }

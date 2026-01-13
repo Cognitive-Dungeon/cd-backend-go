@@ -158,6 +158,12 @@
         .t-SPEECH { color: var(--warning); font-style: italic; }
         .t-ERROR { color: #ff0000; font-weight: bold; }
 
+        .chat-say    { color:#fff; }
+        .chat-yell   { color:var(--danger); }
+        .chat-system { color:var(--warning); }
+        .chat-emote  { color:#ffa657; font-style:italic; }
+        .chat-whisper{ color:#ff77ff; }
+
         /* --- INSPECTOR --- */
         pre.json-dump { margin: 0; font-size: 11px; color: var(--purple); white-space: pre-wrap; }
     </style>
@@ -192,6 +198,37 @@
         <div id="target-info" style="margin-top: 10px; height: 20px; color: var(--warning); font-weight: bold;">
             No target selected
         </div>
+    </div>
+
+    <!-- CHAT -->
+    <div id="chat-panel" style="
+    border-top:1px solid var(--border);
+    background:#050505;
+    display:flex;
+    flex-direction:column;
+    height:180px;
+    ">
+        <div id="chat-log" style="
+        flex:1;
+        overflow-y:auto;
+        padding:8px;
+        font-size:12px;
+        line-height:1.4;
+        "></div>
+
+        <input id="chat-input"
+               type="text"
+               placeholder="Type /say, /yell, /emote..."
+               autocomplete="off"
+               style="
+               border:none;
+               border-top:1px solid var(--border);
+               padding:8px;
+               outline:none;
+               background:#0d1117;
+               color:white;
+               font-family:inherit;
+           ">
     </div>
 
     <!-- RIGHT PANEL: TABS -->
@@ -364,7 +401,15 @@
         ws.onmessage = (evt) => {
             const msg = JSON.parse(evt.data);
             if (msg.error) return alert("Server Error: " + msg.error);
-            if (msg.type === "UPDATE") handleUpdate(msg);
+            if (msg.type === "UPDATE") {
+                handleUpdate(msg);
+                return;
+            }
+            if (msg.type === "CHAT") {
+                renderChat(msg.data);
+                return;
+            }
+
         };
     }
 
@@ -450,6 +495,97 @@
             container.appendChild(btn);
         });
     }
+
+    function renderChat(data) {
+        const log = document.getElementById("chat-log");
+
+        let color = "#c9d1d9";
+        let prefix = "";
+
+        switch (data.type) {
+            case 0: // SYSTEM
+                color = "var(--warning)";
+                prefix = "[System]";
+                break;
+            case 1: // SAY
+                color = "#ffffff";
+                prefix = `[${data.senderName}]`;
+                break;
+            case 2: // YELL
+                color = "var(--danger)";
+                prefix = `[${data.senderName} yells]`;
+                break;
+            case 3: // WHISPER
+                color = "#ff77ff";
+                prefix = `[Whisper] ${data.senderName}`;
+                break;
+            case 4: // EMOTE
+                color = "var(--warning)";
+                prefix = `* ${data.senderName}`;
+                break;
+        }
+
+        const line = document.createElement("div");
+        line.innerHTML =
+            `<span style="color:${color}">${prefix} ${escapeHtml(data.text)}</span>`;
+
+        log.appendChild(line);
+        log.scrollTop = log.scrollHeight;
+    }
+
+    function escapeHtml(str) {
+        return str
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+    }
+
+    const chatInput = document.getElementById("chat-input");
+    let chatHistory = [];
+    let chatHistoryIndex = -1;
+
+    chatInput.addEventListener("keydown", (e) => {
+        // ENTER — отправка
+        if (e.key === "Enter") {
+            const text = chatInput.value.trim();
+            if (!text) return;
+
+            sendCommand("CHAT", { message: text });
+
+            chatHistory.push(text);
+            chatHistoryIndex = chatHistory.length;
+            chatInput.value = "";
+            e.preventDefault();
+        }
+
+        // UP / DOWN — история как в WoW
+        if (e.key === "ArrowUp") {
+            if (chatHistoryIndex > 0) {
+                chatHistoryIndex--;
+                chatInput.value = chatHistory[chatHistoryIndex];
+            }
+            e.preventDefault();
+        }
+
+        if (e.key === "ArrowDown") {
+            if (chatHistoryIndex < chatHistory.length - 1) {
+                chatHistoryIndex++;
+                chatInput.value = chatHistory[chatHistoryIndex];
+            } else {
+                chatHistoryIndex = chatHistory.length;
+                chatInput.value = "";
+            }
+            e.preventDefault();
+        }
+    });
+
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && document.activeElement !== chatInput) {
+            chatInput.focus();
+            e.preventDefault();
+        }
+    });
+
 
     // --- MAP RENDERER ---
     const mapEl = document.getElementById("game-map");

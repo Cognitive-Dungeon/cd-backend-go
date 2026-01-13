@@ -13,6 +13,8 @@ const (
 	EventDamageApply // Нанести урон (запрос к DamageSystem)
 	EventHealApply   // Нанести лечение
 	EventObjectDied  // Факт смерти (для DeathSystem, LootSystem, AI)
+	EventChatRequest
+	EventChatOut
 )
 
 // MoveRequestEvent — намерение объекта сдвинуться на 1 тайл
@@ -58,4 +60,18 @@ type HealEvent struct {
 type ObjectDiedEvent struct {
 	Object types.ObjectGuid
 	Killer types.ObjectGuid
+}
+
+type ChatRequestEvent struct {
+	Source  types.ObjectGuid
+	Type    types.ChatType
+	Target  types.ObjectGuid // Только для Whisper
+	Message string
+}
+
+type ChatOutEvent struct {
+	Receiver types.ObjectGuid
+	Sender   types.ObjectGuid
+	Type     types.ChatType
+	Text     string
 }

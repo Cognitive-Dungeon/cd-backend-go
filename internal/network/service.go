@@ -28,6 +28,7 @@ func New(cfg *config.ServerConfig, eng *engine.Engine) *Service {
 func (n *Service) Start() {
 	// Передаем Gateway в сервер
 	n.srv = server.New(n.gw, n.cfg.Port)
+	n.gw.SetNetworkCallback(n.srv)
 
 	go func() {
 		logger.Log.Infof("🌐 Network: Starting listener on port %d...", n.cfg.Port)
