@@ -16,7 +16,7 @@ import (
 */
 
 var (
-	sinkID     EntityID
+	sinkID     ObjectGuid
 	sinkU8     uint8
 	sinkU16    uint16
 	sinkU32    uint32
@@ -30,45 +30,45 @@ var (
 */
 
 //go:noinline
-func packEntityIDNoInline(
+func packObjectGuidNoInline(
 	shard uint8,
 	typ uint8,
 	gen uint16,
 	index uint32,
-) EntityID {
-	return PackEntityID(shard, typ, gen, index)
+) ObjectGuid {
+	return PackObjectGuid(shard, typ, gen, index)
 }
 
 //go:noinline
-func entityIDShardNoInline(id EntityID) uint8 {
+func objectGuidShardNoInline(id ObjectGuid) uint8 {
 	return id.Shard()
 }
 
 //go:noinline
-func entityIDTypeNoInline(id EntityID) uint8 {
+func objectGuidTypeNoInline(id ObjectGuid) uint8 {
 	return id.Type()
 }
 
 //go:noinline
-func entityIDGenNoInline(id EntityID) uint16 {
+func ObjectGuidGenNoInline(id ObjectGuid) uint16 {
 	return id.Generation()
 }
 
 //go:noinline
-func entityIDIndexNoInline(id EntityID) uint32 {
+func objectGuidIndexNoInline(id ObjectGuid) uint32 {
 	return id.Index()
 }
 
 /*
    =========================
-   Benchmarks: EntityID
+   Benchmarks: ObjectGuid
    =========================
 */
 
 func BenchmarkPackEntityID(b *testing.B) {
-	var id EntityID
+	var id ObjectGuid
 	for i := 0; i < b.N; i++ {
-		id = packEntityIDNoInline(
+		id = packObjectGuidNoInline(
 			1,
 			2,
 			uint16(i),
@@ -78,13 +78,13 @@ func BenchmarkPackEntityID(b *testing.B) {
 	sinkID = id
 }
 
-func BenchmarkEntityID_Getters(b *testing.B) {
-	id := packEntityIDNoInline(1, 2, 3, 4)
+func BenchmarkObjectGuid_Getters(b *testing.B) {
+	id := packObjectGuidNoInline(1, 2, 3, 4)
 
 	b.Run("Shard", func(b *testing.B) {
 		var v uint8
 		for i := 0; i < b.N; i++ {
-			v = entityIDShardNoInline(id)
+			v = objectGuidShardNoInline(id)
 		}
 		sinkU8 = v
 	})
@@ -92,7 +92,7 @@ func BenchmarkEntityID_Getters(b *testing.B) {
 	b.Run("Type", func(b *testing.B) {
 		var v uint8
 		for i := 0; i < b.N; i++ {
-			v = entityIDTypeNoInline(id)
+			v = objectGuidTypeNoInline(id)
 		}
 		sinkU8 = v
 	})
@@ -100,7 +100,7 @@ func BenchmarkEntityID_Getters(b *testing.B) {
 	b.Run("Gen", func(b *testing.B) {
 		var v uint16
 		for i := 0; i < b.N; i++ {
-			v = entityIDGenNoInline(id)
+			v = ObjectGuidGenNoInline(id)
 		}
 		sinkU16 = v
 	})
@@ -108,7 +108,7 @@ func BenchmarkEntityID_Getters(b *testing.B) {
 	b.Run("Index", func(b *testing.B) {
 		var v uint32
 		for i := 0; i < b.N; i++ {
-			v = entityIDIndexNoInline(id)
+			v = objectGuidIndexNoInline(id)
 		}
 		sinkU32 = v
 	})

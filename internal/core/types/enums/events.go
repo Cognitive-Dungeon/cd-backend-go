@@ -1,33 +1,24 @@
 package enums
 
+import "cognitive-server/internal/core/types"
+
 type EventType uint8
 
 const (
-	EventTypeUnknown EventType = iota
-
-	// Combat
-	EventTypeAttackRequested
-	EventTypeDamageInflicted
-	EventTypeEntityDied
-
-	// Movement
-	EventTypeMoveRequested
-	EventTypeEntityMoved // Для триггеров ловушек или обновления тумана войны
-
-	// Inventory
-	EventTypePickupRequested
-	EventTypeDropRequested
-	EventTypeEquipRequested
-	EventTypeUnequipRequested
-	EventTypeUseRequested
-	EventTypeItemUsed // Факт использования (для логов/квестов)
-
-	// Interaction
-	EventTypeInteractRequested
-	EventTypeLevelTransition // Для лестниц
-
-	// System
-	EventTypeLogMessage
-
-	EventTypeCount
+	EventNone EventType = iota
+	EventMoveRequest
+	EventObjectMoved
 )
+
+// MoveRequestEvent — намерение объекта сдвинуться на 1 тайл
+type MoveRequestEvent struct {
+	Object    types.ObjectGuid
+	Direction Direction
+}
+
+// ObjectMovedEvent - Факт передвижения
+type ObjectMovedEvent struct {
+	Object types.ObjectGuid
+	From   types.TilePos
+	To     types.TilePos
+}

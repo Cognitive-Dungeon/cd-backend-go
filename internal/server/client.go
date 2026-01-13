@@ -1,202 +1,171 @@
 package server
 
 import (
-	"cognitive-server/internal/domain"
+	"cognitive-server/internal/api"
+	"cognitive-server/internal/core/types"
+	"cognitive-server/internal/core/types/enums"
 	"cognitive-server/internal/engine"
-	"cognitive-server/pkg/api"
-	"cognitive-server/pkg/dungeon"
+	"cognitive-server/pkg/eventbus"
 	"cognitive-server/pkg/logger"
-	"cognitive-server/pkg/utils"
-	"math/rand"
+	"encoding/json"
 	"net/http"
 	"time"
-
-	"github.com/sirupsen/logrus"
 
 	"github.com/gorilla/websocket"
 )
 
-// Настройки WebSocket
-const (
-	writeWait      = 10 * time.Second
-	pongWait       = 60 * time.Second
-	pingPeriod     = (pongWait * 9) / 10
-	maxMessageSize = 512
-)
-
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin:     func(r *http.Request) bool { return true },
-}
-
-// Client - посредник между Websocket и GameService
 type Client struct {
-	Game     *engine.GameService
-	Conn     *websocket.Conn
-	Send     chan api.ServerResponse
-	EntityID domain.EntityID
+	conn   *websocket.Conn
+	engine *engine.Engine
+
+	// GUID сущности. Если 0 (Nil), значит клиент еще не залогинился.
+	objectGuid engine.ObjectGuid
 }
 
-func NewClient(game *engine.GameService, conn *websocket.Conn) *Client {
-	return &Client{
-		Game: game,
-		Conn: conn,
-		Send: make(chan api.ServerResponse, 256),
-	}
-}
-
-// readPump читает команды от клиента
-func (c *Client) readPump() {
-	defer func() {
-		c.Game.Hub.Unregister(c.EntityID)
-		if err := c.Conn.Close(); err != nil {
-			logger.Log.WithError(err).Warn("failed to close websocket connection")
-		}
-		// Освобождаем сущность, чтобы AI мог перехватить управление (если захотим)
-		// или просто чтобы пометить, что игрок оффлайн
-		if ent := c.Game.GetEntity(c.EntityID); ent != nil {
-			ent.ControllerID = ""
-			logger.Log.WithField("entity_id", c.EntityID).Info("Client disconnected")
-			// Сообщаем движку, что игрок ушел, чтобы прервать его ход немедленно
-			// Используем select, чтобы не заблокировать readPump, если канал полон (маловероятно, но безопасно)
-			select {
-			case c.Game.DisconnectChan <- c.EntityID:
-			default:
-			}
-		}
-	}()
-
-	c.Conn.SetReadLimit(maxMessageSize)
-	if err := c.Conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
-		logger.Log.WithError(err).Warn("failed to set read deadline")
-	}
-	c.Conn.SetPongHandler(func(string) error {
-		if err := c.Conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
-			logger.Log.WithError(err).Warn("failed to set pong read deadline")
-		}
-		return nil
-	})
-
-	// 1. HANDSHAKE (LOGIN)
-	var loginCmd api.ClientCommand
-	if err := c.Conn.ReadJSON(&loginCmd); err != nil {
-		logger.Log.Warn("Handshake failed")
+func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
+	conn, err := s.upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		logger.Log.Errorf("WS Upgrade error: %v", err)
 		return
 	}
 
-	c.EntityID = domain.EntityID(loginCmd.Token)
-	if c.EntityID == "" {
-		c.EntityID = utils.GenerateID()
+	client := &Client{
+		conn:   conn,
+		engine: s.Engine,
 	}
 
-	// 2. ПОИСК ИЛИ СОЗДАНИЕ ИГРОКА
-	ent := c.Game.GetEntity(c.EntityID)
-	if ent == nil {
-		logger.Log.Infof("Player %s not found. Spawning...", c.EntityID)
-		// Сид зависит только от имени игрока.
-		// Это гарантирует, что и в Live-режиме, и в Replay-режиме
-		// предметы в инвентаре получат одни и те же ID.
-		playerSeed := utils.StringToSeed(c.EntityID.String())
-		playerRng := rand.New(rand.NewSource(playerSeed))
+	// Мы НЕ спавним игрока сразу. Мы ждем команду LOGIN.
+	// Запускаем только чтение.
+	go client.readLoop()
+}
 
-		newPlayer := dungeon.CreatePlayer(c.EntityID, playerRng)
-
-		// Ищем место для спавна на уровне 0
-		world := c.Game.Worlds[0]
-		placed := false
-		// Сканируем центр карты
-		for y := 10; y < 20; y++ {
-			for x := 15; x < 25; x++ {
-				if !world.Map[y][x].IsWall && len(world.GetEntitiesAt(x, y)) == 0 {
-					newPlayer.Pos = domain.Position{X: x, Y: y}
-					placed = true
-					goto Done
-				}
-			}
-		}
-	Done:
-		if !placed {
-			newPlayer.Pos = domain.Position{X: 1, Y: 1} // Fallback
-		}
-
-		// Отправляем в движок через канал
-		c.Game.JoinChan <- newPlayer
-
-		// Даем движку мгновение на обработку
-		time.Sleep(50 * time.Millisecond)
-		ent = newPlayer
-	}
-
-	ent.ControllerID = "session_" + c.EntityID.String()
-	logger.Log.WithFields(logrus.Fields{
-		"entity_id": c.EntityID,
-		"name":      ent.Name,
-	}).Info("Client logged in")
-
-	// 3. ПОДПИСКА НА ОБНОВЛЕНИЯ
-	gameUpdates := c.Game.Hub.Register(c.EntityID)
-
-	// Запускаем пересылку обновлений из Hub в writePump
-	go func() {
-		for msg := range gameUpdates {
-			c.Send <- msg
-		}
-		close(c.Send)
+func (c *Client) readLoop() {
+	defer func() {
+		c.conn.Close()
+		// TODO: Обработка дисконнекта (удаление сущности или пометка offline)
 	}()
 
-	// Отправляем INIT (триггер первой отрисовки)
-	c.Game.ProcessCommand(api.ClientCommand{Action: "INIT", Token: c.EntityID.String()})
-
-	// 4. ЦИКЛ ЧТЕНИЯ КОМАНД
 	for {
-		var cmd api.ClientCommand
-		err := c.Conn.ReadJSON(&cmd)
+		var msg api.InboundMessage
+		err := c.conn.ReadJSON(&msg)
 		if err != nil {
+			// Обычный разрыв соединения
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				logger.Log.Errorf("WS Error: %v", err)
+				logger.Log.Warnf("WS Error: %v", err)
 			}
 			break
 		}
-		cmd.Token = c.EntityID.String()
-		c.Game.ProcessCommand(cmd)
+
+		c.handleMessage(msg)
 	}
 }
 
-// writePump отправляет данные клиенту + Ping
-func (c *Client) writePump() {
-	ticker := time.NewTicker(pingPeriod)
+func (c *Client) handleMessage(msg api.InboundMessage) {
+	// Если мы еще не залогинены, принимаем только LOGIN
+	if c.objectGuid == 0 && msg.Action != "LOGIN" {
+		logger.Log.Warn("Ignored command before LOGIN")
+		return
+	}
+
+	switch msg.Action {
+	case "LOGIN":
+		// Токен приходит в поле Token, а не в Payload (легаси клиента)
+		c.handleLogin(msg.Token)
+
+	case "MOVE":
+		var payload api.MovePayload
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			logger.Log.Warn("Invalid MOVE payload")
+			return
+		}
+		c.handleMove(payload)
+	}
+}
+
+func (c *Client) handleLogin(token string) {
+	if token == "" {
+		token = "Unnamed"
+	}
+
+	// Отправляем задачу в движок (Main Thread)
+	c.engine.PushCommand(func() {
+		// 1. Создаем сущность
+		guid := c.engine.Instance.CreateObject(enums.ObjectTypePlayer)
+
+		// 2. Наполняем компонентами
+		c.engine.Instance.NewEntityBuilder(guid).
+			WithName(engine.NameComponent{Name: token}). // Используем токен как имя
+			WithPosition(engine.PositionComponent{TilePos: engine.TilePos{X: 10, Y: 10}}).
+			WithStats(engine.StatsComponent{Health: 100, MaxHealth: 100}).
+			// Визуал: Зеленая @
+			WithRender(types.MakeGlyph(0x00FF00, '@')).
+			WithController(engine.ControllerComponent{AgentID: token})
+
+		// 3. Привязываем к клиенту
+		c.objectGuid = guid
+
+		logger.Log.Infof("Client logged in as '%s' -> GUID %s", token, guid)
+
+		// 4. ТЕПЕРЬ запускаем отправку обновлений (Snapshot Loop)
+		// Запускаем в отдельной горутине
+		go c.writeLoop()
+	})
+}
+
+func (c *Client) handleMove(p api.MovePayload) {
+	var dir enums.Direction
+
+	// АДАПТЕР: Вектор -> Enum
+	// Это изолирует легаси протокол от чистой внутренней логики
+	switch {
+	case p.Dy < 0:
+		dir = enums.DirUp
+	case p.Dy > 0:
+		dir = enums.DirDown
+	case p.Dx < 0:
+		dir = enums.DirLeft
+	case p.Dx > 0:
+		dir = enums.DirRight
+	default:
+		// Если dx=0, dy=0 или какая-то диагональ (если мы её не поддерживаем),
+		// просто игнорируем
+		return
+	}
+
+	// Отправляем в движок (Движок получает чистый Enum)
+	c.engine.PushCommand(func() {
+		if !c.engine.Instance.IsValid(c.objectGuid) {
+			return
+		}
+
+		c.engine.Bus.Publish(eventbus.EventType(enums.EventMoveRequest), enums.MoveRequestEvent{
+			Object:    c.objectGuid,
+			Direction: dir,
+		})
+	})
+}
+
+func (c *Client) writeLoop() {
+	ticker := time.NewTicker(50 * time.Millisecond)
 	defer func() {
 		ticker.Stop()
-		if err := c.Conn.Close(); err != nil {
-			logger.Log.WithError(err).Warn("failed to close websocket connection in writePump")
-		}
+		c.conn.Close()
 	}()
 
 	for {
-		select {
-		case message, ok := <-c.Send:
-			if err := c.Conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
-				logger.Log.WithError(err).Warn("failed to set write deadline")
-			}
-			if !ok {
-				if err := c.Conn.WriteMessage(websocket.CloseMessage, []byte{}); err != nil {
-					logger.Log.WithError(err).Debug("write close message failed")
-				}
-				return
-			}
-			if err := c.Conn.WriteJSON(message); err != nil {
-				logger.Log.WithError(err).Debug("write json message failed")
-				return
-			}
+		// Проверка: если клиент отключился или объект удален - выходим
+		// (в простой реализации достаточно проверки conn write error)
 
+		select {
 		case <-ticker.C:
-			if err := c.Conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
-				logger.Log.WithError(err).Warn("failed to set ping write deadline")
-			}
-			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-				logger.Log.WithError(err).Debug("ping failed")
-				return
+			// Генерируем снапшот (thread-safe, т.к. GetWorldSnapshot читает ECS)
+			// В идеале GetWorldSnapshot должен вызываться внутри PushCommand и отдавать результат в канал,
+			// но для чтения Paged Slice это допустимо, если мы не ресайзим чанки каждую миллисекунду.
+			snapshot := c.engine.GetWorldSnapshot(c.objectGuid)
+
+			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := c.conn.WriteJSON(snapshot); err != nil {
+				return // Ошибка записи = клиент отвалился
 			}
 		}
 	}

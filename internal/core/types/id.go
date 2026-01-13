@@ -5,9 +5,9 @@ import (
 	"strconv"
 )
 
-// EntityID — 64-битный идентификатор сущности.
+// ObjectGuid — 64-битный идентификатор сущности.
 //
-// EntityID является value-type и предназначен для дешёвого копирования,
+// ObjectGuid является value-type и предназначен для дешёвого копирования,
 // сериализации и сравнения.
 //
 // Формат битов (от старших к младшим):
@@ -24,148 +24,225 @@ import (
 //   - быстро адресовать сущности в ECS
 //   - определять принадлежность сущности миру
 //   - безопасно обнаруживать stale references
-type EntityID uint64
+type ObjectGuid uint64
 
-// NilEntityID — нулевой идентификатор сущности.
+// NilObjectGuid — нулевой идентификатор сущности.
 //
 // Используется как аналог nil для случаев, когда сущность отсутствует
 // или ссылка ещё не инициализирована.
-const NilEntityID EntityID = 0
+const NilObjectGuid ObjectGuid = 0
 
-// Конфигурация битов EntityID.
 //
+// ==========================
+// Bit layout configuration
+// ==========================
+//
+
 // Общее количество бит — 64.
 const (
-	// bitsIndex — количество бит, выделенных под индекс сущности.
-	// Позволяет адресовать до ~4.29 миллиарда сущностей в рамках одного шарда.
+	// bitsIndex — количество бит под индекс сущности.
+	// Позволяет адресовать до ~4.29 млрд сущностей в одном шарде.
 	bitsIndex = 32
 
 	// bitsGen — количество бит для поколения слота.
-	// Используется для защиты от использования устаревших ссылок.
 	bitsGen = 16
 
 	// bitsType — количество бит для типа сущности.
-	// Позволяет определить до 256 различных типов сущностей.
 	bitsType = 8
 
-	// bitsShard — количество бит для идентификатора шарда (мира).
-	// Позволяет использовать до 256 миров / серверов.
+	// bitsShard — количество бит для идентификатора шарда.
 	bitsShard = 8
 
-	// Сдвиги битов
+	// Битовые сдвиги
 	shiftGen   = bitsIndex
 	shiftType  = bitsIndex + bitsGen
 	shiftShard = bitsIndex + bitsGen + bitsType
 
-	// Маски для извлечения значений
+	// Маски
 	maskIndex = (1 << bitsIndex) - 1
 	maskGen   = (1 << bitsGen) - 1
 	maskType  = (1 << bitsType) - 1
 	maskShard = (1 << bitsShard) - 1
 )
 
-// PackEntityID собирает EntityID из составных частей.
+// compile-time проверка корректности схемы битов
+const _totalBits = bitsIndex + bitsGen + bitsType + bitsShard
+
+// Если сумма битов != 64 — код не скомпилируется
+type _objectGuidBitsCheck [64 - _totalBits]struct{}
+
 //
-// Параметры:
-//   - shardID — идентификатор текущего мира / сервера
-//   - typeID — тип сущности
-//   - gen — поколение слота сущности
-//   - index — индекс сущности в ECS-массиве
+// ==========================
+// Constructors
+// ==========================
 //
-// Функция не выполняет проверок диапазонов значений и предполагает,
-// что входные данные валидны.
-func PackEntityID(
-	shardID uint8,
-	typeID uint8,
+
+// PackObjectGuid собирает ObjectGuid из составных частей.
+//
+// ! Fast-path функция:
+//   - НЕ выполняет проверок диапазонов
+//   - предполагает, что входные данные валидны
+//
+// Используется во внутренних hot-path участках (ECS, networking).
+func PackObjectGuid(
+	shard uint8,
+	typ uint8,
 	gen uint16,
-	index uint32,
-) EntityID {
-	return EntityID(
-		(uint64(shardID) << shiftShard) |
-			(uint64(typeID) << shiftType) |
+	idx uint32,
+) ObjectGuid {
+	return ObjectGuid(
+		(uint64(shard) << shiftShard) |
+			(uint64(typ) << shiftType) |
 			(uint64(gen) << shiftGen) |
-			uint64(index),
+			uint64(idx),
 	)
 }
 
+// NewObjectGuid создаёт ObjectGuid с проверкой корректности значений.
+//
+// Рекомендуется использовать:
+//   - на границах системы
+//   - при сетевом вводе
+//   - при десериализации
+func NewObjectGuid(
+	shard uint8,
+	typ uint8,
+	gen uint16,
+	idx uint32,
+) (ObjectGuid, error) {
+	if idx > maskIndex {
+		return 0, fmt.Errorf("objectguid: index overflow: %d", idx)
+	}
+	if gen > maskGen {
+		return 0, fmt.Errorf("objectguid: generation overflow: %d", gen)
+	}
+	if typ > maskType {
+		return 0, fmt.Errorf("objectguid: type overflow: %d", typ)
+	}
+	if shard > maskShard {
+		return 0, fmt.Errorf("objectguid: shard overflow: %d", gen)
+	}
+
+	return PackObjectGuid(shard, typ, gen, idx), nil
+}
+
+//
+// ==========================
+// Accessors
+// ==========================
+//
+
 // Index возвращает индекс сущности в ECS-массиве.
-func (id EntityID) Index() uint32 {
+func (id ObjectGuid) Index() uint32 {
 	return uint32(id & maskIndex)
 }
 
 // Generation возвращает поколение слота сущности.
-//
-// Используется для обнаружения устаревших ссылок на уничтоженные сущности.
-func (id EntityID) Generation() uint16 {
+func (id ObjectGuid) Generation() uint16 {
 	return uint16((id >> shiftGen) & maskGen)
 }
 
 // Type возвращает тип сущности.
-func (id EntityID) Type() uint8 {
+func (id ObjectGuid) Type() uint8 {
 	return uint8((id >> shiftType) & maskType)
 }
 
-// Shard возвращает идентификатор шарда, которому принадлежит сущность.
-func (id EntityID) Shard() uint8 {
+// Shard возвращает идентификатор шарда.
+func (id ObjectGuid) Shard() uint8 {
 	return uint8((id >> shiftShard) & maskShard)
 }
 
+//
+// ==========================
+// Utility methods
+// ==========================
+//
+
 // IsNil проверяет, является ли идентификатор нулевым.
-func (id EntityID) IsNil() bool {
-	return id == NilEntityID
+func (id ObjectGuid) IsNil() bool {
+	return id == NilObjectGuid
 }
 
 // IsLocal проверяет, принадлежит ли сущность текущему шарду.
-func (id EntityID) IsLocal(currentShard uint8) bool {
+func (id ObjectGuid) IsLocal(currentShard uint8) bool {
 	return id.Shard() == currentShard
 }
 
-// String возвращает человекочитаемое строковое представление EntityID.
+// IsEqual сравнивает два идентификатора.
+func (id ObjectGuid) IsEqual(other ObjectGuid) bool {
+	return id == other
+}
+
+//
+// ==========================
+// Debug & formatting
+// ==========================
+//
+
+// String возвращает человекочитаемое представление ObjectGuid.
 //
 // Предназначено для логирования и отладки.
-func (id EntityID) String() string {
+func (id ObjectGuid) String() string {
 	if id.IsNil() {
 		return "<nil>"
 	}
 
-	return fmt.Sprintf(
-		"[shard=%d type=%d gen=%d idx=%d]",
-		id.Shard(),
-		// TODO: Взять код из types/enums/entities
-		id.Type(),
-		id.Generation(),
-		id.Index(),
-	)
+	return "ObjectGuid{" +
+		"shard=" + strconv.Itoa(int(id.Shard())) +
+		", type=" + strconv.Itoa(int(id.Type())) +
+		", gen=" + strconv.Itoa(int(id.Generation())) +
+		", idx=" + strconv.Itoa(int(id.Index())) +
+		"}"
 }
 
-// MarshalJSON сериализует EntityID в JSON как строку.
 //
-// Это необходимо для предотвращения потери точности при работе с
-// JavaScript и другими средами, не поддерживающими uint64.
-func (id EntityID) MarshalJSON() ([]byte, error) {
+// ==========================
+// JSON serialization
+// ==========================
+//
+
+// MarshalJSON сериализует ObjectGuid в JSON как строку.
+//
+// Это предотвращает потерю точности при работе с JavaScript
+// и другими средами без поддержки uint64.
+func (id ObjectGuid) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + strconv.FormatUint(uint64(id), 10) + `"`), nil
 }
 
-// UnmarshalJSON десериализует EntityID из JSON.
+// UnmarshalJSON десериализует ObjectGuid из JSON.
 //
-// Поддерживаются как строковое, так и числовое представление.
-func (id *EntityID) UnmarshalJSON(data []byte) error {
-	s := string(data)
-
-	if len(s) > 1 && s[0] == '"' {
-		s = s[1 : len(s)-1]
-	}
-
-	if s == "" {
-		*id = NilEntityID
+// Поддерживаются:
+//   - строковое представление ("123456")
+//   - числовое представление (123456)
+func (id *ObjectGuid) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 {
+		*id = NilObjectGuid
 		return nil
 	}
 
-	v, err := strconv.ParseUint(s, 10, 64)
+	// строка
+	if data[0] == '"' {
+		// ""
+		if len(data) == 2 {
+			*id = NilObjectGuid
+			return nil
+		}
+
+		v, err := strconv.ParseUint(string(data[1:len(data)-1]), 10, 64)
+		if err != nil {
+			return err
+		}
+
+		*id = ObjectGuid(v)
+		return nil
+	}
+
+	// число
+	v, err := strconv.ParseUint(string(data), 10, 64)
 	if err != nil {
 		return err
 	}
 
-	*id = EntityID(v)
+	*id = ObjectGuid(v)
 	return nil
 }

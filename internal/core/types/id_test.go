@@ -3,33 +3,34 @@ package types
 import (
 	"bytes"
 	"encoding/json"
+	"strconv"
 	"testing"
 )
 
-func TestEntityID_Generation(t *testing.T) {
+func TestObjectGuid_Generation(t *testing.T) {
 	tests := []struct {
 		name string
-		id   EntityID
+		id   ObjectGuid
 		want uint16
 	}{
 		{
 			name: "Generation zero",
-			id:   EntityID(0),
+			id:   ObjectGuid(0),
 			want: 0,
 		},
 		{
 			name: "Generation simple",
-			id:   EntityID(uint64(1) << shiftGen),
+			id:   ObjectGuid(uint64(1) << shiftGen),
 			want: 1,
 		},
 		{
 			name: "Generation max",
-			id:   EntityID(uint64(maskGen) << shiftGen),
+			id:   ObjectGuid(uint64(maskGen) << shiftGen),
 			want: maskGen,
 		},
 		{
 			name: "Generation masked correctly",
-			id:   EntityID(uint64(0xFFFFFFFF) << shiftGen),
+			id:   ObjectGuid(uint64(0xFFFFFFFF) << shiftGen),
 			want: maskGen,
 		},
 	}
@@ -43,30 +44,30 @@ func TestEntityID_Generation(t *testing.T) {
 	}
 }
 
-func TestEntityID_Index(t *testing.T) {
+func TestObjectGuid_Index(t *testing.T) {
 	tests := []struct {
 		name string
-		id   EntityID
+		id   ObjectGuid
 		want uint32
 	}{
 		{
 			name: "Index zero",
-			id:   EntityID(0),
+			id:   ObjectGuid(0),
 			want: 0,
 		},
 		{
 			name: "Index simple",
-			id:   EntityID(42),
+			id:   ObjectGuid(42),
 			want: 42,
 		},
 		{
 			name: "Index max",
-			id:   EntityID(maskIndex),
+			id:   ObjectGuid(maskIndex),
 			want: maskIndex,
 		},
 		{
 			name: "Index masked correctly",
-			id:   EntityID(uint64(maskIndex) | (1 << shiftGen)),
+			id:   ObjectGuid(uint64(maskIndex) | (1 << shiftGen)),
 			want: maskIndex,
 		},
 	}
@@ -80,8 +81,8 @@ func TestEntityID_Index(t *testing.T) {
 	}
 }
 
-func TestEntityID_IsLocal(t *testing.T) {
-	id := PackEntityID(5, 1, 0, 10)
+func TestObjectGuid_IsLocal(t *testing.T) {
+	id := PackObjectGuid(5, 1, 0, 10)
 
 	tests := []struct {
 		name         string
@@ -101,15 +102,22 @@ func TestEntityID_IsLocal(t *testing.T) {
 	}
 }
 
-func TestEntityID_IsNil(t *testing.T) {
+func TestNilObjectGuidPartsAreZero(t *testing.T) {
+	var id ObjectGuid
+	if id.Shard() != 0 || id.Type() != 0 || id.Generation() != 0 || id.Index() != 0 {
+		t.Fatal("NilObjectGuid must have all parts equal to zero")
+	}
+}
+
+func TestObjectGuid_IsNil(t *testing.T) {
 	tests := []struct {
 		name string
-		id   EntityID
+		id   ObjectGuid
 		want bool
 	}{
 		{"Zero is Nil", 0, true},
-		{"NilEntityID constant", NilEntityID, true},
-		{"Non-zero is not Nil", PackEntityID(1, 1, 1, 1), false},
+		{"NilObjectGuid constant", NilObjectGuid, true},
+		{"Non-zero is not Nil", PackObjectGuid(1, 1, 1, 1), false},
 	}
 
 	for _, tt := range tests {
@@ -121,20 +129,31 @@ func TestEntityID_IsNil(t *testing.T) {
 	}
 }
 
-func TestEntityID_MarshalJSON(t *testing.T) {
+func TestPackObjectGuid_Masking(t *testing.T) {
+	id := PackObjectGuid(255, 255, 65535, 0xFFFFFFFF)
+
+	if id.Shard() != maskShard ||
+		id.Type() != maskType ||
+		id.Generation() != maskGen ||
+		id.Index() != maskIndex {
+		t.Fatal("PackObjectGuid masking failed")
+	}
+}
+
+func TestObjectGuid_MarshalJSON(t *testing.T) {
 	tests := []struct {
 		name string
-		id   EntityID
+		id   ObjectGuid
 		want []byte
 	}{
 		{
 			name: "Simple ID",
-			id:   PackEntityID(1, 2, 3, 4),
-			want: []byte(`"` + string("72620556876251140") + `"`),
+			id:   PackObjectGuid(1, 2, 3, 4),
+			want: []byte(`"` + strconv.FormatUint(uint64(PackObjectGuid(1, 2, 3, 4)), 10) + `"`),
 		},
 		{
 			name: "Zero ID",
-			id:   EntityID(0),
+			id:   ObjectGuid(0),
 			want: []byte(`"0"`),
 		},
 	}
@@ -152,25 +171,25 @@ func TestEntityID_MarshalJSON(t *testing.T) {
 	}
 }
 
-func TestEntityID_Shard(t *testing.T) {
+func TestObjectGuid_Shard(t *testing.T) {
 	tests := []struct {
 		name string
-		id   EntityID
+		id   ObjectGuid
 		want uint8
 	}{
 		{
 			name: "Shard zero",
-			id:   EntityID(0),
+			id:   ObjectGuid(0),
 			want: 0,
 		},
 		{
 			name: "Shard simple",
-			id:   EntityID(uint64(5) << shiftShard),
+			id:   ObjectGuid(uint64(5) << shiftShard),
 			want: 5,
 		},
 		{
 			name: "Shard max",
-			id:   EntityID(uint64(maskShard) << shiftShard),
+			id:   ObjectGuid(uint64(maskShard) << shiftShard),
 			want: maskShard,
 		},
 	}
@@ -184,13 +203,13 @@ func TestEntityID_Shard(t *testing.T) {
 	}
 }
 
-func TestEntityID_String(t *testing.T) {
+func TestObjectGuid_String(t *testing.T) {
 	tests := []struct {
 		name string
-		id   EntityID
+		id   ObjectGuid
 	}{
-		{"Nil", EntityID(0)},
-		{"Non-nil", PackEntityID(1, 2, 3, 4)},
+		{"Nil", ObjectGuid(0)},
+		{"Non-nil", PackObjectGuid(1, 2, 3, 4)},
 	}
 
 	for _, tt := range tests {
@@ -203,25 +222,25 @@ func TestEntityID_String(t *testing.T) {
 	}
 }
 
-func TestEntityID_Type(t *testing.T) {
+func TestObjectGuid_Type(t *testing.T) {
 	tests := []struct {
 		name string
-		id   EntityID
+		id   ObjectGuid
 		want uint8
 	}{
 		{
 			name: "Type zero",
-			id:   EntityID(0),
+			id:   ObjectGuid(0),
 			want: 0,
 		},
 		{
 			name: "Type simple",
-			id:   EntityID(uint64(7) << shiftType),
+			id:   ObjectGuid(uint64(7) << shiftType),
 			want: 7,
 		},
 		{
 			name: "Type max",
-			id:   EntityID(uint64(maskType) << shiftType),
+			id:   ObjectGuid(uint64(maskType) << shiftType),
 			want: maskType,
 		},
 	}
@@ -235,27 +254,27 @@ func TestEntityID_Type(t *testing.T) {
 	}
 }
 
-func TestEntityID_UnmarshalJSON(t *testing.T) {
+func TestObjectGuid_UnmarshalJSON(t *testing.T) {
 	tests := []struct {
 		name    string
 		data    []byte
-		want    EntityID
+		want    ObjectGuid
 		wantErr bool
 	}{
 		{
 			name: "String ID",
 			data: []byte(`"123"`),
-			want: EntityID(123),
+			want: ObjectGuid(123),
 		},
 		{
 			name: "Number ID",
 			data: []byte(`456`),
-			want: EntityID(456),
+			want: ObjectGuid(456),
 		},
 		{
 			name: "Empty string",
 			data: []byte(`""`),
-			want: EntityID(0),
+			want: ObjectGuid(0),
 		},
 		{
 			name:    "Invalid format",
@@ -266,7 +285,7 @@ func TestEntityID_UnmarshalJSON(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var id EntityID
+			var id ObjectGuid
 			err := id.UnmarshalJSON(tt.data)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("UnmarshalJSON() error = %v, wantErr %v", err, tt.wantErr)
@@ -278,7 +297,7 @@ func TestEntityID_UnmarshalJSON(t *testing.T) {
 	}
 }
 
-func TestPackEntityID(t *testing.T) {
+func TestPackObjectGuid(t *testing.T) {
 	tests := []struct {
 		name  string
 		shard uint8
@@ -293,7 +312,7 @@ func TestPackEntityID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			id := PackEntityID(tt.shard, tt.typ, tt.gen, tt.index)
+			id := PackObjectGuid(tt.shard, tt.typ, tt.gen, tt.index)
 
 			if id.Shard() != tt.shard {
 				t.Errorf("Shard() = %v, want %v", id.Shard(), tt.shard)
@@ -311,15 +330,15 @@ func TestPackEntityID(t *testing.T) {
 	}
 }
 
-func TestEntityID_JSONRoundTrip(t *testing.T) {
-	original := PackEntityID(3, 4, 5, 6)
+func TestObjectGuid_JSONRoundTrip(t *testing.T) {
+	original := PackObjectGuid(3, 4, 5, 6)
 
 	data, err := json.Marshal(original)
 	if err != nil {
 		t.Fatalf("Marshal error: %v", err)
 	}
 
-	var decoded EntityID
+	var decoded ObjectGuid
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("Unmarshal error: %v", err)
 	}
@@ -329,9 +348,9 @@ func TestEntityID_JSONRoundTrip(t *testing.T) {
 	}
 }
 
-// FuzzPackEntityID проверяет инвариант:
-// PackEntityID → извлечение полей → равенство исходным значениям.
-func FuzzPackEntityID(f *testing.F) {
+// FuzzPackObjectGuid проверяет инвариант:
+// PackObjectGuid → извлечение полей → равенство исходным значениям.
+func FuzzPackObjectGuid(f *testing.F) {
 	// Сидовые значения (важно для воспроизводимости)
 	f.Add(uint8(0), uint8(0), uint16(0), uint32(0))
 	f.Add(uint8(1), uint8(2), uint16(3), uint32(4))
@@ -344,7 +363,7 @@ func FuzzPackEntityID(f *testing.F) {
 		gen uint16,
 		index uint32,
 	) {
-		id := PackEntityID(shard, typ, gen, index)
+		id := PackObjectGuid(shard, typ, gen, index)
 
 		if got := id.Shard(); got != shard {
 			t.Fatalf("Shard mismatch: got %d, want %d", got, shard)
@@ -361,21 +380,21 @@ func FuzzPackEntityID(f *testing.F) {
 	})
 }
 
-func FuzzEntityID_JSONRoundTrip(f *testing.F) {
+func FuzzObjectGuid_JSONRoundTrip(f *testing.F) {
 	f.Add(uint64(0))
 	f.Add(uint64(1))
 	f.Add(uint64(123456789))
 	f.Add(^uint64(0)) // max uint64
 
 	f.Fuzz(func(t *testing.T, raw uint64) {
-		original := EntityID(raw)
+		original := ObjectGuid(raw)
 
 		data, err := json.Marshal(original)
 		if err != nil {
 			t.Fatalf("Marshal failed: %v", err)
 		}
 
-		var decoded EntityID
+		var decoded ObjectGuid
 		if err := json.Unmarshal(data, &decoded); err != nil {
 			t.Fatalf("Unmarshal failed: %v", err)
 		}
@@ -389,7 +408,7 @@ func FuzzEntityID_JSONRoundTrip(f *testing.F) {
 	})
 }
 
-func FuzzEntityID_UnmarshalJSON(f *testing.F) {
+func FuzzObjectGuid_UnmarshalJSON(f *testing.F) {
 	f.Add([]byte(`"123"`))
 	f.Add([]byte(`123`))
 	f.Add([]byte(`""`))
@@ -398,7 +417,7 @@ func FuzzEntityID_UnmarshalJSON(f *testing.F) {
 	f.Add([]byte(`[]`))
 
 	f.Fuzz(func(t *testing.T, data []byte) {
-		var id EntityID
+		var id ObjectGuid
 		_ = id.UnmarshalJSON(data)
 		// Единственное требование: отсутствие panic
 	})

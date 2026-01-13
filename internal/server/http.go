@@ -2,23 +2,30 @@ package server
 
 import (
 	"cognitive-server/internal/engine"
-	"cognitive-server/internal/version"
 	"cognitive-server/pkg/logger"
+	"cognitive-server/pkg/version"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	_ "net/http/pprof" // Profiling
 	"strconv"
+
+	"github.com/gorilla/websocket"
 )
 
 type Server struct {
-	Engine *engine.GameService
-	Port   uint16
+	Engine   *engine.Engine
+	Port     uint16
+	upgrader websocket.Upgrader
 }
 
-func New(engine *engine.GameService, port uint16) *Server {
+func New(engine *engine.Engine, port uint16) *Server {
 	return &Server{
 		Engine: engine,
 		Port:   port,
+		upgrader: websocket.Upgrader{
+			CheckOrigin: func(r *http.Request) bool { return true },
+		},
 	}
 }
 
@@ -31,11 +38,8 @@ func (s *Server) Run() error {
 	mux.HandleFunc("/health", enableCORS(s.handleHealth))
 	mux.HandleFunc("/version", enableCORS(s.handleVersion))
 
-	// Debug Routes (из вашего debug.go, который теперь часть пакета server)
-	debugHandler := NewDebugHandler(s.Engine)
-	debugHandler.RegisterRoutes(mux)
-
-	logger.Log.Info("🛡️  Cognitive Dungeon Server running on :" + strconv.Itoa(int(s.Port)))
+	addr := fmt.Sprintf(":%d", s.Port)
+	logger.Log.Infof("🛡️  Cognitive Dungeon Server running on %s", addr)
 	return http.ListenAndServe(":"+strconv.Itoa(int(s.Port)), mux)
 }
 
@@ -48,21 +52,6 @@ func enableCORS(next http.HandlerFunc) http.HandlerFunc {
 
 		next(w, r)
 	}
-}
-
-// handleWS обрабатывает подключение по WebSocket
-func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		logger.Log.Error("Upgrade error:", err)
-		return
-	}
-
-	client := NewClient(s.Engine, conn)
-
-	// Запускаем пампы
-	go client.writePump()
-	go client.readPump()
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
