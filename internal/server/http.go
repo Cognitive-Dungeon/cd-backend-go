@@ -1,7 +1,7 @@
 package server
 
 import (
-	"cognitive-server/internal/engine"
+	"cognitive-server/internal/gateway"
 	"cognitive-server/pkg/logger"
 	"cognitive-server/pkg/version"
 	"encoding/json"
@@ -14,15 +14,15 @@ import (
 )
 
 type Server struct {
-	Engine   *engine.Engine
+	Gateway  *gateway.GameGateway // <--- Заменили Engine на Gateway
 	Port     uint16
 	upgrader websocket.Upgrader
 }
 
-func New(engine *engine.Engine, port uint16) *Server {
+func New(gw *gateway.GameGateway, port uint16) *Server {
 	return &Server{
-		Engine: engine,
-		Port:   port,
+		Gateway: gw,
+		Port:    port,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true },
 		},

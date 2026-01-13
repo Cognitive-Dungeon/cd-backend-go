@@ -3,9 +3,7 @@ package server
 import (
 	"cognitive-server/internal/api"
 	"cognitive-server/internal/core/types"
-	"cognitive-server/internal/core/types/enums"
 	"cognitive-server/internal/engine"
-	"cognitive-server/pkg/eventbus"
 	"cognitive-server/pkg/logger"
 	"encoding/json"
 	"net/http"
@@ -16,10 +14,10 @@ import (
 
 type Client struct {
 	conn   *websocket.Conn
-	engine *engine.Engine
+	server *Server
 
 	// GUID сущности. Если 0 (Nil), значит клиент еще не залогинился.
-	objectGuid engine.ObjectGuid
+	objectGuid types.ObjectGuid
 }
 
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
@@ -31,7 +29,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 
 	client := &Client{
 		conn:   conn,
-		engine: s.Engine,
+		server: s,
 	}
 
 	// Мы НЕ спавним игрока сразу. Мы ждем команду LOGIN.
@@ -69,80 +67,21 @@ func (c *Client) handleMessage(msg api.InboundMessage) {
 
 	switch msg.Action {
 	case "LOGIN":
-		// Токен приходит в поле Token, а не в Payload (легаси клиента)
-		c.handleLogin(msg.Token)
+		// Вся логика создания игрока теперь в Gateway
+		// Мы передаем callback, который выполнится, когда игрок будет создан
+		c.server.Gateway.HandleLogin(msg.Token, func(guid engine.ObjectGuid) {
+			c.objectGuid = guid
+			// Запускаем отправку данных
+			go c.writeLoop()
+		})
 
 	case "MOVE":
 		var payload api.MovePayload
-		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
-			logger.Log.Warn("Invalid MOVE payload")
-			return
+		if err := json.Unmarshal(msg.Payload, &payload); err == nil {
+			// Gateway сам разберется с векторами и enum-ами
+			c.server.Gateway.HandleMove(c.objectGuid, payload)
 		}
-		c.handleMove(payload)
 	}
-}
-
-func (c *Client) handleLogin(token string) {
-	if token == "" {
-		token = "Unnamed"
-	}
-
-	// Отправляем задачу в движок (Main Thread)
-	c.engine.PushCommand(func() {
-		// 1. Создаем сущность
-		guid := c.engine.Instance.CreateObject(enums.ObjectTypePlayer)
-
-		// 2. Наполняем компонентами
-		c.engine.Instance.NewEntityBuilder(guid).
-			WithName(engine.NameComponent{Name: token}). // Используем токен как имя
-			WithPosition(engine.PositionComponent{TilePos: engine.TilePos{X: 10, Y: 10}}).
-			WithStats(engine.StatsComponent{Health: 100, MaxHealth: 100}).
-			// Визуал: Зеленая @
-			WithRender(types.MakeGlyph(0x00FF00, '@')).
-			WithController(engine.ControllerComponent{AgentID: token})
-
-		// 3. Привязываем к клиенту
-		c.objectGuid = guid
-
-		logger.Log.Infof("Client logged in as '%s' -> GUID %s", token, guid)
-
-		// 4. ТЕПЕРЬ запускаем отправку обновлений (Snapshot Loop)
-		// Запускаем в отдельной горутине
-		go c.writeLoop()
-	})
-}
-
-func (c *Client) handleMove(p api.MovePayload) {
-	var dir enums.Direction
-
-	// АДАПТЕР: Вектор -> Enum
-	// Это изолирует легаси протокол от чистой внутренней логики
-	switch {
-	case p.Dy < 0:
-		dir = enums.DirUp
-	case p.Dy > 0:
-		dir = enums.DirDown
-	case p.Dx < 0:
-		dir = enums.DirLeft
-	case p.Dx > 0:
-		dir = enums.DirRight
-	default:
-		// Если dx=0, dy=0 или какая-то диагональ (если мы её не поддерживаем),
-		// просто игнорируем
-		return
-	}
-
-	// Отправляем в движок (Движок получает чистый Enum)
-	c.engine.PushCommand(func() {
-		if !c.engine.Instance.IsValid(c.objectGuid) {
-			return
-		}
-
-		c.engine.Bus.Publish(eventbus.EventType(enums.EventMoveRequest), enums.MoveRequestEvent{
-			Object:    c.objectGuid,
-			Direction: dir,
-		})
-	})
 }
 
 func (c *Client) writeLoop() {
@@ -153,19 +92,14 @@ func (c *Client) writeLoop() {
 	}()
 
 	for {
-		// Проверка: если клиент отключился или объект удален - выходим
-		// (в простой реализации достаточно проверки conn write error)
-
 		select {
 		case <-ticker.C:
-			// Генерируем снапшот (thread-safe, т.к. GetWorldSnapshot читает ECS)
-			// В идеале GetWorldSnapshot должен вызываться внутри PushCommand и отдавать результат в канал,
-			// но для чтения Paged Slice это допустимо, если мы не ресайзим чанки каждую миллисекунду.
-			snapshot := c.engine.GetWorldSnapshot(c.objectGuid)
+			// Получаем снапшот через Gateway
+			snapshot := c.server.Gateway.GetSnapshot(c.objectGuid)
 
 			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := c.conn.WriteJSON(snapshot); err != nil {
-				return // Ошибка записи = клиент отвалился
+				return
 			}
 		}
 	}
