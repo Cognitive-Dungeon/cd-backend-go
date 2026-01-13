@@ -9,7 +9,7 @@ import "strings"
 //   - значение хранится в ObjectGuid
 //   - используется для базовой идентификации объекта
 //
-// Для семантических проверок (Unit, Enemy, Item и т.п.)
+// Для семантических проверок (Object, Enemy, Item и т.п.)
 // используется ObjectTypeMask.
 type ObjectType uint8
 

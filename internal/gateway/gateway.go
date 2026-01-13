@@ -41,7 +41,11 @@ func (g *GameGateway) HandleLogin(token string, callback func(engine.ObjectGuid)
 			WithPosition(engine.PositionComponent{TilePos: engine.TilePos{X: 10, Y: 10}}).
 			WithStats(engine.StatsComponent{Health: 100, MaxHealth: 100}).
 			WithRender(types.MakeGlyph(0x00FF00, '@')).
-			WithController(engine.ControllerComponent{AgentID: token})
+			WithController(engine.ControllerComponent{AgentID: token}).
+			WithSpells(engine.SpellbookComponent{
+				KnownSpells: []uint32{1, 2, 4}, // Умеет бить, фаербол и блинк
+				Cooldowns:   make(map[uint32]float64),
+			})
 
 		logger.Log.Infof("Gateway: Login '%s' -> %s", token, guid)
 
@@ -75,6 +79,20 @@ func (g *GameGateway) HandleMove(guid engine.ObjectGuid, payload api.MovePayload
 		g.engine.Bus.Publish(eventbus.EventType(enums.EventMoveRequest), enums.MoveRequestEvent{
 			Object:    guid,
 			Direction: dir,
+		})
+	})
+}
+
+func (g *GameGateway) HandleCast(casterGuid engine.ObjectGuid, payload api.CastPayload) {
+	g.engine.PushCommand(func() {
+		if !g.engine.Instance.IsValid(casterGuid) {
+			return
+		}
+
+		g.engine.Bus.Publish(eventbus.EventType(enums.EventCastRequest), enums.CastRequestEvent{
+			Caster:  casterGuid,
+			Target:  payload.TargetID,
+			SpellID: payload.SpellID,
 		})
 	})
 }

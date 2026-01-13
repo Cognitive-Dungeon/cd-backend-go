@@ -1,6 +1,7 @@
 package api
 
 import (
+	"cognitive-server/internal/core/types"
 	"encoding/json"
 )
 
@@ -19,6 +20,12 @@ type MovePayload struct {
 	Dy int `json:"dy"` // -1, 0, 1
 }
 
+// CastPayload — параметры применения способности
+type CastPayload struct {
+	SpellID  types.SpellID    `json:"spellId"`
+	TargetID types.ObjectGuid `json:"targetId"`
+}
+
 // --- ИСХОДЯЩИЕ (Server -> Client) ---
 
 // ServerResponse — главный пакет обновления мира.
@@ -31,6 +38,16 @@ type ServerResponse struct {
 	Grid           *GridMeta    `json:"grid"`           // Размеры карты
 	Map            []TileView   `json:"map"`            // Тайлы
 	Entities       []EntityView `json:"entities"`       // Сущности
+	Spells         []SpellView  `json:"spells,omitempty"`
+}
+
+type SpellView struct {
+	ID       uint32  `json:"id"`
+	Name     string  `json:"name"`
+	Cost     int     `json:"cost"`
+	CostType string  `json:"costType"` // "MANA", "HP"
+	Cooldown int     `json:"cooldown"` // Полный КД (для справки)
+	Range    float64 `json:"range"`
 }
 
 // GridMeta — размеры мира.

@@ -1,0 +1,41 @@
+[
+  {
+    "id": 1,
+    "name": "Melee Attack",
+    "description": "Basic strike",
+    "range": 1.5,
+    "castTime": 0,
+    "cooldown": 1500,
+    "costType": 0,
+    "costValue": 0,
+    "attributes": ["TARGET_ENEMY", "CANT_MISS"],
+    "effects": [
+      { "type": 1, "baseValue": 10 }
+    ]
+  },
+  {
+    "id": 2,
+    "name": "Fireball",
+    "description": "Hurls a fiery ball.",
+    "range": 15.0,
+    "castTime": 2000,
+    "cooldown": 0,
+    "costType": 2,
+    "costValue": 20,
+    "attributes": ["TARGET_ENEMY"],
+    "effects": [
+      { "type": 1, "baseValue": 30 }
+    ]
+  },
+  {
+    "id": 4,
+    "name": "Blink",
+    "attributes": ["INSTANT", "CAST_WHILE_MOVING", "TARGET_SELF"],
+    "cooldown": 15000,
+    "costType": 2,
+    "costValue": 10,
+    "effects": [
+      { "type": 3, "baseValue": 5 }
+    ]
+  }
+]

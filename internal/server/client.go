@@ -60,6 +60,8 @@ func (c *Client) readLoop() {
 
 func (c *Client) handleMessage(msg api.InboundMessage) {
 	// Если мы еще не залогинены, принимаем только LOGIN
+	// ЛОГ №1: Видим ли мы вообще сообщение?
+	logger.Log.Debugf("WS Recv: Action=%s Payload=%s", msg.Action, string(msg.Payload))
 	if c.objectGuid == 0 && msg.Action != "LOGIN" {
 		logger.Log.Warn("Ignored command before LOGIN")
 		return
@@ -81,7 +83,20 @@ func (c *Client) handleMessage(msg api.InboundMessage) {
 			// Gateway сам разберется с векторами и enum-ами
 			c.server.Gateway.HandleMove(c.objectGuid, payload)
 		}
+
+	case "CAST":
+		var payload api.CastPayload
+		// ЛОГ №2: Ошибка JSON парсинга
+		if err := json.Unmarshal(msg.Payload, &payload); err == nil {
+			c.server.Gateway.HandleCast(c.objectGuid, payload)
+		} else {
+			logger.Log.Errorf("CAST Unmarshal Error: %v. Payload: %s", err, string(msg.Payload))
+		}
+
+	default:
+		logger.Log.Warnf("Unknown Action: %s", msg.Action)
 	}
+
 }
 
 func (c *Client) writeLoop() {

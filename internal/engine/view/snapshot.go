@@ -5,6 +5,7 @@ import (
 	"cognitive-server/internal/core/types"
 	"cognitive-server/internal/core/types/enums"
 	"cognitive-server/internal/engine"
+	"strconv"
 )
 
 // NewSnapshotBuilder создает хелпер для генерации ответов
@@ -68,7 +69,7 @@ func (b *SnapshotBuilder) BuildSnapshot(playerGuid engine.ObjectGuid) *api.Serve
 			}
 
 			entView := api.EntityView{
-				ID:   guid.String(),
+				ID:   strconv.FormatUint(uint64(guid), 10),
 				Name: "Unknown",
 				Type: "UNIT",
 			}
@@ -92,6 +93,36 @@ func (b *SnapshotBuilder) BuildSnapshot(playerGuid engine.ObjectGuid) *api.Serve
 			if guid == playerGuid {
 				resp.MyEntityID = guid.String()
 				resp.ActiveEntityID = guid.String()
+
+				// --- Сборка Spellbook ---
+				// Получаем компонент книги заклинаний
+				spellbook := inst.Spells[chunkIdx][slotIdx]
+				if spellbook != nil {
+					for _, spellID := range spellbook.KnownSpells {
+						// Достаем инфо из Registry
+						// Приводим uint32 -> types.SpellID
+						info, found := b.Engine.SpellRegistry.Get(types.SpellID(spellID))
+						if !found {
+							continue
+						}
+
+						sView := api.SpellView{
+							ID:       uint32(info.ID),
+							Name:     info.Name,
+							Cost:     int(info.CostValue),
+							Range:    info.Range,
+							Cooldown: int(info.Cooldown),
+						}
+
+						if info.CostType == types.SpellResourceMana {
+							sView.CostType = "MANA"
+						} else if info.CostType == types.SpellResourceHealth {
+							sView.CostType = "HP"
+						}
+
+						resp.Spells = append(resp.Spells, sView)
+					}
+				}
 			}
 
 			resp.Entities = append(resp.Entities, entView)

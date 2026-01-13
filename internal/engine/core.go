@@ -18,7 +18,11 @@ type Engine struct {
 
 	Instance *Instance
 
-	MovementSys *MovementSystem
+	MovementSys   *MovementSystem
+	SpellRegistry *SpellRegistry // Храним реестр
+	SpellSys      *SpellSystem
+	DamageSys     *DamageSystem
+	DeathSys      *DeathSystem
 
 	// Канал для входящих "задач" от сети
 	commandQueue chan func()
@@ -39,7 +43,20 @@ func New(cfg *config.SimulationConfig) *Engine {
 		inst.Grid.SetTile(TilePos{X: 19, Y: i}, enums.TileWall)
 	}
 
+	// 1. Загрузка данных
+	spellReg := NewSpellRegistry()
+	// Внимание: путь к assets должен быть корректным относительно точки запуска
+	// При запуске из корня проекта: assets/spells.json
+	if err := spellReg.LoadFromFile("assets/spells.json"); err != nil {
+		logger.Log.Fatalf("Failed to load spells: %v", err)
+	}
+	logger.Log.Info("✨ Spell Registry loaded")
+
+	// 2. Системы
 	moveSystem := NewMovementSystem(inst, bus)
+	spellSystem := NewSpellSystem(inst, bus, spellReg)
+	damageSystem := NewDamageSystem(inst, bus)
+	deathSystem := NewDeathSystem(inst, bus)
 
 	// --- ТЕСТОВЫЙ СПАВН (Чтобы проверить, что ECS работает) ---
 	// Создадим "Игрока"
@@ -54,15 +71,26 @@ func New(cfg *config.SimulationConfig) *Engine {
 			Cooldowns:   make(map[uint32]float64),
 		})
 
+	dummyGuid := inst.CreateObject(enums.ObjectTypeCreature)
+	inst.NewEntityBuilder(dummyGuid).
+		WithName(NameComponent{Name: "Target Dummy"}).
+		WithRender(types.MakeGlyph(0xFF0000, 'D')).
+		WithStats(StatsComponent{Health: 50, MaxHealth: 50}).
+		WithPosition(PositionComponent{types.TilePos{X: 12, Y: 10}})
+
 	chunk, slot := inst.locate(playerGuid.Index())
 	logger.Log.Infof("Spawned Player at %v with GUID %s", inst.Positions[chunk][slot], playerGuid)
 
 	return &Engine{
-		cfg:          cfg,
-		Bus:          bus,
-		Instance:     inst,
-		MovementSys:  moveSystem,
-		commandQueue: make(chan func(), 1024),
+		cfg:           cfg,
+		Bus:           bus,
+		Instance:      inst,
+		MovementSys:   moveSystem,
+		SpellRegistry: spellReg,
+		SpellSys:      spellSystem,
+		DamageSys:     damageSystem,
+		DeathSys:      deathSystem,
+		commandQueue:  make(chan func(), 1024),
 	}
 }
 

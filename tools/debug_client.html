@@ -229,6 +229,17 @@
             </div>
 
             <div class="control-group">
+                <div class="control-header">Action Bar</div>
+                <!-- Сюда JS будет вставлять кнопки -->
+                <div id="action-bar" class="btn-grid">
+                    <span style="color:#666; font-size:11px">Waiting for spellbook...</span>
+                </div>
+                <div style="margin-top: 5px; font-size: 10px; color: #666;">
+                    * Click on yourself (@) to self-cast
+                </div>
+            </div>
+
+            <div class="control-group">
                 <div class="control-header">Inventory</div>
                 <div style="display: flex; gap: 5px; margin-bottom: 5px;">
                     <button onclick="useSelectedItem()" style="flex:1; color:var(--warning)">Use</button>
@@ -357,6 +368,9 @@
         };
     }
 
+    // Кэш, чтобы не перерисовывать DOM если спеллы не изменились
+    let lastSpellsJson = "";
+
     function handleUpdate(msg) {
         if (msg.myEntityId) {
             myId = msg.myEntityId;
@@ -375,6 +389,11 @@
             turnInd.style.display = "none";
         }
 
+        // Рендер спеллов
+        if (msg.spells) {
+            renderActionBar(msg.spells);
+        }
+
         if (msg.grid && !gridInitialized) initGrid(msg.grid.w, msg.grid.h);
 
         // Reset visuals ONLY if we received a map update (prevents ghosting on level change)
@@ -390,6 +409,46 @@
             updateInspector();
         }
         if (msg.logs) renderLogs(msg.logs);
+    }
+
+    function renderActionBar(spells) {
+        // Простая оптимизация: если данные те же, не трогаем DOM
+        const currentJson = JSON.stringify(spells);
+        if (currentJson === lastSpellsJson) return;
+        lastSpellsJson = currentJson;
+
+        const container = document.getElementById("action-bar");
+        container.innerHTML = "";
+
+        spells.forEach(s => {
+            const btn = document.createElement("button");
+
+            // Стилизация в зависимости от типа (можно расширить)
+            let color = "var(--text)";
+            if (s.name.includes("Attack")) color = "var(--danger)";
+            else if (s.name.includes("Fire")) color = "var(--warning)";
+            else if (s.name.includes("Heal")) color = "var(--success)";
+            else if (s.name.includes("Blink")) color = "var(--accent)";
+
+            btn.style.color = color;
+            btn.style.borderColor = color;
+
+            // Текст кнопки: "1. Fireball (20 MANA)"
+            // Для красоты добавим ID для хоткеев
+            btn.innerText = `${s.id}. ${s.name}`;
+
+            if (s.cost > 0) {
+                const costSpan = document.createElement("span");
+                costSpan.style.fontSize = "10px";
+                costSpan.style.marginLeft = "5px";
+                costSpan.style.opacity = "0.7";
+                costSpan.innerText = `(${s.cost} ${s.costType || ''})`;
+                btn.appendChild(costSpan);
+            }
+
+            btn.onclick = () => castSpell(s.id);
+            container.appendChild(btn);
+        });
     }
 
     // --- MAP RENDERER ---
@@ -493,6 +552,28 @@
     function sendAction(act) {
         if (act !== 'INIT' && !selectedTarget) return alert("Select target!");
         sendCommand(act, { targetId: selectedTarget });
+    }
+    function castSpell(spellId) {
+        // Если цель не выбрана, пытаемся кастовать в себя (Self Cast)
+        // Это удобно для лечения и баффов
+        let target = selectedTarget;
+        if (!target) {
+            if (myId) {
+                target = myId; // Auto-self cast
+                log("INFO", "No target selected, casting on self.");
+            } else {
+                return alert("Select a target first!");
+            }
+        }
+
+        log("INFO", `Casting Spell ID ${spellId} on ${target}...`);
+
+        // Шлем команду CAST согласно нашему новому протоколу
+        // Payload: { spellId: number, targetId: string }
+        sendCommand("CAST", {
+            spellId: spellId,
+            targetId: target
+        });
     }
 
     // --- INVENTORY ---

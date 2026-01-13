@@ -1,51 +1,70 @@
 package engine
 
-// SpellEffectType — что делает заклинание.
-type SpellEffectType int
-
-const (
-	EffectDummy    SpellEffectType = iota
-	EffectDamage                   // Нанести урон
-	EffectHeal                     // Полечить
-	EffectTeleport                 // Скачок (Blink)
+import (
+	"cognitive-server/internal/core/types"
+	"encoding/json"
+	"os"
 )
 
-// SpellInfo — "Паспорт" заклинания (Read-only static data).
-type SpellInfo struct {
-	ID        uint32
-	Name      string
-	CastTime  float64 // Секунды. 0 = Instant
-	Cooldown  float64 // Секунды
-	Range     int     // Дистанция в клетках
-	Effect    SpellEffectType
-	BaseValue int // Сила эффекта (урон/хил)
-	Cost      int // Цена маны
+// SpellEffectDef описывает один эффект заклинания (урон, хил и т.д.)
+type SpellEffectDef struct {
+	Type      types.SpellEffectType `json:"type"`
+	BaseValue int32                 `json:"baseValue"` // Базовое значение (урон)
+	Target    string                `json:"target"`    // "TARGET_ENEMY", "TARGET_SELF"
 }
 
-// SpellRegistry — Глобальный справочник всех заклинаний игры.
-var SpellRegistry = map[uint32]SpellInfo{
-	// 1. Обычная атака (Melee)
-	1: {
-		ID: 1, Name: "Attack",
-		CastTime: 0, Cooldown: 1.5, Range: 1,
-		Effect: EffectDamage, BaseValue: 10, Cost: 0,
-	},
-	// 2. Огненный шар
-	2: {
-		ID: 2, Name: "Fireball",
-		CastTime: 2.0, Cooldown: 0, Range: 10,
-		Effect: EffectDamage, BaseValue: 30, Cost: 20,
-	},
-	// 3. Малое лечение
-	3: {
-		ID: 3, Name: "Lesser Heal",
-		CastTime: 1.5, Cooldown: 0, Range: 30,
-		Effect: EffectHeal, BaseValue: 40, Cost: 15,
-	},
-	// 4. Скачок (Мгновенное перемещение)
-	4: {
-		ID: 4, Name: "Blink",
-		CastTime: 0, Cooldown: 15.0, Range: 5,
-		Effect: EffectTeleport, BaseValue: 0, Cost: 10,
-	},
+// SpellDef — это "DBC запись". Статическое описание заклинания.
+type SpellDef struct {
+	ID          types.SpellID `json:"id"`
+	Name        string        `json:"name"`
+	Description string        `json:"description"`
+
+	// Характеристики
+	Range      float64              `json:"range"` // Дистанция (в метрах/тайлах)
+	Cooldown   float64              // Секунды
+	Attributes types.SpellAttribute `json:"attributes"`
+
+	// Ресурсы
+	CostType  types.SpellResourceType `json:"costType"`
+	CostValue int32                   `json:"costValue"`
+
+	// Эффекты
+	Effects []SpellEffectDef `json:"effects"`
+}
+
+// SpellRegistry хранит загруженные спеллы.
+// Используем map для быстрого поиска по ID.
+type SpellRegistry struct {
+	spells map[types.SpellID]SpellDef
+}
+
+func NewSpellRegistry() *SpellRegistry {
+	return &SpellRegistry{
+		spells: make(map[types.SpellID]SpellDef),
+	}
+}
+
+func (r *SpellRegistry) LoadFromFile(path string) error {
+	// Открываем файл
+	// В реальном проекте путь должен быть абсолютным или относительно бинарника
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	var spellList []SpellDef
+	if err := json.Unmarshal(data, &spellList); err != nil {
+		return err
+	}
+
+	// Индексируем
+	for _, spell := range spellList {
+		r.spells[spell.ID] = spell
+	}
+	return nil
+}
+
+func (r *SpellRegistry) Get(id types.SpellID) (SpellDef, bool) {
+	s, ok := r.spells[id]
+	return s, ok
 }
