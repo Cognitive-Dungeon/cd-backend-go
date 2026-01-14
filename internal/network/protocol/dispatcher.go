@@ -26,7 +26,7 @@ func (d *Dispatcher) Handle(c *server.Client, msg api.InboundMessage) {
 	}
 
 	// Общая проверка авторизации
-	if msg.Action != "LOGIN" && c.ObjectGuid() == 0 {
+	if msg.Action != "LOGIN" && !c.Session().IsAuthenticated() {
 		logger.Log.Warn("Ignored command before LOGIN")
 		return
 	}

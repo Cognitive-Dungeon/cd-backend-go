@@ -26,5 +26,5 @@ func (h *MoveHandler) Handle(c *server.Client, msg api.InboundMessage) {
 	if err := json.Unmarshal(msg.Payload, &p); err != nil {
 		return
 	}
-	h.gateway.HandleMove(c.ObjectGuid(), p)
+	h.gateway.HandleMove(c.Session().ObjectGuid(), p)
 }

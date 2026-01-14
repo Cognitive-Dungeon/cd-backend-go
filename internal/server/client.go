@@ -15,20 +15,15 @@ type Client struct {
 	conn   *websocket.Conn
 	server *Server
 
-	// GUID сущности. Если 0 (Nil), значит клиент еще не залогинился.
-	objectGuid types.ObjectGuid
+	session *Session
 
 	sendChan chan interface{}
 
 	closed atomic.Bool
 }
 
-func (c *Client) ObjectGuid() types.ObjectGuid {
-	return c.objectGuid
-}
-
-func (c *Client) SetObjectGuid(guid types.ObjectGuid) {
-	c.objectGuid = guid
+func (c *Client) Session() *Session {
+	return c.session
 }
 
 func (c *Client) onAuthenticated() {
@@ -36,7 +31,7 @@ func (c *Client) onAuthenticated() {
 }
 
 func (c *Client) OnLogin(guid types.ObjectGuid) {
-	c.objectGuid = guid
+	c.session.Authenticate(guid)
 	c.onAuthenticated()
 }
 
@@ -50,6 +45,7 @@ func (s *Server) HandleWS(w http.ResponseWriter, r *http.Request) {
 	client := &Client{
 		conn:     conn,
 		server:   s,
+		session:  NewSession(),
 		sendChan: make(chan interface{}, 64),
 	}
 
@@ -88,7 +84,7 @@ func (c *Client) writeLoop() {
 		// 🔁 Мир
 		case <-ticker.C:
 			// Получаем снапшот через Gateway
-			snapshot := c.server.Gateway.GetSnapshot(c.objectGuid)
+			snapshot := c.server.Gateway.GetSnapshot(c.session.objectGuid)
 
 			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := c.conn.WriteJSON(snapshot); err != nil {
@@ -108,8 +104,8 @@ func (c *Client) cleanup() {
 		return // уже закрыт
 	}
 
-	if c.objectGuid != types.NilObjectGuid {
-		c.server.unregisterClient(c.objectGuid)
+	if c.session.ObjectGuid() != types.NilObjectGuid {
+		c.server.unregisterClient(c.session.ObjectGuid())
 	}
 
 	c.conn.Close()

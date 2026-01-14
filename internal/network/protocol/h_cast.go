@@ -26,5 +26,5 @@ func (h *CastHandler) Handle(c *server.Client, msg api.InboundMessage) {
 	if err := json.Unmarshal(msg.Payload, &p); err != nil {
 		return
 	}
-	h.gateway.HandleCast(c.ObjectGuid(), p)
+	h.gateway.HandleCast(c.Session().ObjectGuid(), p)
 }

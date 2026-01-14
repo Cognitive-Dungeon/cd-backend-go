@@ -64,7 +64,7 @@ func (s *Server) unregisterClient(guid types.ObjectGuid) {
 }
 
 func (s *Server) onClientAuthenticated(c *Client) {
-	guid := c.objectGuid
+	guid := c.session.ObjectGuid()
 
 	s.registerClient(guid, c)
 	go c.writeLoop()

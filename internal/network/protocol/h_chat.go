@@ -26,5 +26,5 @@ func (h *ChatHandler) Handle(c *server.Client, msg api.InboundMessage) {
 	if err := json.Unmarshal(msg.Payload, &p); err != nil {
 		return
 	}
-	h.gateway.HandleChat(c.ObjectGuid(), p)
+	h.gateway.HandleChat(c.Session().ObjectGuid(), p)
 }
