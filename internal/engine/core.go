@@ -23,6 +23,7 @@ type Engine struct {
 	SpellSys      *SpellSystem
 	DamageSys     *DamageSystem
 	DeathSys      *DeathSystem
+	ChatSys       *ChatSystem
 
 	// Канал для входящих "задач" от сети
 	commandQueue chan func()
@@ -57,6 +58,7 @@ func New(cfg *config.SimulationConfig) *Engine {
 	spellSystem := NewSpellSystem(inst, bus, spellReg)
 	damageSystem := NewDamageSystem(inst, bus)
 	deathSystem := NewDeathSystem(inst, bus)
+	chatSystem := NewChatSystem(inst, bus)
 
 	// --- ТЕСТОВЫЙ СПАВН (Чтобы проверить, что ECS работает) ---
 	// Создадим "Игрока"
@@ -90,7 +92,9 @@ func New(cfg *config.SimulationConfig) *Engine {
 		SpellSys:      spellSystem,
 		DamageSys:     damageSystem,
 		DeathSys:      deathSystem,
-		commandQueue:  make(chan func(), 1024),
+		ChatSys:       chatSystem,
+
+		commandQueue: make(chan func(), 1024),
 	}
 }
 

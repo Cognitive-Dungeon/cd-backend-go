@@ -7,6 +7,7 @@ import (
 	"cognitive-server/pkg/logger"
 	"encoding/json"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -20,6 +21,8 @@ type Client struct {
 	objectGuid types.ObjectGuid
 
 	sendChan chan interface{}
+
+	closed atomic.Bool
 }
 
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
@@ -41,10 +44,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *Client) readLoop() {
-	defer func() {
-		c.conn.Close()
-		// TODO: Обработка дисконнекта (удаление сущности или пометка offline)
-	}()
+	defer c.cleanup()
 
 	for {
 		var msg api.InboundMessage
@@ -72,10 +72,22 @@ func (c *Client) handleMessage(msg api.InboundMessage) {
 
 	switch msg.Action {
 	case "LOGIN":
-		// Вся логика создания игрока теперь в Gateway
-		// Мы передаем callback, который выполнится, когда игрок будет создан
-		c.server.Gateway.HandleLogin(msg.Token, func(guid engine.ObjectGuid) {
+		// 1. Берем токен из корня
+		token := msg.Token
+
+		// 2. Если пусто, пробуем достать из Payload
+		if token == "" && len(msg.Payload) > 0 {
+			var loginPayload struct {
+				Token string `json:"token"`
+			}
+			if err := json.Unmarshal(msg.Payload, &loginPayload); err == nil {
+				token = loginPayload.Token
+			}
+		}
+
+		c.server.Gateway.HandleLogin(token, func(guid engine.ObjectGuid) {
 			c.objectGuid = guid
+			c.server.registerClient(guid, c)
 			// Запускаем отправку данных
 			go c.writeLoop()
 		})
@@ -110,10 +122,10 @@ func (c *Client) handleMessage(msg api.InboundMessage) {
 }
 
 func (c *Client) writeLoop() {
-	ticker := time.NewTicker(50 * time.Millisecond)
+	ticker := time.NewTicker(50 * time.Millisecond) // Вернули как было
 	defer func() {
 		ticker.Stop()
-		c.conn.Close()
+		c.cleanup()
 	}()
 
 	for {
@@ -134,4 +146,17 @@ func (c *Client) writeLoop() {
 
 		}
 	}
+}
+
+func (c *Client) cleanup() {
+	if c.closed.Swap(true) {
+		return // уже закрыт
+	}
+
+	if c.objectGuid != types.NilObjectGuid {
+		c.server.unregisterClient(c.objectGuid)
+	}
+
+	c.conn.Close()
+	close(c.sendChan)
 }

@@ -1,890 +1,743 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <title>Cognitive Debugger v8 (Admin)</title>
-    <style>
-        :root {
-            --bg: #0d1117;
-            --panel: #161b22;
-            --border: #30363d;
-            --text: #c9d1d9;
-            --accent: #58a6ff;
-            --danger: #da3633;
-            --success: #238636;
-            --warning: #d29922;
-            --purple: #a371f7;
-        }
+  <meta charset="UTF-8">
+  <title>Cognitive Debugger v13 (Terminal Fix)</title>
+  <style>
+    :root {
+      --bg-dark: #0d1117;
+      --bg-panel: #161b22;
+      --border: #30363d;
+      --accent: #58a6ff;
+      --text-main: #c9d1d9;
+      --text-muted: #8b949e;
+      --success: #238636;
+      --danger: #da3633;
+      --warning: #d29922;
+      --font-mono: 'JetBrains Mono', 'Consolas', monospace;
+    }
 
-        body {
-            background: var(--bg);
-            color: var(--text);
-            font-family: 'Consolas', 'Monaco', monospace;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            height: 100vh;
-            overflow: hidden;
-            font-size: 13px;
-        }
+    * { box-sizing: border-box; }
 
-        /* --- UTILS --- */
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: var(--bg); }
-        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #555; }
+    body {
+      margin: 0; padding: 0;
+      background: var(--bg-dark); color: var(--text-main);
+      font-family: var(--font-mono); font-size: 12px;
+      height: 100vh; display: flex; overflow: hidden;
+    }
 
-        button {
-            background: #21262d;
-            color: var(--text);
-            border: 1px solid var(--border);
-            padding: 6px 12px;
-            cursor: pointer;
-            border-radius: 4px;
-            font-family: inherit;
-            font-weight: bold;
-            transition: all 0.1s;
-        }
-        button:hover { background: #30363d; border-color: #8b949e; }
-        button:active { transform: translateY(1px); }
+    /* --- LAYOUT --- */
+    #app { display: grid; grid-template-columns: 300px 1fr 400px; width: 100%; height: 100%; }
 
-        input, select {
-            background: #0d1117;
-            border: 1px solid #30363d;
-            color: white;
-            padding: 6px;
-            border-radius: 4px;
-            font-family: inherit;
-        }
+    .panel {
+      background: var(--bg-panel); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; overflow: hidden;
+      height: 100%;
+    }
+    .panel-right { border-left: 1px solid var(--border); border-right: none; }
 
-        /* --- LOGIN --- */
-        #login-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(13, 17, 23, 0.95); z-index: 9999;
-            display: flex; flex-direction: column;
-            justify-content: center; align-items: center;
-        }
-        #login-box {
-            background: var(--panel); border: 1px solid var(--border);
-            padding: 30px; border-radius: 8px; text-align: center;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        }
-        .btn-login { background: var(--success); width: 100%; margin-top: 10px; }
+    .panel-header {
+      padding: 10px; background: #21262d; border-bottom: 1px solid var(--border);
+      font-weight: bold; text-transform: uppercase; letter-spacing: 1px;
+      display: flex; justify-content: space-between; align-items: center;
+      flex-shrink: 0;
+    }
 
-        /* --- LAYOUT --- */
-        .container {
-            display: flex; gap: 15px; padding: 15px;
-            width: 100%; height: 100%; box-sizing: border-box;
-        }
+    .scroll-area { flex: 1; overflow-y: auto; padding: 10px; }
 
-        .panel {
-            background: var(--panel); border: 1px solid var(--border);
-            border-radius: 6px; display: flex; flex-direction: column;
-            overflow: hidden;
-        }
+    /* --- MAP VIEWPORT --- */
+    #viewport {
+      position: relative; background: #000; overflow: hidden;
+      display: flex; flex-direction: column;
+    }
+    canvas { display: block; outline: none; }
 
-        #left-panel { flex: 0 0 auto; padding: 10px; min-width: 300px; transition: border-color 0.3s; border: 2px solid transparent; }
-        #right-panel { flex: 1; min-width: 400px; }
+    #overlay-ui {
+      position: absolute; top: 10px; left: 10px; pointer-events: none;
+    }
+    .hud-stat {
+      background: rgba(0,0,0,0.8); padding: 5px 10px;
+      border-radius: 4px; margin-bottom: 5px; border-left: 3px solid var(--accent);
+      color: #fff; text-shadow: 0 1px 2px #000; font-size: 13px; font-weight: bold;
+    }
 
-        /* MY TURN INDICATOR */
-        .my-turn {
-            border-color: var(--success) !important;
-            box-shadow: 0 0 15px rgba(35, 134, 54, 0.3);
-        }
+    /* --- CONTROLS --- */
+    button {
+      background: #21262d; color: var(--text-main); border: 1px solid var(--border);
+      padding: 6px 10px; cursor: pointer; border-radius: 4px; font-family: inherit;
+      transition: background 0.1s; margin: 2px;
+    }
+    button:hover { background: #30363d; border-color: #8b949e; }
+    button:active { transform: translateY(1px); }
+    button.btn-primary { background: var(--success); border-color: rgba(255,255,255,0.1); color: white; }
+    button.btn-danger { color: var(--danger); border-color: var(--danger); }
 
-        /* --- MAP --- */
-        #map-container {
-            flex: 1; overflow: auto; background: #000;
-            border: 1px solid var(--border); margin-top: 10px;
-            position: relative;
-        }
-        #game-map { display: grid; }
-        .tile {
-            width: 20px; height: 20px;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 16px; cursor: crosshair; user-select: none;
-            color: #222;
-        }
-        .tile.visible { font-weight: bold; }
-        .tile.explored { opacity: 0.4; }
+    input, select, textarea {
+      background: var(--bg-dark); border: 1px solid var(--border);
+      color: white; padding: 5px; border-radius: 4px; font-family: inherit; width: 100%;
+    }
+    textarea { resize: vertical; min-height: 60px; }
 
-        /* ENTITIES */
-        .entity { z-index: 10; font-weight: bold; text-shadow: 0 0 2px #000; }
-        .player { text-shadow: 0 0 5px var(--accent); }
-        .enemy { text-shadow: 0 0 5px var(--danger); }
-        .npc { text-shadow: 0 0 5px var(--warning); }
-        .corpse { opacity: 0.5; filter: grayscale(100%); }
-        .selected { box-shadow: inset 0 0 0 2px var(--accent); background: rgba(88, 166, 255, 0.2); }
+    .control-group { margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+    .control-label { color: var(--text-muted); font-size: 10px; text-transform: uppercase; margin-bottom: 5px; }
 
-        /* --- TABS --- */
-        .tabs { display: flex; border-bottom: 1px solid var(--border); background: #21262d; }
-        .tab {
-            padding: 10px 20px; cursor: pointer; border-right: 1px solid var(--border);
-            font-weight: bold; color: #8b949e;
-        }
-        .tab:hover { color: var(--text); background: #30363d; }
-        .tab.active { background: var(--panel); color: var(--accent); border-bottom: 2px solid var(--accent); }
+    /* --- JSON TREE --- */
+    .json-key { color: var(--text-muted); }
+    .json-val { color: var(--accent); }
+    .json-str { color: #a5d6ff; }
+    .json-bool { color: var(--danger); }
+    .json-toggle { cursor: pointer; user-select: none; margin-right: 4px; display: inline-block; width: 10px; }
+    .json-obj { margin-left: 18px; border-left: 1px solid #30363d; padding-left: 5px; }
+    .json-collapsed { display: none; }
 
-        .tab-content { padding: 15px; overflow-y: auto; flex: 1; display: none; }
-        .tab-content.active { display: block; }
+    /* --- TABS --- */
+    .tabs { display: flex; border-bottom: 1px solid var(--border); background: #21262d; flex-shrink: 0; }
+    .tab { flex: 1; padding: 8px; text-align: center; cursor: pointer; border-bottom: 2px solid transparent; opacity: 0.6; }
+    .tab:hover { background: #30363d; opacity: 1; }
+    .tab.active { border-bottom-color: var(--accent); opacity: 1; color: white; }
 
-        /* --- CONTROLS --- */
-        .control-group { margin-bottom: 20px; border-bottom: 1px solid #30363d; padding-bottom: 15px; }
-        .control-header {
-            font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
-            color: #8b949e; margin-bottom: 10px; font-weight: bold;
-        }
-        .d-pad { display: grid; grid-template-columns: repeat(3, 40px); gap: 5px; margin-bottom: 10px; }
+    .tab-content { display: none; flex: 1; flex-direction: column; overflow: hidden; height: 100%; }
+    .tab-content.active { display: flex; }
 
-        .btn-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-        .cheat-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+    /* --- LOGS & CHAT --- */
+    .log-entry { padding: 2px 5px; border-bottom: 1px solid #1f242c; font-size: 11px; white-space: pre-wrap; word-break: break-all; }
+    .log-time { color: #555; margin-right: 5px; user-select: none; }
+    .t-error { color: var(--danger); }
+    .t-warn { color: var(--warning); }
+    .t-system { color: var(--text-muted); }
+    .t-in { color: var(--success); }
+    .t-out { color: var(--accent); }
 
-        /* --- DATA TABLES --- */
-        table.debug-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-        table.debug-table th { text-align: left; border-bottom: 1px solid var(--border); color: #8b949e; padding: 5px; }
-        table.debug-table td { border-bottom: 1px solid #21262d; padding: 5px; color: var(--text); }
-        table.debug-table tr:hover { background: #21262d; }
+    /* --- LOGIN MODAL --- */
+    #login-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(13, 17, 23, 0.95); z-index: 100;
+      display: flex; justify-content: center; align-items: center;
+    }
+    .modal {
+      background: var(--bg-panel); padding: 30px; border: 1px solid var(--border);
+      border-radius: 8px; width: 300px; text-align: center;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    }
 
-        /* --- LOGS --- */
-        #logs-panel {
-            height: 150px; border-top: 1px solid var(--border);
-            background: #050505; padding: 10px; overflow-y: auto;
-            flex-shrink: 0;
-        }
-        .log-line { margin-bottom: 4px; border-bottom: 1px solid #1a1a1a; padding-bottom: 2px; }
-        .t-COMBAT { color: var(--danger); }
-        .t-INFO { color: #8b949e; }
-        .t-SPEECH { color: var(--warning); font-style: italic; }
-        .t-ERROR { color: #ff0000; font-weight: bold; }
+    /* --- UTILS --- */
+    .d-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+    .d-flex { display: flex; gap: 5px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: #666; }
+    .status-dot.online { background: var(--success); box-shadow: 0 0 5px var(--success); }
 
-        .chat-say    { color:#fff; }
-        .chat-yell   { color:var(--danger); }
-        .chat-system { color:var(--warning); }
-        .chat-emote  { color:#ffa657; font-style:italic; }
-        .chat-whisper{ color:#ff77ff; }
-
-        /* --- INSPECTOR --- */
-        pre.json-dump { margin: 0; font-size: 11px; color: var(--purple); white-space: pre-wrap; }
-    </style>
+    .action-bar-btn {
+      position: relative; overflow: hidden;
+    }
+  </style>
 </head>
-
 <body>
 
+<!-- LOGIN -->
 <div id="login-overlay">
-    <div id="login-box">
-        <h2 style="margin-top:0">Cognitive Debugger v9</h2>
-        <p style="color:#8b949e; font-size:12px; margin-bottom:15px">Enter Entity ID to possess</p>
-        <input type="text" id="login-token" value="hero_1" placeholder="Entity ID (e.g. hero_1)">
-        <button class="btn-login" onclick="connect()">Connect Agent</button>
+  <div class="modal">
+    <h2 style="margin-top:0; color: var(--accent)">Cognitive Debugger v13</h2>
+    <div class="control-group">
+      <input type="text" id="conn-url" value="ws://localhost:8080/ws" placeholder="WebSocket URL">
     </div>
+    <div class="control-group">
+      <input type="text" id="conn-token" value="hero_1" placeholder="Entity ID to Possess">
+    </div>
+    <button class="btn-primary" style="width:100%" onclick="app.connect()">INITIALIZE LINK</button>
+  </div>
 </div>
 
-<div class="container">
-    <!-- LEFT PANEL: MAP & HUD -->
-    <div id="left-panel" class="panel">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div style="font-weight: bold; color: var(--accent);">VIEWPORT</div>
-            <div style="font-size: 11px; color: #8b949e;">Tick: <span id="tick" style="color:#fff">0</span></div>
-        </div>
-        <div style="font-size: 11px; margin-top: 5px; color: #8b949e;">
-            Agent: <span id="my-id-display" style="color:var(--success)">...</span>
-            <span id="turn-indicator" style="display:none; color:var(--success); font-weight:bold; margin-left:10px">🟢 YOUR TURN</span>
-        </div>
+<div id="app">
+  <!-- LEFT PANEL: CONTROLS -->
+  <div class="panel">
+    <div class="panel-header">
+      <span>Neural Link</span>
+      <span id="status-indicator" class="status-dot"></span>
+    </div>
 
-        <div id="map-container">
-            <div id="game-map"></div>
+    <div class="scroll-area">
+      <!-- PLAYER INFO -->
+      <div class="control-group">
+        <div class="control-label">Active Agent</div>
+        <div style="font-size: 14px; font-weight: bold; color: white;" id="agent-id">Disconnected</div>
+        <div style="margin-top:5px; font-size:11px;" id="agent-pos">Pos: ?, ?</div>
+      </div>
+
+      <!-- CONTROLS -->
+      <div class="control-group">
+        <div class="control-label">Motor Functions</div>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; width: 120px; margin: 0 auto;">
+          <div></div><button onclick="app.sendDir(0, -1)">W</button><div></div>
+          <button onclick="app.sendDir(-1, 0)">A</button><button onclick="app.sendAction('WAIT')">.</button><button onclick="app.sendDir(1, 0)">D</button>
+          <div></div><button onclick="app.sendDir(0, 1)">S</button><div></div>
         </div>
-        <div id="target-info" style="margin-top: 10px; height: 20px; color: var(--warning); font-weight: bold;">
-            No target selected
+        <div class="d-grid-2" style="margin-top: 10px;">
+          <button onclick="app.interact()">INTERACT</button>
+          <button onclick="app.pickup()">PICK UP</button>
         </div>
+      </div>
+
+      <!-- SPELLS -->
+      <div class="control-group">
+        <div class="control-label">Abilities</div>
+        <div id="spell-list" style="display: flex; flex-wrap: wrap; gap: 5px;">
+          <em style="color:#666">Waiting for data...</em>
+        </div>
+      </div>
+
+      <!-- INVENTORY -->
+      <div class="control-group">
+        <div class="control-label">Inventory</div>
+        <div id="inv-list" style="max-height: 200px; overflow-y: auto;">
+          <div style="color:#666; font-style:italic">Empty</div>
+        </div>
+        <div class="d-flex" style="margin-top:5px">
+          <button style="flex:1; font-size:10px" onclick="app.invAction('USE')">USE</button>
+          <button style="flex:1; font-size:10px" onclick="app.invAction('EQUIP')">EQP</button>
+          <button style="flex:1; font-size:10px" onclick="app.invAction('DROP')">DROP</button>
+        </div>
+      </div>
+
+      <!-- GOD MODE -->
+      <div class="control-group">
+        <div class="control-label" style="color:var(--accent)">Admin Override</div>
+        <select id="spawn-id" style="margin-bottom: 5px;">
+          <option value="goblin">Goblin</option>
+          <option value="orc">Orc</option>
+          <option value="health_potion">Potion</option>
+          <option value="iron_sword">Sword</option>
+        </select>
+        <div class="d-grid-2">
+          <button onclick="app.cheatSpawn()">SPAWN</button>
+          <button class="btn-danger" onclick="app.cheatKill()">KILL TGT</button>
+          <button onclick="app.cheatHeal()">HEAL ME</button>
+          <button onclick="app.cheatTeleport()">TP HERE</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MIDDLE PANEL: CANVAS -->
+  <div id="viewport">
+    <canvas id="game-canvas"></canvas>
+    <div id="overlay-ui">
+      <div class="hud-stat" id="hud-hp">HP: --/--</div>
+      <div class="hud-stat" id="hud-mana" style="border-color: #a371f7;">MP: --/--</div>
+      <div style="font-size:10px; color:#888; margin-top:5px; background: rgba(0,0,0,0.5); padding: 4px;">
+        LMB: Select | <b>Shift+LMB: Teleport</b>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL: INSPECTOR & LOGS -->
+  <div class="panel panel-right">
+    <div class="tabs">
+      <div class="tab active" data-target="tab-inspector" onclick="app.setTab('tab-inspector')">INSPECTOR</div>
+      <div class="tab" data-target="tab-logs" onclick="app.setTab('tab-logs')">LOGS</div>
+      <div class="tab" data-target="tab-chat" onclick="app.setTab('tab-chat')">CHAT</div>
+      <div class="tab" data-target="tab-terminal" onclick="app.setTab('tab-terminal')">TERMINAL</div>
+    </div>
+
+    <!-- INSPECTOR -->
+    <div id="tab-inspector" class="tab-content active scroll-area">
+      <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+        <span class="control-label">Selected Entity</span>
+        <label style="font-size:10px; display:flex; align-items:center; gap:5px; cursor:pointer">
+          <input type="checkbox" id="inspector-auto" style="width:auto"> Auto-Watch
+        </label>
+      </div>
+      <div id="inspector-tree" style="user-select: text;">Select an entity...</div>
+    </div>
+
+    <!-- LOGS -->
+    <div id="tab-logs" class="tab-content scroll-area" style="font-family: 'Consolas', monospace;">
+      <div id="log-container"></div>
     </div>
 
     <!-- CHAT -->
-    <div id="chat-panel" style="
-    border-top:1px solid var(--border);
-    background:#050505;
-    display:flex;
-    flex-direction:column;
-    height:180px;
-    ">
-        <div id="chat-log" style="
-        flex:1;
-        overflow-y:auto;
-        padding:8px;
-        font-size:12px;
-        line-height:1.4;
-        "></div>
-
-        <input id="chat-input"
-               type="text"
-               placeholder="Type /say, /yell, /emote..."
-               autocomplete="off"
-               style="
-               border:none;
-               border-top:1px solid var(--border);
-               padding:8px;
-               outline:none;
-               background:#0d1117;
-               color:white;
-               font-family:inherit;
-           ">
+    <div id="tab-chat" class="tab-content">
+      <div id="chat-history" style="flex:1; overflow-y: auto; padding: 10px; font-size: 13px;"></div>
+      <div style="padding:10px; border-top:1px solid var(--border)">
+        <input type="text" id="chat-input" placeholder="Say something..." onkeydown="if(event.key==='Enter') app.sendChat(this)">
+      </div>
     </div>
 
-    <!-- RIGHT PANEL: TABS -->
-    <div id="right-panel" class="panel">
-        <div class="tabs">
-            <div class="tab active" onclick="openTab(event, 'tab-player')">PLAYER</div>
-            <div class="tab" onclick="openTab(event, 'tab-god')">GOD MODE</div>
-            <div class="tab" onclick="openTab(event, 'tab-server')">SERVER STATE</div>
-        </div>
+    <!-- TERMINAL (RAW) -->
+    <div id="tab-terminal" class="tab-content scroll-area">
+      <div class="control-label">Raw Request</div>
+      <textarea id="raw-input" placeholder='{"action": "MOVE", "payload": {"dx": 0, "dy": 1}}'></textarea>
+      <button class="btn-primary" style="width:100%; margin-top:5px" onclick="app.sendRawFromInput()">SEND JSON</button>
 
-        <!-- TAB 1: PLAYER CONTROLS -->
-        <div id="tab-player" class="tab-content active">
-            <div class="control-group">
-                <div class="control-header">Movement</div>
-                <div style="display: flex; gap: 20px;">
-                    <div class="d-pad">
-                        <div></div><button onclick="sendDir(0, -1)">W</button><div></div>
-                        <button onclick="sendDir(-1, 0)">A</button><button onclick="sendWait()">Wait</button><button onclick="sendDir(1, 0)">D</button>
-                        <div></div><button onclick="sendDir(0, 1)">S</button><div></div>
-                    </div>
-                    <div class="btn-grid" style="flex:1">
-                        <button onclick="pickupNearestItem()" style="color:var(--accent)">📦 Pick Up</button>
-                        <button onclick="sendAction('INIT')">🔄 Resync</button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="control-group">
-                <div class="control-header">Interaction (Selected Target)</div>
-                <div class="btn-grid">
-                    <button onclick="sendAction('ATTACK')" style="color:var(--danger)">⚔️ Attack</button>
-                    <button onclick="sendAction('TALK')" style="color:var(--warning)">💬 Talk</button>
-                    <button onclick="sendAction('INTERACT')" style="color:var(--success)">🖐️ Interact</button>
-                </div>
-            </div>
-
-            <div class="control-group">
-                <div class="control-header">Action Bar</div>
-                <!-- Сюда JS будет вставлять кнопки -->
-                <div id="action-bar" class="btn-grid">
-                    <span style="color:#666; font-size:11px">Waiting for spellbook...</span>
-                </div>
-                <div style="margin-top: 5px; font-size: 10px; color: #666;">
-                    * Click on yourself (@) to self-cast
-                </div>
-            </div>
-
-            <div class="control-group">
-                <div class="control-header">Inventory</div>
-                <div style="display: flex; gap: 5px; margin-bottom: 5px;">
-                    <button onclick="useSelectedItem()" style="flex:1; color:var(--warning)">Use</button>
-                    <button onclick="equipSelectedItem()" style="flex:1; color:var(--success)">Equip</button>
-                    <button onclick="unequipSelectedItem()" style="flex:1; color:#8b949e">Unequip</button>
-                    <button onclick="dropSelectedItem()" style="flex:1; color:var(--danger)">Drop</button>
-                </div>
-                <div id="inventory-display" style="background:#0d1117; padding:10px; height:150px; overflow-y:auto; border:1px solid var(--border);">
-                    No items...
-                </div>
-            </div>
-        </div>
-
-        <!-- TAB 2: GOD MODE (CHEATS) -->
-        <div id="tab-god" class="tab-content">
-            <div class="control-group">
-                <div class="control-header">Spawn Entity</div>
-                <div class="cheat-row">
-                    <select id="spawn-select" style="flex:1">
-                        <optgroup label="Enemies">
-                            <option value="goblin">Goblin</option>
-                            <option value="orc">Orc</option>
-                            <option value="troll">Troll</option>
-                        </optgroup>
-                        <optgroup label="Weapons">
-                            <option value="iron_sword">Iron Sword</option>
-                            <option value="bloodthirsty_sword">Bloodthirsty Sword (Live)</option>
-                            <option value="steel_dagger">Steel Dagger</option>
-                        </optgroup>
-                        <optgroup label="Items">
-                            <option value="health_potion">Health Potion</option>
-                            <option value="torch">Torch</option>
-                            <option value="greedy_ring">Greedy Ring (Live)</option>
-                        </optgroup>
-                    </select>
-                    <button onclick="cheatSpawn()" style="color:var(--purple)">Spawn</button>
-                </div>
-            </div>
-
-            <div class="control-group">
-                <div class="control-header">Teleport Self</div>
-                <div class="cheat-row">
-                    <input type="number" id="tp-x" placeholder="X" style="width: 50px">
-                    <input type="number" id="tp-y" placeholder="Y" style="width: 50px">
-                    <button onclick="cheatTeleport()" style="color:var(--accent); flex:1">Teleport</button>
-                </div>
-            </div>
-
-            <div class="control-group">
-                <div class="control-header">Status Effects</div>
-                <div class="btn-grid">
-                    <button onclick="cheatHeal()" style="color:var(--success)">❤️ Full Heal</button>
-                    <button onclick="cheatKill()" style="color:var(--danger)">💀 Kill Target</button>
-                    <button onclick="cheatOmni()" style="color:var(--accent); grid-column: span 2;">👁️ Toggle God Vision</button>
-                </div>
-            </div>
-
-            <div class="control-group">
-                <div class="control-header">Inspector (Selected)</div>
-                <pre id="inspector-content" class="json-dump" style="height: 150px; overflow: auto; background: #000; padding: 5px;">...</pre>
-            </div>
-        </div>
-
-        <!-- TAB 3: SERVER DEBUG -->
-        <div id="tab-server" class="tab-content">
-            <div style="margin-bottom: 15px; display: flex; justify-content: space-between;">
-                <span class="control-header">Active Worlds</span>
-                <button onclick="refreshServerInfo()">🔄 Refresh</button>
-            </div>
-            <div style="background: #0d1117; padding: 5px; margin-bottom: 20px;">
-                <table class="debug-table">
-                    <thead><tr><th>Lvl</th><th>Size</th><th>Entities</th></tr></thead>
-                    <tbody id="debug-worlds-body"><tr><td colspan="3">Loading...</td></tr></tbody>
-                </table>
-            </div>
-
-            <div class="control-header">Turn Queue (By Level)</div>
-            <div class="cheat-row">
-                <input type="number" id="debug-level-id" value="1" style="width: 50px">
-                <button onclick="fetchQueue()" style="flex:1">Fetch Queue</button>
-            </div>
-            <div style="background: #0d1117; padding: 5px; height: 200px; overflow-y: auto;">
-                <table class="debug-table">
-                    <thead><tr><th>Tick</th><th>ID</th><th>Name</th></tr></thead>
-                    <tbody id="debug-queue-body"><tr><td colspan="3">No data</td></tr></tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- LOGS (Always visible at bottom right) -->
-        <div id="logs-panel"></div>
+      <div style="margin-top:15px; display:flex; justify-content:space-between; align-items:center">
+        <span class="control-label">Traffic Monitor</span>
+        <label style="font-size:10px; color:#888;"><input type="checkbox" id="log-updates"> Log Updates</label>
+      </div>
+      <div id="traffic-log" style="font-size:10px; font-family:monospace; color:#888;"></div>
     </div>
+  </div>
 </div>
 
 <script>
-    let ws;
-    let myId = "";
-    let selectedTarget = null;
-    let selectedItemId = null;
-    let entitiesCache = [];
-    let gridInitialized = false;
+  const $ = (id) => document.getElementById(id);
+  const create = (tag, cls) => { const e = document.createElement(tag); if(cls) e.className=cls; return e; };
 
-    // --- CORE ---
-    function connect() {
-        const token = document.getElementById("login-token").value.trim();
-        if (!token) return alert("Please enter an Entity ID");
+  class JSONTree {
+    static create(data, rootLabel = null) {
+      if (typeof data !== 'object' || data === null) {
+        const span = create('span');
+        if (typeof data === 'string') { span.className = 'json-str'; span.innerText = `"${data}"`; }
+        else if (typeof data === 'boolean') { span.className = 'json-bool'; span.innerText = data; }
+        else { span.className = 'json-val'; span.innerText = data; }
+        return span;
+      }
 
-        ws = new WebSocket("ws://localhost:8080/ws");
+      const container = create('div');
+      const header = create('div');
+      const toggle = create('span', 'json-toggle');
+      toggle.innerText = '▼';
 
-        ws.onopen = () => {
-            ws.send(JSON.stringify({ action: "LOGIN", token: token }));
-            document.getElementById("login-overlay").style.display = "none";
-            log("INFO", `Connected as ${token}`);
-            // Refresh server info initially
-            setTimeout(refreshServerInfo, 1000);
-        };
-        ws.onclose = () => {
-            document.getElementById("login-overlay").style.display = "flex";
-            log("ERROR", "Connection Lost");
-            gridInitialized = false;
-        };
-        ws.onmessage = (evt) => {
-            const msg = JSON.parse(evt.data);
-            if (msg.error) return alert("Server Error: " + msg.error);
-            if (msg.type === "UPDATE") {
-                handleUpdate(msg);
-                return;
-            }
-            if (msg.type === "CHAT") {
-                renderChat(msg.data);
-                return;
-            }
+      const label = create('span', 'json-key');
+      label.innerText = rootLabel ? rootLabel : (Array.isArray(data) ? `[${data.length}]` : '{...}');
 
-        };
-    }
+      header.appendChild(toggle);
+      header.appendChild(label);
+      container.appendChild(header);
 
-    // Кэш, чтобы не перерисовывать DOM если спеллы не изменились
-    let lastSpellsJson = "";
-
-    function handleUpdate(msg) {
-        if (msg.myEntityId) {
-            myId = msg.myEntityId;
-            document.getElementById("my-id-display").innerText = myId;
-        }
-        if (msg.tick !== undefined) document.getElementById("tick").innerText = msg.tick;
-
-        // --- TURN INDICATOR LOGIC ---
-        const leftPanel = document.getElementById("left-panel");
-        const turnInd = document.getElementById("turn-indicator");
-        if (msg.activeEntityId === myId) {
-            leftPanel.classList.add("my-turn");
-            turnInd.style.display = "inline";
+      const children = create('div', 'json-obj');
+      header.onclick = (e) => {
+        e.stopPropagation();
+        if (children.classList.contains('json-collapsed')) {
+          children.classList.remove('json-collapsed');
+          toggle.innerText = '▼';
         } else {
-            leftPanel.classList.remove("my-turn");
-            turnInd.style.display = "none";
+          children.classList.add('json-collapsed');
+          toggle.innerText = '▶';
+        }
+      };
+
+      for (let key in data) {
+        const line = create('div');
+        const keySpan = create('span', 'json-key');
+        keySpan.innerText = key + ": ";
+        line.appendChild(keySpan);
+        line.appendChild(JSONTree.create(data[key]));
+        children.appendChild(line);
+      }
+
+      container.appendChild(children);
+      return container;
+    }
+  }
+
+  class Renderer {
+    constructor(canvasId, onClick) {
+      this.canvas = $(canvasId);
+      this.ctx = this.canvas.getContext('2d');
+      this.tileSize = 32;
+      this.camera = { x: 0, y: 0, zoom: 1 };
+      this.map = [];
+      this.entities = [];
+      this.hoverTile = { x: -1, y: -1 };
+      this.selectedId = null;
+
+      let isDragging = false;
+      let dragStart = { x: 0, y: 0 };
+      let lastMouse = { x: 0, y: 0 };
+
+      const resize = () => {
+        if(!this.canvas.parentElement) return;
+        this.canvas.width = this.canvas.parentElement.offsetWidth;
+        this.canvas.height = this.canvas.parentElement.offsetHeight;
+        this.draw();
+      };
+      window.addEventListener('resize', resize);
+      setTimeout(resize, 50);
+
+      this.canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        this.camera.zoom = Math.max(0.5, Math.min(3.0, this.camera.zoom + delta));
+        this.draw();
+      }, { passive: false });
+
+      this.canvas.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        dragStart = { x: e.clientX, y: e.clientY };
+        lastMouse = { x: e.clientX, y: e.clientY };
+      });
+
+      window.addEventListener('mouseup', (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        const dist = Math.hypot(e.clientX - dragStart.x, e.clientY - dragStart.y);
+        if (dist < 5) onClick(this.hoverTile.x, this.hoverTile.y, e.shiftKey);
+      });
+
+      this.canvas.addEventListener('mousemove', (e) => {
+        const rect = this.canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const worldX = (mx - this.canvas.width/2) / (this.tileSize * this.camera.zoom) + this.camera.x;
+        const worldY = (my - this.canvas.height/2) / (this.tileSize * this.camera.zoom) + this.camera.y;
+        this.hoverTile = { x: Math.floor(worldX), y: Math.floor(worldY) };
+
+        if (isDragging) {
+          const dx = (e.clientX - lastMouse.x) / (this.tileSize * this.camera.zoom);
+          const dy = (e.clientY - lastMouse.y) / (this.tileSize * this.camera.zoom);
+          this.camera.x -= dx;
+          this.camera.y -= dy;
+          lastMouse = { x: e.clientX, y: e.clientY };
+        }
+        this.draw();
+      });
+    }
+
+    updateData(mapData, entitiesData) {
+      if (mapData) this.map = mapData;
+      if (entitiesData) this.entities = entitiesData;
+      this.draw();
+    }
+
+    draw() {
+      const ctx = this.ctx;
+      const cw = this.canvas.width;
+      const ch = this.canvas.height;
+      const ts = this.tileSize;
+      const zoom = this.camera.zoom;
+
+      ctx.fillStyle = '#050505';
+      ctx.fillRect(0, 0, cw, ch);
+
+      ctx.save();
+      ctx.translate(cw / 2, ch / 2);
+      ctx.scale(zoom, zoom);
+      ctx.translate(-this.camera.x * ts, -this.camera.y * ts);
+
+      this.map.forEach(t => {
+        const tx = t.x * ts;
+        const ty = t.y * ts;
+        if (t.symbol === '.') {
+          ctx.fillStyle = t.isVisible ? '#111' : '#080808';
+          ctx.fillRect(tx, ty, ts, ts);
+        }
+        if (t.isVisible || t.isExplored) {
+          ctx.fillStyle = t.isVisible ? (t.color || '#444') : '#222';
+          ctx.font = `${ts-4}px monospace`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(t.symbol, tx + ts/2, ty + ts/2 + 2);
+        }
+      });
+
+      this.entities.forEach(e => {
+        const ex = e.pos.x * ts;
+        const ey = e.pos.y * ts;
+
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.beginPath();
+        ctx.ellipse(ex + ts/2, ey + ts - 2, ts/3, ts/6, 0, 0, Math.PI*2);
+        ctx.fill();
+
+        ctx.fillStyle = e.render?.color || '#fff';
+        if (e.stats?.isDead) { ctx.fillStyle = '#444'; ctx.globalAlpha = 0.5; }
+        ctx.font = `bold ${ts-2}px monospace`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(e.render?.symbol || '?', ex + ts/2, ey + ts/2 + 2);
+        ctx.globalAlpha = 1.0;
+
+        if (e.id === this.selectedId) {
+          ctx.strokeStyle = '#58a6ff'; ctx.lineWidth = 2;
+          ctx.strokeRect(ex, ey, ts, ts);
+        }
+      });
+
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; ctx.lineWidth = 1;
+      ctx.strokeRect(this.hoverTile.x * ts, this.hoverTile.y * ts, ts, ts);
+      ctx.restore();
+    }
+  }
+
+  class App {
+    constructor() {
+      this.ws = null;
+      this.token = null;
+      this.myId = null;
+      this.entitiesCache = [];
+      this.selectedInvItem = null;
+      this.stateCache = { spellsHash: "", invHash: "" };
+
+      this.renderer = new Renderer('game-canvas', (x, y, isShift) => this.onMapClick(x, y, isShift));
+
+      if(localStorage.getItem('cd_url')) $('conn-url').value = localStorage.getItem('cd_url');
+      if(localStorage.getItem('cd_token')) $('conn-token').value = localStorage.getItem('cd_token');
+    }
+
+    connect() {
+      const url = $('conn-url').value;
+      const token = $('conn-token').value;
+      localStorage.setItem('cd_url', url);
+      localStorage.setItem('cd_token', token);
+
+      this.token = token;
+      this.ws = new WebSocket(url);
+
+      this.ws.onopen = () => {
+        $('login-overlay').style.display = 'none';
+        $('status-indicator').classList.add('online');
+        this.send('LOGIN', { token: token });
+        this.log('system', 'Neural Link Established.');
+      };
+      this.ws.onclose = () => {
+        $('login-overlay').style.display = 'flex';
+        $('status-indicator').classList.remove('online');
+        this.log('error', 'Connection lost.');
+      };
+      this.ws.onmessage = (evt) => {
+        const msg = JSON.parse(evt.data);
+
+        // --- TRAFFIC MONITOR (With Filter) ---
+        if ($('tab-terminal').classList.contains('active')) {
+          const logUpdates = $('log-updates').checked;
+          if (msg.type !== 'UPDATE' || logUpdates) {
+            const line = create('div');
+            line.className = 't-in';
+            line.innerText = `IN: ${evt.data.substring(0, 150)}${evt.data.length>150?'...':''}`;
+            $('traffic-log').prepend(line);
+          }
         }
 
-        // Рендер спеллов
-        if (msg.spells) {
-            renderActionBar(msg.spells);
+        this.handleMessage(msg);
+      };
+    }
+
+    send(action, payload = {}) {
+      if (this.ws && this.ws.readyState === 1) {
+        const str = JSON.stringify({ action, payload });
+        this.ws.send(str);
+
+        if ($('tab-terminal').classList.contains('active')) {
+          const line = create('div');
+          line.className = 't-out';
+          line.innerText = `OUT: ${str}`;
+          $('traffic-log').prepend(line);
         }
+      }
+    }
 
-        if (msg.grid && !gridInitialized) initGrid(msg.grid.w, msg.grid.h);
+    sendRawFromInput() {
+      try {
+        const raw = $('raw-input').value;
+        const json = JSON.parse(raw);
+        this.send(json.action, json.payload);
+      } catch(e) {
+        alert("Invalid JSON");
+      }
+    }
 
-        // Reset visuals ONLY if we received a map update (prevents ghosting on level change)
-        if (msg.map) {
-            resetMapVisuals();
-            renderTiles(msg.map);
+    handleMessage(msg) {
+      if (msg.error) this.log('error', msg.error);
+
+      switch (msg.type) {
+        case 'UPDATE':
+          this.processUpdate(msg);
+          break;
+        case 'CHAT':
+          // Try to handle varied JSON structures
+          const payload = msg.data || msg.payload || msg;
+          this.addChat(payload);
+          break;
+      }
+    }
+
+    processUpdate(data) {
+      if (data.myEntityId) this.myId = data.myEntityId;
+      this.entitiesCache = data.entities || [];
+      this.renderer.updateData(data.map, this.entitiesCache);
+
+      let me = this.entitiesCache.find(e => e.id == this.myId);
+      if (!me && data.myEntityId) {
+        me = this.entitiesCache.find(e => e.type === 'UNIT' && e.name === this.token);
+      }
+
+      if (me) {
+        $('agent-id').innerText = `${me.name}`;
+        $('agent-pos').innerText = `X:${me.pos.x} Y:${me.pos.y}`;
+        if (me.stats) {
+          $('hud-hp').innerText = `HP: ${me.stats.hp}/${me.stats.maxHp}`;
+          const hpPct = (me.stats.hp / me.stats.maxHp) * 100;
+          $('hud-hp').style.background = `linear-gradient(90deg, rgba(218, 54, 51, 0.4) ${hpPct}%, rgba(0,0,0,0.7) ${hpPct}%)`;
         }
+        this.renderInventory(me);
+      }
 
-        if (msg.entities) {
-            entitiesCache = msg.entities;
-            drawEntities(msg.entities);
-            renderInventory();
-            updateInspector();
-        }
-        if (msg.logs) renderLogs(msg.logs);
+      if (data.spells) this.renderSpells(data.spells);
+      if (data.logs) data.logs.forEach(l => this.log('info', l.text));
+
+      if (this.renderer.selectedId && $('inspector-auto').checked) {
+        const target = this.entitiesCache.find(e => e.id === this.renderer.selectedId);
+        const container = $('inspector-tree');
+        container.innerHTML = '';
+        if (target) container.appendChild(JSONTree.create(target, target.name));
+      }
     }
 
-    function renderActionBar(spells) {
-        // Простая оптимизация: если данные те же, не трогаем DOM
-        const currentJson = JSON.stringify(spells);
-        if (currentJson === lastSpellsJson) return;
-        lastSpellsJson = currentJson;
+    renderSpells(spells) {
+      const hash = JSON.stringify(spells.map(s => s.id + s.name + s.cost));
+      if (hash === this.stateCache.spellsHash) return;
+      this.stateCache.spellsHash = hash;
 
-        const container = document.getElementById("action-bar");
-        container.innerHTML = "";
-
-        spells.forEach(s => {
-            const btn = document.createElement("button");
-
-            // Стилизация в зависимости от типа (можно расширить)
-            let color = "var(--text)";
-            if (s.name.includes("Attack")) color = "var(--danger)";
-            else if (s.name.includes("Fire")) color = "var(--warning)";
-            else if (s.name.includes("Heal")) color = "var(--success)";
-            else if (s.name.includes("Blink")) color = "var(--accent)";
-
-            btn.style.color = color;
-            btn.style.borderColor = color;
-
-            // Текст кнопки: "1. Fireball (20 MANA)"
-            // Для красоты добавим ID для хоткеев
-            btn.innerText = `${s.id}. ${s.name}`;
-
-            if (s.cost > 0) {
-                const costSpan = document.createElement("span");
-                costSpan.style.fontSize = "10px";
-                costSpan.style.marginLeft = "5px";
-                costSpan.style.opacity = "0.7";
-                costSpan.innerText = `(${s.cost} ${s.costType || ''})`;
-                btn.appendChild(costSpan);
-            }
-
-            btn.onclick = () => castSpell(s.id);
-            container.appendChild(btn);
-        });
+      const div = $('spell-list');
+      div.innerHTML = '';
+      spells.forEach(s => {
+        const b = create('button', 'action-bar-btn');
+        b.innerText = s.name;
+        b.title = `Cost: ${s.cost}`;
+        b.onclick = () => {
+          const target = this.renderer.selectedId || this.myId;
+          this.send('CAST', { spellId: s.id, targetId: target });
+        };
+        if(s.name.includes('Fire')) b.style.color = 'var(--warning)';
+        if(s.name.includes('Heal')) b.style.color = 'var(--success)';
+        div.appendChild(b);
+      });
     }
 
-    function renderChat(data) {
-        const log = document.getElementById("chat-log");
+    renderInventory(me) {
+      const items = me.inventory ? me.inventory.items : [];
+      const equip = me.equipment || {};
+      const hash = JSON.stringify({ i: items, e: equip, sel: this.selectedInvItem });
+      if (hash === this.stateCache.invHash) return;
+      this.stateCache.invHash = hash;
 
-        let color = "#c9d1d9";
-        let prefix = "";
+      const list = $('inv-list');
+      list.innerHTML = '';
+      let hasItems = false;
 
-        switch (data.type) {
-            case 0: // SYSTEM
-                color = "var(--warning)";
-                prefix = "[System]";
-                break;
-            case 1: // SAY
-                color = "#ffffff";
-                prefix = `[${data.senderName}]`;
-                break;
-            case 2: // YELL
-                color = "var(--danger)";
-                prefix = `[${data.senderName} yells]`;
-                break;
-            case 3: // WHISPER
-                color = "#ff77ff";
-                prefix = `[Whisper] ${data.senderName}`;
-                break;
-            case 4: // EMOTE
-                color = "var(--warning)";
-                prefix = `* ${data.senderName}`;
-                break;
-        }
+      for(let slot in equip) {
+        const item = equip[slot];
+        if(!item) continue;
+        hasItems = true;
+        this.createInvRow(list, item, `[${slot}]`, 'var(--warning)');
+      }
+      items.forEach(item => {
+        hasItems = true;
+        this.createInvRow(list, item, '', 'var(--success)');
+      });
 
-        const line = document.createElement("div");
-        line.innerHTML =
-            `<span style="color:${color}">${prefix} ${escapeHtml(data.text)}</span>`;
-
-        log.appendChild(line);
-        log.scrollTop = log.scrollHeight;
+      if (!hasItems) list.innerHTML = '<div style="color:#666; font-style:italic; padding:5px;">Empty</div>';
     }
 
-    function escapeHtml(str) {
-        return str
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;");
+    createInvRow(container, item, prefix, color) {
+      const row = create('div');
+      row.style.padding = '4px';
+      row.style.borderLeft = `2px solid ${color}`;
+      row.style.background = (this.selectedInvItem === item.id) ? '#30363d' : 'transparent';
+      row.style.cursor = 'pointer';
+      row.innerText = `${prefix} ${item.name} ${item.stackSize > 1 ? '(x'+item.stackSize+')' : ''}`;
+      row.onclick = () => {
+        this.selectedInvItem = item.id;
+        this.stateCache.invHash = "";
+      };
+      container.appendChild(row);
     }
 
-    const chatInput = document.getElementById("chat-input");
-    let chatHistory = [];
-    let chatHistoryIndex = -1;
-
-    chatInput.addEventListener("keydown", (e) => {
-        // ENTER — отправка
-        if (e.key === "Enter") {
-            const text = chatInput.value.trim();
-            if (!text) return;
-
-            sendCommand("CHAT", { message: text });
-
-            chatHistory.push(text);
-            chatHistoryIndex = chatHistory.length;
-            chatInput.value = "";
-            e.preventDefault();
-        }
-
-        // UP / DOWN — история как в WoW
-        if (e.key === "ArrowUp") {
-            if (chatHistoryIndex > 0) {
-                chatHistoryIndex--;
-                chatInput.value = chatHistory[chatHistoryIndex];
-            }
-            e.preventDefault();
-        }
-
-        if (e.key === "ArrowDown") {
-            if (chatHistoryIndex < chatHistory.length - 1) {
-                chatHistoryIndex++;
-                chatInput.value = chatHistory[chatHistoryIndex];
-            } else {
-                chatHistoryIndex = chatHistory.length;
-                chatInput.value = "";
-            }
-            e.preventDefault();
-        }
-    });
-
-    document.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && document.activeElement !== chatInput) {
-            chatInput.focus();
-            e.preventDefault();
-        }
-    });
-
-
-    // --- MAP RENDERER ---
-    const mapEl = document.getElementById("game-map");
-    function initGrid(w, h) {
-        mapEl.innerHTML = '';
-        mapEl.style.gridTemplateColumns = `repeat(${w}, 20px)`;
-        for (let y = 0; y < h; y++) {
-            for (let x = 0; x < w; x++) {
-                const div = document.createElement("div");
-                div.id = `c-${x}-${y}`;
-                div.className = "tile";
-                div.onclick = () => selectTile(x, y);
-                mapEl.appendChild(div);
-            }
-        }
-        gridInitialized = true;
+    invAction(action) {
+      if(!this.selectedInvItem) return;
+      this.send(action, { itemId: this.selectedInvItem });
     }
 
-    function resetMapVisuals() {
-        // Clears all visual states from tiles before applying new update
-        // This fixes "ghost" explored tiles when changing levels
-        document.querySelectorAll('.tile').forEach(el => {
-            el.className = 'tile';
-            el.style.color = '#222';
-            el.innerText = '';
-        });
+    onMapClick(x, y, isShift) {
+      if (isShift) {
+        this.send('ADMIN_TELEPORT', { x, y });
+        return;
+      }
+
+      const ent = this.entitiesCache.find(e => e.pos.x === x && e.pos.y === y);
+      if (ent) {
+        this.renderer.selectedId = ent.id;
+        this.log('system', `Selected: ${ent.name}`);
+        const container = $('inspector-tree');
+        container.innerHTML = '';
+        container.appendChild(JSONTree.create(ent, ent.name));
+        this.setTab('tab-inspector');
+      } else {
+        this.renderer.selectedId = null;
+        $('inspector-tree').innerText = "No target selected";
+      }
+      this.renderer.draw();
     }
 
-    function renderTiles(tiles) {
-        tiles.forEach(t => {
-            const el = document.getElementById(`c-${t.x}-${t.y}`);
-            if (!el) return;
-            el.innerText = t.symbol;
-            el.style.color = t.color;
-            if (t.isVisible) el.classList.add("visible");
-            if (t.isExplored) el.classList.add("explored");
-        });
+    log(type, msg) {
+      const c = $('log-container');
+      const entry = create('div', 'log-entry');
+      if (type === 'error') entry.classList.add('t-error');
+      if (type === 'warn') entry.classList.add('t-warn');
+      if (type === 'system') entry.classList.add('t-system');
+      const time = create('span', 'log-time');
+      time.innerText = new Date().toLocaleTimeString();
+      entry.appendChild(time);
+      entry.appendChild(document.createTextNode(msg));
+      c.appendChild(entry);
+      c.scrollTop = c.scrollHeight;
     }
 
-    function drawEntities(entities) {
-        // Note: resetMapVisuals handles cleaning up old entities if map was updated.
-        // If map wasn't updated, we might have ghosts if entities moved.
-        // Ideally server always sends map on move, but for safety let's clean entities from DOM:
-        // Actually, resetMapVisuals is only called on map update.
-        // Let's rely on map update for clearing or do a targeted cleanup?
-        // For this debug client, entities are drawn ON TOP of tiles.
+    addChat(data) {
+      if (!data) return;
+      const h = $('chat-history');
+      const d = create('div');
+      d.style.marginBottom = "4px";
+      const sender = data.senderName || data.SenderName || 'Sys';
+      const txt = data.text || data.Text || data.message || JSON.stringify(data);
 
-        entities.forEach(e => {
-            const el = document.getElementById(`c-${e.pos.x}-${e.pos.y}`);
-            if (!el) return;
-            el.innerText = e.render?.symbol || "?";
-            el.style.color = e.render?.color || "#fff";
-            el.className = "tile entity"; // re-add base tile class
-
-            if (e.id === myId) el.classList.add("player");
-            else if (e.type === "ENEMY") el.classList.add("enemy");
-            else if (e.type === "NPC") el.classList.add("npc");
-
-            if (e.stats?.isDead) el.classList.add("corpse");
-            if (e.id === selectedTarget) el.classList.add("selected");
-
-            // Restore visibility style if tile underneath was visible
-            // (Quick hack: we rely on renderTiles having run before this)
-            // If the tile was visible, the entity should be bright.
-            // In this simple DOM renderer, CSS order matters.
-        });
+      d.innerHTML = `<span style="color:#888">[${sender}]</span> ${txt}`;
+      h.appendChild(d);
+      h.scrollTop = h.scrollHeight;
     }
 
-    // --- INTERACTION ---
-    function selectTile(x, y) {
-        const ent = entitiesCache.find(e => e.pos.x === x && e.pos.y === y);
-        selectedTarget = ent ? ent.id : null;
-        document.getElementById("target-info").innerText = ent ?
-            `Target: ${ent.name} [${ent.id}]` : "No target selected";
-
-        // Trigger redraw to show selection box
-        // We just re-apply entity styles because map update isn't happening here
-        drawEntities(entitiesCache);
-        updateInspector();
+    sendChat(input) {
+      const txt = input.value.trim();
+      if(!txt) return;
+      this.send('CHAT', { message: txt });
+      input.value = '';
     }
 
-    function updateInspector() {
-        const el = document.getElementById("inspector-content");
-        if (!selectedTarget) {
-            el.innerText = "// Select an entity to inspect";
-            return;
-        }
-        const ent = entitiesCache.find(e => e.id === selectedTarget);
-        el.innerText = ent ? JSON.stringify(ent, null, 2) : "// Entity lost";
+    setTab(targetId) {
+      document.querySelectorAll('.tab').forEach(t => {
+        if (t.dataset.target === targetId) t.classList.add('active');
+        else t.classList.remove('active');
+      });
+      document.querySelectorAll('.tab-content').forEach(c => {
+        if (c.id === targetId) c.classList.add('active');
+        else c.classList.remove('active');
+      });
     }
 
-    // --- COMMANDS ---
-    function sendCommand(action, payload = {}) {
-        if (!ws) return;
-        ws.send(JSON.stringify({ action, payload }));
+    cheatSpawn() { this.send('ADMIN_SPAWN', { template: $('spawn-id').value }); }
+    cheatKill() { if(this.renderer.selectedId) this.send('ADMIN_KILL', { targetId: this.renderer.selectedId }); }
+    cheatHeal() { this.send('ADMIN_HEAL'); }
+    cheatTeleport() { if(this.renderer.hoverTile.x !== -1) this.send('ADMIN_TELEPORT', { x: this.renderer.hoverTile.x, y: this.renderer.hoverTile.y }); }
+    interact() { if(this.renderer.selectedId) this.send('INTERACT', { targetId: this.renderer.selectedId }); }
+    pickup() {
+      const me = this.entitiesCache.find(e => e.id == this.myId);
+      if(!me) return;
+      const item = this.entitiesCache.find(e => e.type === 'ITEM' && e.pos.x === me.pos.x && e.pos.y === me.pos.y);
+      if(item) this.send('PICKUP', {itemId: item.id});
     }
+    sendDir(dx, dy) { this.send('MOVE', { dx, dy }); }
+    sendAction(act) { this.send(act); }
+  }
 
-    function sendDir(dx, dy) { sendCommand("MOVE", { dx, dy }); }
-    function sendWait() { sendCommand("WAIT"); }
-    function sendAction(act) {
-        if (act !== 'INIT' && !selectedTarget) return alert("Select target!");
-        sendCommand(act, { targetId: selectedTarget });
+  const app = new App();
+
+  document.addEventListener('keydown', (e) => {
+    if(e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    switch(e.key.toLowerCase()) {
+      case 'w': app.sendDir(0, -1); break;
+      case 's': app.sendDir(0, 1); break;
+      case 'a': app.sendDir(-1, 0); break;
+      case 'd': app.sendDir(1, 0); break;
+      case ' ': app.sendAction('WAIT'); break;
     }
-    function castSpell(spellId) {
-        // Если цель не выбрана, пытаемся кастовать в себя (Self Cast)
-        // Это удобно для лечения и баффов
-        let target = selectedTarget;
-        if (!target) {
-            if (myId) {
-                target = myId; // Auto-self cast
-                log("INFO", "No target selected, casting on self.");
-            } else {
-                return alert("Select a target first!");
-            }
-        }
-
-        log("INFO", `Casting Spell ID ${spellId} on ${target}...`);
-
-        // Шлем команду CAST согласно нашему новому протоколу
-        // Payload: { spellId: number, targetId: string }
-        sendCommand("CAST", {
-            spellId: spellId,
-            targetId: target
-        });
-    }
-
-    // --- INVENTORY ---
-    function selectInventoryItem(id) {
-        selectedItemId = id;
-        renderInventory();
-    }
-
-    function pickupNearestItem() {
-        const me = entitiesCache.find(e => e.id === myId);
-        if (!me) return;
-        const item = entitiesCache.find(e => e.type === 'ITEM' &&
-            Math.abs(e.pos.x - me.pos.x) <= 1 && Math.abs(e.pos.y - me.pos.y) <= 1);
-        if (item) sendCommand('PICKUP', { itemId: item.id });
-        else alert("No item nearby");
-    }
-
-    function useSelectedItem() { if(selectedItemId) { sendCommand('USE', {itemId: selectedItemId}); selectedItemId=null;} }
-    function equipSelectedItem() { if(selectedItemId) { sendCommand('EQUIP', {itemId: selectedItemId}); selectedItemId=null;} }
-    function unequipSelectedItem() { if(selectedItemId) { sendCommand('UNEQUIP', {itemId: selectedItemId}); selectedItemId=null;} }
-    function dropSelectedItem() { if(selectedItemId) { sendCommand('DROP', {itemId: selectedItemId}); selectedItemId=null;} }
-
-    function renderInventory() {
-        const me = entitiesCache.find(e => e.id === myId);
-        const container = document.getElementById('inventory-display');
-        if (!me || !me.inventory) return;
-
-        let html = "";
-        // Equipment
-        if (me.equipment) {
-            ['weapon', 'armor'].forEach(slot => {
-                const item = me.equipment[slot];
-                if (item) {
-                    const isSel = item.id === selectedItemId;
-                    // Stats display for equipment
-                    const stats = [];
-                    if (item.damage) stats.push(`⚔️${item.damage}`);
-                    if (item.defense) stats.push(`🛡️${item.defense}`);
-
-                    html += `<div style="background:${isSel?'#2a3a1a':'#161b22'}; padding:4px; border-left:2px solid var(--warning); cursor:pointer; font-size:11px; margin-bottom:2px" onclick="selectInventoryItem('${item.id}')">
-                            [${slot.toUpperCase()}] ${item.symbol} ${item.name}
-                            <span style="color:#888">${stats.join(' ')}</span>
-                        </div>`;
-                }
-            });
-        }
-        // Items
-        me.inventory.items.forEach(item => {
-            const isSel = item.id === selectedItemId;
-            // Stats display for inventory
-            const stats = [];
-            if (item.damage) stats.push(`⚔️${item.damage}`);
-            if (item.defense) stats.push(`🛡️${item.defense}`);
-            if (item.weight) stats.push(`⚖️${item.weight}`);
-
-            html += `<div style="background:${isSel?'#2a3a1a':'#161b22'}; padding:4px; border-left:2px solid var(--success); cursor:pointer; font-size:11px; margin-bottom:2px" onclick="selectInventoryItem('${item.id}')">
-                   ${item.symbol} ${item.name} ${item.stackSize > 1 ? 'x'+item.stackSize : ''}
-                   <span style="color:#666; font-size:10px; margin-left:5px">${stats.join(' ')}</span>
-                </div>`;
-        });
-        container.innerHTML = html || "Empty";
-    }
-
-    // --- CHEATS (GOD MODE) ---
-    function cheatSpawn() {
-        const tmpl = document.getElementById("spawn-select").value;
-        sendCommand("ADMIN_SPAWN", { template: tmpl });
-    }
-    function cheatTeleport() {
-        const x = parseInt(document.getElementById("tp-x").value);
-        const y = parseInt(document.getElementById("tp-y").value);
-        if (isNaN(x) || isNaN(y)) return alert("Invalid coords");
-        sendCommand("ADMIN_TELEPORT", { x, y });
-    }
-    function cheatHeal() { sendCommand("ADMIN_HEAL"); }
-    function cheatKill() {
-        if (!selectedTarget) return alert("Select target first");
-        sendCommand("ADMIN_KILL", { targetId: selectedTarget });
-    }
-    function cheatOmni() { sendCommand("ADMIN_TOGGLE_OMNI"); }
-
-    // --- SERVER DEBUG (HTTP) ---
-    // Указываем явный адрес сервера, так как файл открыт локально
-    const API_BASE = "http://localhost:8080";
-
-    async function refreshServerInfo() {
-        try {
-            const res = await fetch(`${API_BASE}/debug/worlds`);
-            if (!res.ok) throw new Error("Network response was not ok");
-
-            const data = await res.json();
-            const tbody = document.getElementById('debug-worlds-body');
-
-            if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="3">No active worlds</td></tr>';
-                return;
-            }
-
-            tbody.innerHTML = data.map(w => `
-                    <tr>
-                        <td style="color:var(--accent)">${w.level_id}</td>
-                        <td>${w.width}x${w.height}</td>
-                        <td>${w.entity_count}</td>
-                    </tr>
-                `).join('');
-        } catch (e) {
-            console.error("Refresh Error:", e);
-            document.getElementById('debug-worlds-body').innerHTML =
-                `<tr><td colspan="3" style="color:red">Connection Failed. Check Console (F12).</td></tr>`;
-        }
-    }
-
-    async function fetchQueue() {
-        const lvl = document.getElementById('debug-level-id').value;
-        try {
-            const res = await fetch(`${API_BASE}/debug/queue?level=${lvl}`);
-            if (!res.ok) throw new Error("Network response was not ok");
-
-            const data = await res.json();
-            const tbody = document.getElementById('debug-queue-body');
-
-            // Проверка на null или пустой массив
-            if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="3">Queue empty (No active AI)</td></tr>';
-                return;
-            }
-
-            tbody.innerHTML = data.map(q => `
-                    <tr>
-                        <td style="color:var(--warning)">${q.priority}</td>
-                        <td style="font-family:monospace">${q.id.substring(0,8)}...</td>
-                        <td>${q.name}</td>
-                    </tr>
-                `).join('');
-        } catch (e) {
-            console.error("Queue Error:", e);
-            document.getElementById('debug-queue-body').innerHTML =
-                '<tr><td colspan="3" style="color:red">Error fetching queue</td></tr>';
-        }
-    }
-
-    // --- UI UTILS ---
-    function openTab(evt, tabId) {
-        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        document.getElementById(tabId).classList.add('active');
-        evt.currentTarget.classList.add('active');
-    }
-
-    function log(type, msg) {
-        const p = document.getElementById("logs-panel");
-        p.innerHTML += `<div class="log-line t-${type}">[${new Date().toLocaleTimeString()}] ${msg}</div>`;
-        p.scrollTop = p.scrollHeight;
-    }
-
-    function renderLogs(logs) {
-        const p = document.getElementById("logs-panel");
-        logs.forEach(l => {
-            p.innerHTML += `<div class="log-line t-${l.type}">[${new Date(l.timestamp).toLocaleTimeString()}] ${l.text}</div>`;
-        });
-        p.scrollTop = p.scrollHeight;
-    }
-
-    // --- KEYS ---
-    document.addEventListener("keydown", (e) => {
-        if (e.target.tagName === "INPUT") return;
-        switch(e.key.toLowerCase()) {
-            case "w": case "arrowup": sendDir(0, -1); break;
-            case "s": case "arrowdown": sendDir(0, 1); break;
-            case "a": case "arrowleft": sendDir(-1, 0); break;
-            case "d": case "arrowright": sendDir(1, 0); break;
-            case " ": sendWait(); break;
-        }
-    });
-
+  });
 </script>
 </body>
 </html>

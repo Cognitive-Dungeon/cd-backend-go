@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Cognitive Debugger v8 (Admin)</title>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --panel: #161b22;
+            --border: #30363d;
+            --text: #c9d1d9;
+            --accent: #58a6ff;
+            --danger: #da3633;
+            --success: #238636;
+            --warning: #d29922;
+            --purple: #a371f7;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Consolas', 'Monaco', monospace;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            font-size: 13px;
+        }
+
+        /* --- UTILS --- */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+
+        button {
+            background: #21262d;
+            color: var(--text);
+            border: 1px solid var(--border);
+            padding: 6px 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-family: inherit;
+            font-weight: bold;
+            transition: all 0.1s;
+        }
+        button:hover { background: #30363d; border-color: #8b949e; }
+        button:active { transform: translateY(1px); }
+
+        input, select {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            color: white;
+            padding: 6px;
+            border-radius: 4px;
+            font-family: inherit;
+        }
+
+        /* --- LOGIN --- */
+        #login-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(13, 17, 23, 0.95); z-index: 9999;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+        }
+        #login-box {
+            background: var(--panel); border: 1px solid var(--border);
+            padding: 30px; border-radius: 8px; text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .btn-login { background: var(--success); width: 100%; margin-top: 10px; }
+
+        /* --- LAYOUT --- */
+        .container {
+            display: flex; gap: 15px; padding: 15px;
+            width: 100%; height: 100%; box-sizing: border-box;
+        }
+
+        .panel {
+            background: var(--panel); border: 1px solid var(--border);
+            border-radius: 6px; display: flex; flex-direction: column;
+            overflow: hidden;
+        }
+
+        #left-panel { flex: 0 0 auto; padding: 10px; min-width: 300px; transition: border-color 0.3s; border: 2px solid transparent; }
+        #right-panel { flex: 1; min-width: 400px; }
+
+        /* MY TURN INDICATOR */
+        .my-turn {
+            border-color: var(--success) !important;
+            box-shadow: 0 0 15px rgba(35, 134, 54, 0.3);
+        }
+
+        /* --- MAP --- */
+        #map-container {
+            flex: 1; overflow: auto; background: #000;
+            border: 1px solid var(--border); margin-top: 10px;
+            position: relative;
+        }
+        #game-map { display: grid; }
+        .tile {
+            width: 20px; height: 20px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px; cursor: crosshair; user-select: none;
+            color: #222;
+        }
+        .tile.visible { font-weight: bold; }
+        .tile.explored { opacity: 0.4; }
+
+        /* ENTITIES */
+        .entity { z-index: 10; font-weight: bold; text-shadow: 0 0 2px #000; }
+        .player { text-shadow: 0 0 5px var(--accent); }
+        .enemy { text-shadow: 0 0 5px var(--danger); }
+        .npc { text-shadow: 0 0 5px var(--warning); }
+        .corpse { opacity: 0.5; filter: grayscale(100%); }
+        .selected { box-shadow: inset 0 0 0 2px var(--accent); background: rgba(88, 166, 255, 0.2); }
+
+        /* --- TABS --- */
+        .tabs { display: flex; border-bottom: 1px solid var(--border); background: #21262d; }
+        .tab {
+            padding: 10px 20px; cursor: pointer; border-right: 1px solid var(--border);
+            font-weight: bold; color: #8b949e;
+        }
+        .tab:hover { color: var(--text); background: #30363d; }
+        .tab.active { background: var(--panel); color: var(--accent); border-bottom: 2px solid var(--accent); }
+
+        .tab-content { padding: 15px; overflow-y: auto; flex: 1; display: none; }
+        .tab-content.active { display: block; }
+
+        /* --- CONTROLS --- */
+        .control-group { margin-bottom: 20px; border-bottom: 1px solid #30363d; padding-bottom: 15px; }
+        .control-header {
+            font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+            color: #8b949e; margin-bottom: 10px; font-weight: bold;
+        }
+        .d-pad { display: grid; grid-template-columns: repeat(3, 40px); gap: 5px; margin-bottom: 10px; }
+
+        .btn-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+        .cheat-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+
+        /* --- DATA TABLES --- */
+        table.debug-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        table.debug-table th { text-align: left; border-bottom: 1px solid var(--border); color: #8b949e; padding: 5px; }
+        table.debug-table td { border-bottom: 1px solid #21262d; padding: 5px; color: var(--text); }
+        table.debug-table tr:hover { background: #21262d; }
+
+        /* --- LOGS --- */
+        #logs-panel {
+            height: 150px; border-top: 1px solid var(--border);
+            background: #050505; padding: 10px; overflow-y: auto;
+            flex-shrink: 0;
+        }
+        .log-line { margin-bottom: 4px; border-bottom: 1px solid #1a1a1a; padding-bottom: 2px; }
+        .t-COMBAT { color: var(--danger); }
+        .t-INFO { color: #8b949e; }
+        .t-SPEECH { color: var(--warning); font-style: italic; }
+        .t-ERROR { color: #ff0000; font-weight: bold; }
+
+        .chat-say    { color:#fff; }
+        .chat-yell   { color:var(--danger); }
+        .chat-system { color:var(--warning); }
+        .chat-emote  { color:#ffa657; font-style:italic; }
+        .chat-whisper{ color:#ff77ff; }
+
+        /* --- INSPECTOR --- */
+        pre.json-dump { margin: 0; font-size: 11px; color: var(--purple); white-space: pre-wrap; }
+    </style>
+</head>
+
+<body>
+
+<div id="login-overlay">
+    <div id="login-box">
+        <h2 style="margin-top:0">Cognitive Debugger v9</h2>
+        <p style="color:#8b949e; font-size:12px; margin-bottom:15px">Enter Entity ID to possess</p>
+        <input type="text" id="login-token" value="hero_1" placeholder="Entity ID (e.g. hero_1)">
+        <button class="btn-login" onclick="connect()">Connect Agent</button>
+    </div>
+</div>
+
+<div class="container">
+    <!-- LEFT PANEL: MAP & HUD -->
+    <div id="left-panel" class="panel">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="font-weight: bold; color: var(--accent);">VIEWPORT</div>
+            <div style="font-size: 11px; color: #8b949e;">Tick: <span id="tick" style="color:#fff">0</span></div>
+        </div>
+        <div style="font-size: 11px; margin-top: 5px; color: #8b949e;">
+            Agent: <span id="my-id-display" style="color:var(--success)">...</span>
+            <span id="turn-indicator" style="display:none; color:var(--success); font-weight:bold; margin-left:10px">🟢 YOUR TURN</span>
+        </div>
+
+        <div id="map-container">
+            <div id="game-map"></div>
+        </div>
+        <div id="target-info" style="margin-top: 10px; height: 20px; color: var(--warning); font-weight: bold;">
+            No target selected
+        </div>
+    </div>
+
+    <!-- CHAT -->
+    <div id="chat-panel" style="
+    border-top:1px solid var(--border);
+    background:#050505;
+    display:flex;
+    flex-direction:column;
+    height:180px;
+    ">
+        <div id="chat-log" style="
+        flex:1;
+        overflow-y:auto;
+        padding:8px;
+        font-size:12px;
+        line-height:1.4;
+        "></div>
+
+        <input id="chat-input"
+               type="text"
+               placeholder="Type /say, /yell, /emote..."
+               autocomplete="off"
+               style="
+               border:none;
+               border-top:1px solid var(--border);
+               padding:8px;
+               outline:none;
+               background:#0d1117;
+               color:white;
+               font-family:inherit;
+           ">
+    </div>
+
+    <!-- RIGHT PANEL: TABS -->
+    <div id="right-panel" class="panel">
+        <div class="tabs">
+            <div class="tab active" onclick="openTab(event, 'tab-player')">PLAYER</div>
+            <div class="tab" onclick="openTab(event, 'tab-god')">GOD MODE</div>
+            <div class="tab" onclick="openTab(event, 'tab-server')">SERVER STATE</div>
+        </div>
+
+        <!-- TAB 1: PLAYER CONTROLS -->
+        <div id="tab-player" class="tab-content active">
+            <div class="control-group">
+                <div class="control-header">Movement</div>
+                <div style="display: flex; gap: 20px;">
+                    <div class="d-pad">
+                        <div></div><button onclick="sendDir(0, -1)">W</button><div></div>
+                        <button onclick="sendDir(-1, 0)">A</button><button onclick="sendWait()">Wait</button><button onclick="sendDir(1, 0)">D</button>
+                        <div></div><button onclick="sendDir(0, 1)">S</button><div></div>
+                    </div>
+                    <div class="btn-grid" style="flex:1">
+                        <button onclick="pickupNearestItem()" style="color:var(--accent)">📦 Pick Up</button>
+                        <button onclick="sendAction('INIT')">🔄 Resync</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <div class="control-header">Interaction (Selected Target)</div>
+                <div class="btn-grid">
+                    <button onclick="sendAction('ATTACK')" style="color:var(--danger)">⚔️ Attack</button>
+                    <button onclick="sendAction('TALK')" style="color:var(--warning)">💬 Talk</button>
+                    <button onclick="sendAction('INTERACT')" style="color:var(--success)">🖐️ Interact</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <div class="control-header">Action Bar</div>
+                <!-- Сюда JS будет вставлять кнопки -->
+                <div id="action-bar" class="btn-grid">
+                    <span style="color:#666; font-size:11px">Waiting for spellbook...</span>
+                </div>
+                <div style="margin-top: 5px; font-size: 10px; color: #666;">
+                    * Click on yourself (@) to self-cast
+                </div>
+            </div>
+
+            <div class="control-group">
+                <div class="control-header">Inventory</div>
+                <div style="display: flex; gap: 5px; margin-bottom: 5px;">
+                    <button onclick="useSelectedItem()" style="flex:1; color:var(--warning)">Use</button>
+                    <button onclick="equipSelectedItem()" style="flex:1; color:var(--success)">Equip</button>
+                    <button onclick="unequipSelectedItem()" style="flex:1; color:#8b949e">Unequip</button>
+                    <button onclick="dropSelectedItem()" style="flex:1; color:var(--danger)">Drop</button>
+                </div>
+                <div id="inventory-display" style="background:#0d1117; padding:10px; height:150px; overflow-y:auto; border:1px solid var(--border);">
+                    No items...
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: GOD MODE (CHEATS) -->
+        <div id="tab-god" class="tab-content">
+            <div class="control-group">
+                <div class="control-header">Spawn Entity</div>
+                <div class="cheat-row">
+                    <select id="spawn-select" style="flex:1">
+                        <optgroup label="Enemies">
+                            <option value="goblin">Goblin</option>
+                            <option value="orc">Orc</option>
+                            <option value="troll">Troll</option>
+                        </optgroup>
+                        <optgroup label="Weapons">
+                            <option value="iron_sword">Iron Sword</option>
+                            <option value="bloodthirsty_sword">Bloodthirsty Sword (Live)</option>
+                            <option value="steel_dagger">Steel Dagger</option>
+                        </optgroup>
+                        <optgroup label="Items">
+                            <option value="health_potion">Health Potion</option>
+                            <option value="torch">Torch</option>
+                            <option value="greedy_ring">Greedy Ring (Live)</option>
+                        </optgroup>
+                    </select>
+                    <button onclick="cheatSpawn()" style="color:var(--purple)">Spawn</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <div class="control-header">Teleport Self</div>
+                <div class="cheat-row">
+                    <input type="number" id="tp-x" placeholder="X" style="width: 50px">
+                    <input type="number" id="tp-y" placeholder="Y" style="width: 50px">
+                    <button onclick="cheatTeleport()" style="color:var(--accent); flex:1">Teleport</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <div class="control-header">Status Effects</div>
+                <div class="btn-grid">
+                    <button onclick="cheatHeal()" style="color:var(--success)">❤️ Full Heal</button>
+                    <button onclick="cheatKill()" style="color:var(--danger)">💀 Kill Target</button>
+                    <button onclick="cheatOmni()" style="color:var(--accent); grid-column: span 2;">👁️ Toggle God Vision</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <div class="control-header">Inspector (Selected)</div>
+                <pre id="inspector-content" class="json-dump" style="height: 150px; overflow: auto; background: #000; padding: 5px;">...</pre>
+            </div>
+        </div>
+
+        <!-- TAB 3: SERVER DEBUG -->
+        <div id="tab-server" class="tab-content">
+            <div style="margin-bottom: 15px; display: flex; justify-content: space-between;">
+                <span class="control-header">Active Worlds</span>
+                <button onclick="refreshServerInfo()">🔄 Refresh</button>
+            </div>
+            <div style="background: #0d1117; padding: 5px; margin-bottom: 20px;">
+                <table class="debug-table">
+                    <thead><tr><th>Lvl</th><th>Size</th><th>Entities</th></tr></thead>
+                    <tbody id="debug-worlds-body"><tr><td colspan="3">Loading...</td></tr></tbody>
+                </table>
+            </div>
+
+            <div class="control-header">Turn Queue (By Level)</div>
+            <div class="cheat-row">
+                <input type="number" id="debug-level-id" value="1" style="width: 50px">
+                <button onclick="fetchQueue()" style="flex:1">Fetch Queue</button>
+            </div>
+            <div style="background: #0d1117; padding: 5px; height: 200px; overflow-y: auto;">
+                <table class="debug-table">
+                    <thead><tr><th>Tick</th><th>ID</th><th>Name</th></tr></thead>
+                    <tbody id="debug-queue-body"><tr><td colspan="3">No data</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- LOGS (Always visible at bottom right) -->
+        <div id="logs-panel"></div>
+    </div>
+</div>
+
+<script>
+    let ws;
+    let myId = "";
+    let selectedTarget = null;
+    let selectedItemId = null;
+    let entitiesCache = [];
+    let gridInitialized = false;
+
+    // --- CORE ---
+    function connect() {
+        const token = document.getElementById("login-token").value.trim();
+        if (!token) return alert("Please enter an Entity ID");
+
+        ws = new WebSocket("ws://localhost:8080/ws");
+
+        ws.onopen = () => {
+            ws.send(JSON.stringify({ action: "LOGIN", token: token }));
+            document.getElementById("login-overlay").style.display = "none";
+            log("INFO", `Connected as ${token}`);
+            // Refresh server info initially
+            setTimeout(refreshServerInfo, 1000);
+        };
+        ws.onclose = () => {
+            document.getElementById("login-overlay").style.display = "flex";
+            log("ERROR", "Connection Lost");
+            gridInitialized = false;
+        };
+        ws.onmessage = (evt) => {
+            const msg = JSON.parse(evt.data);
+            if (msg.error) return alert("Server Error: " + msg.error);
+            if (msg.type === "UPDATE") {
+                handleUpdate(msg);
+                return;
+            }
+            if (msg.type === "CHAT") {
+                renderChat(msg.data);
+                return;
+            }
+
+        };
+    }
+
+    // Кэш, чтобы не перерисовывать DOM если спеллы не изменились
+    let lastSpellsJson = "";
+
+    function handleUpdate(msg) {
+        if (msg.myEntityId) {
+            myId = msg.myEntityId;
+            document.getElementById("my-id-display").innerText = myId;
+        }
+        if (msg.tick !== undefined) document.getElementById("tick").innerText = msg.tick;
+
+        // --- TURN INDICATOR LOGIC ---
+        const leftPanel = document.getElementById("left-panel");
+        const turnInd = document.getElementById("turn-indicator");
+        if (msg.activeEntityId === myId) {
+            leftPanel.classList.add("my-turn");
+            turnInd.style.display = "inline";
+        } else {
+            leftPanel.classList.remove("my-turn");
+            turnInd.style.display = "none";
+        }
+
+        // Рендер спеллов
+        if (msg.spells) {
+            renderActionBar(msg.spells);
+        }
+
+        if (msg.grid && !gridInitialized) initGrid(msg.grid.w, msg.grid.h);
+
+        // Reset visuals ONLY if we received a map update (prevents ghosting on level change)
+        if (msg.map) {
+            resetMapVisuals();
+            renderTiles(msg.map);
+        }
+
+        if (msg.entities) {
+            entitiesCache = msg.entities;
+            drawEntities(msg.entities);
+            renderInventory();
+            updateInspector();
+        }
+        if (msg.logs) renderLogs(msg.logs);
+    }
+
+    function renderActionBar(spells) {
+        // Простая оптимизация: если данные те же, не трогаем DOM
+        const currentJson = JSON.stringify(spells);
+        if (currentJson === lastSpellsJson) return;
+        lastSpellsJson = currentJson;
+
+        const container = document.getElementById("action-bar");
+        container.innerHTML = "";
+
+        spells.forEach(s => {
+            const btn = document.createElement("button");
+
+            // Стилизация в зависимости от типа (можно расширить)
+            let color = "var(--text)";
+            if (s.name.includes("Attack")) color = "var(--danger)";
+            else if (s.name.includes("Fire")) color = "var(--warning)";
+            else if (s.name.includes("Heal")) color = "var(--success)";
+            else if (s.name.includes("Blink")) color = "var(--accent)";
+
+            btn.style.color = color;
+            btn.style.borderColor = color;
+
+            // Текст кнопки: "1. Fireball (20 MANA)"
+            // Для красоты добавим ID для хоткеев
+            btn.innerText = `${s.id}. ${s.name}`;
+
+            if (s.cost > 0) {
+                const costSpan = document.createElement("span");
+                costSpan.style.fontSize = "10px";
+                costSpan.style.marginLeft = "5px";
+                costSpan.style.opacity = "0.7";
+                costSpan.innerText = `(${s.cost} ${s.costType || ''})`;
+                btn.appendChild(costSpan);
+            }
+
+            btn.onclick = () => castSpell(s.id);
+            container.appendChild(btn);
+        });
+    }
+
+    function renderChat(data) {
+        const log = document.getElementById("chat-log");
+
+        let color = "#c9d1d9";
+        let prefix = "";
+
+        switch (data.type) {
+            case 0: // SYSTEM
+                color = "var(--warning)";
+                prefix = "[System]";
+                break;
+            case 1: // SAY
+                color = "#ffffff";
+                prefix = `[${data.senderName}]`;
+                break;
+            case 2: // YELL
+                color = "var(--danger)";
+                prefix = `[${data.senderName} yells]`;
+                break;
+            case 3: // WHISPER
+                color = "#ff77ff";
+                prefix = `[Whisper] ${data.senderName}`;
+                break;
+            case 4: // EMOTE
+                color = "var(--warning)";
+                prefix = `* ${data.senderName}`;
+                break;
+        }
+
+        const line = document.createElement("div");
+        line.innerHTML =
+            `<span style="color:${color}">${prefix} ${escapeHtml(data.text)}</span>`;
+
+        log.appendChild(line);
+        log.scrollTop = log.scrollHeight;
+    }
+
+    function escapeHtml(str) {
+        return str
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+    }
+
+    const chatInput = document.getElementById("chat-input");
+    let chatHistory = [];
+    let chatHistoryIndex = -1;
+
+    chatInput.addEventListener("keydown", (e) => {
+        // ENTER — отправка
+        if (e.key === "Enter") {
+            const text = chatInput.value.trim();
+            if (!text) return;
+
+            sendCommand("CHAT", { message: text });
+
+            chatHistory.push(text);
+            chatHistoryIndex = chatHistory.length;
+            chatInput.value = "";
+            e.preventDefault();
+        }
+
+        // UP / DOWN — история как в WoW
+        if (e.key === "ArrowUp") {
+            if (chatHistoryIndex > 0) {
+                chatHistoryIndex--;
+                chatInput.value = chatHistory[chatHistoryIndex];
+            }
+            e.preventDefault();
+        }
+
+        if (e.key === "ArrowDown") {
+            if (chatHistoryIndex < chatHistory.length - 1) {
+                chatHistoryIndex++;
+                chatInput.value = chatHistory[chatHistoryIndex];
+            } else {
+                chatHistoryIndex = chatHistory.length;
+                chatInput.value = "";
+            }
+            e.preventDefault();
+        }
+    });
+
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && document.activeElement !== chatInput) {
+            chatInput.focus();
+            e.preventDefault();
+        }
+    });
+
+
+    // --- MAP RENDERER ---
+    const mapEl = document.getElementById("game-map");
+    function initGrid(w, h) {
+        mapEl.innerHTML = '';
+        mapEl.style.gridTemplateColumns = `repeat(${w}, 20px)`;
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const div = document.createElement("div");
+                div.id = `c-${x}-${y}`;
+                div.className = "tile";
+                div.onclick = () => selectTile(x, y);
+                mapEl.appendChild(div);
+            }
+        }
+        gridInitialized = true;
+    }
+
+    function resetMapVisuals() {
+        // Clears all visual states from tiles before applying new update
+        // This fixes "ghost" explored tiles when changing levels
+        document.querySelectorAll('.tile').forEach(el => {
+            el.className = 'tile';
+            el.style.color = '#222';
+            el.innerText = '';
+        });
+    }
+
+    function renderTiles(tiles) {
+        tiles.forEach(t => {
+            const el = document.getElementById(`c-${t.x}-${t.y}`);
+            if (!el) return;
+            el.innerText = t.symbol;
+            el.style.color = t.color;
+            if (t.isVisible) el.classList.add("visible");
+            if (t.isExplored) el.classList.add("explored");
+        });
+    }
+
+    function drawEntities(entities) {
+        // Note: resetMapVisuals handles cleaning up old entities if map was updated.
+        // If map wasn't updated, we might have ghosts if entities moved.
+        // Ideally server always sends map on move, but for safety let's clean entities from DOM:
+        // Actually, resetMapVisuals is only called on map update.
+        // Let's rely on map update for clearing or do a targeted cleanup?
+        // For this debug client, entities are drawn ON TOP of tiles.
+
+        entities.forEach(e => {
+            const el = document.getElementById(`c-${e.pos.x}-${e.pos.y}`);
+            if (!el) return;
+            el.innerText = e.render?.symbol || "?";
+            el.style.color = e.render?.color || "#fff";
+            el.className = "tile entity"; // re-add base tile class
+
+            if (e.id === myId) el.classList.add("player");
+            else if (e.type === "ENEMY") el.classList.add("enemy");
+            else if (e.type === "NPC") el.classList.add("npc");
+
+            if (e.stats?.isDead) el.classList.add("corpse");
+            if (e.id === selectedTarget) el.classList.add("selected");
+
+            // Restore visibility style if tile underneath was visible
+            // (Quick hack: we rely on renderTiles having run before this)
+            // If the tile was visible, the entity should be bright.
+            // In this simple DOM renderer, CSS order matters.
+        });
+    }
+
+    // --- INTERACTION ---
+    function selectTile(x, y) {
+        const ent = entitiesCache.find(e => e.pos.x === x && e.pos.y === y);
+        selectedTarget = ent ? ent.id : null;
+        document.getElementById("target-info").innerText = ent ?
+            `Target: ${ent.name} [${ent.id}]` : "No target selected";
+
+        // Trigger redraw to show selection box
+        // We just re-apply entity styles because map update isn't happening here
+        drawEntities(entitiesCache);
+        updateInspector();
+    }
+
+    function updateInspector() {
+        const el = document.getElementById("inspector-content");
+        if (!selectedTarget) {
+            el.innerText = "// Select an entity to inspect";
+            return;
+        }
+        const ent = entitiesCache.find(e => e.id === selectedTarget);
+        el.innerText = ent ? JSON.stringify(ent, null, 2) : "// Entity lost";
+    }
+
+    // --- COMMANDS ---
+    function sendCommand(action, payload = {}) {
+        if (!ws) return;
+        ws.send(JSON.stringify({ action, payload }));
+    }
+
+    function sendDir(dx, dy) { sendCommand("MOVE", { dx, dy }); }
+    function sendWait() { sendCommand("WAIT"); }
+    function sendAction(act) {
+        if (act !== 'INIT' && !selectedTarget) return alert("Select target!");
+        sendCommand(act, { targetId: selectedTarget });
+    }
+    function castSpell(spellId) {
+        // Если цель не выбрана, пытаемся кастовать в себя (Self Cast)
+        // Это удобно для лечения и баффов
+        let target = selectedTarget;
+        if (!target) {
+            if (myId) {
+                target = myId; // Auto-self cast
+                log("INFO", "No target selected, casting on self.");
+            } else {
+                return alert("Select a target first!");
+            }
+        }
+
+        log("INFO", `Casting Spell ID ${spellId} on ${target}...`);
+
+        // Шлем команду CAST согласно нашему новому протоколу
+        // Payload: { spellId: number, targetId: string }
+        sendCommand("CAST", {
+            spellId: spellId,
+            targetId: target
+        });
+    }
+
+    // --- INVENTORY ---
+    function selectInventoryItem(id) {
+        selectedItemId = id;
+        renderInventory();
+    }
+
+    function pickupNearestItem() {
+        const me = entitiesCache.find(e => e.id === myId);
+        if (!me) return;
+        const item = entitiesCache.find(e => e.type === 'ITEM' &&
+            Math.abs(e.pos.x - me.pos.x) <= 1 && Math.abs(e.pos.y - me.pos.y) <= 1);
+        if (item) sendCommand('PICKUP', { itemId: item.id });
+        else alert("No item nearby");
+    }
+
+    function useSelectedItem() { if(selectedItemId) { sendCommand('USE', {itemId: selectedItemId}); selectedItemId=null;} }
+    function equipSelectedItem() { if(selectedItemId) { sendCommand('EQUIP', {itemId: selectedItemId}); selectedItemId=null;} }
+    function unequipSelectedItem() { if(selectedItemId) { sendCommand('UNEQUIP', {itemId: selectedItemId}); selectedItemId=null;} }
+    function dropSelectedItem() { if(selectedItemId) { sendCommand('DROP', {itemId: selectedItemId}); selectedItemId=null;} }
+
+    function renderInventory() {
+        const me = entitiesCache.find(e => e.id === myId);
+        const container = document.getElementById('inventory-display');
+        if (!me || !me.inventory) return;
+
+        let html = "";
+        // Equipment
+        if (me.equipment) {
+            ['weapon', 'armor'].forEach(slot => {
+                const item = me.equipment[slot];
+                if (item) {
+                    const isSel = item.id === selectedItemId;
+                    // Stats display for equipment
+                    const stats = [];
+                    if (item.damage) stats.push(`⚔️${item.damage}`);
+                    if (item.defense) stats.push(`🛡️${item.defense}`);
+
+                    html += `<div style="background:${isSel?'#2a3a1a':'#161b22'}; padding:4px; border-left:2px solid var(--warning); cursor:pointer; font-size:11px; margin-bottom:2px" onclick="selectInventoryItem('${item.id}')">
+                            [${slot.toUpperCase()}] ${item.symbol} ${item.name}
+                            <span style="color:#888">${stats.join(' ')}</span>
+                        </div>`;
+                }
+            });
+        }
+        // Items
+        me.inventory.items.forEach(item => {
+            const isSel = item.id === selectedItemId;
+            // Stats display for inventory
+            const stats = [];
+            if (item.damage) stats.push(`⚔️${item.damage}`);
+            if (item.defense) stats.push(`🛡️${item.defense}`);
+            if (item.weight) stats.push(`⚖️${item.weight}`);
+
+            html += `<div style="background:${isSel?'#2a3a1a':'#161b22'}; padding:4px; border-left:2px solid var(--success); cursor:pointer; font-size:11px; margin-bottom:2px" onclick="selectInventoryItem('${item.id}')">
+                   ${item.symbol} ${item.name} ${item.stackSize > 1 ? 'x'+item.stackSize : ''}
+                   <span style="color:#666; font-size:10px; margin-left:5px">${stats.join(' ')}</span>
+                </div>`;
+        });
+        container.innerHTML = html || "Empty";
+    }
+
+    // --- CHEATS (GOD MODE) ---
+    function cheatSpawn() {
+        const tmpl = document.getElementById("spawn-select").value;
+        sendCommand("ADMIN_SPAWN", { template: tmpl });
+    }
+    function cheatTeleport() {
+        const x = parseInt(document.getElementById("tp-x").value);
+        const y = parseInt(document.getElementById("tp-y").value);
+        if (isNaN(x) || isNaN(y)) return alert("Invalid coords");
+        sendCommand("ADMIN_TELEPORT", { x, y });
+    }
+    function cheatHeal() { sendCommand("ADMIN_HEAL"); }
+    function cheatKill() {
+        if (!selectedTarget) return alert("Select target first");
+        sendCommand("ADMIN_KILL", { targetId: selectedTarget });
+    }
+    function cheatOmni() { sendCommand("ADMIN_TOGGLE_OMNI"); }
+
+    // --- SERVER DEBUG (HTTP) ---
+    // Указываем явный адрес сервера, так как файл открыт локально
+    const API_BASE = "http://localhost:8080";
+
+    async function refreshServerInfo() {
+        try {
+            const res = await fetch(`${API_BASE}/debug/worlds`);
+            if (!res.ok) throw new Error("Network response was not ok");
+
+            const data = await res.json();
+            const tbody = document.getElementById('debug-worlds-body');
+
+            if (!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3">No active worlds</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.map(w => `
+                    <tr>
+                        <td style="color:var(--accent)">${w.level_id}</td>
+                        <td>${w.width}x${w.height}</td>
+                        <td>${w.entity_count}</td>
+                    </tr>
+                `).join('');
+        } catch (e) {
+            console.error("Refresh Error:", e);
+            document.getElementById('debug-worlds-body').innerHTML =
+                `<tr><td colspan="3" style="color:red">Connection Failed. Check Console (F12).</td></tr>`;
+        }
+    }
+
+    async function fetchQueue() {
+        const lvl = document.getElementById('debug-level-id').value;
+        try {
+            const res = await fetch(`${API_BASE}/debug/queue?level=${lvl}`);
+            if (!res.ok) throw new Error("Network response was not ok");
+
+            const data = await res.json();
+            const tbody = document.getElementById('debug-queue-body');
+
+            // Проверка на null или пустой массив
+            if (!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3">Queue empty (No active AI)</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.map(q => `
+                    <tr>
+                        <td style="color:var(--warning)">${q.priority}</td>
+                        <td style="font-family:monospace">${q.id.substring(0,8)}...</td>
+                        <td>${q.name}</td>
+                    </tr>
+                `).join('');
+        } catch (e) {
+            console.error("Queue Error:", e);
+            document.getElementById('debug-queue-body').innerHTML =
+                '<tr><td colspan="3" style="color:red">Error fetching queue</td></tr>';
+        }
+    }
+
+    // --- UI UTILS ---
+    function openTab(evt, tabId) {
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        evt.currentTarget.classList.add('active');
+    }
+
+    function log(type, msg) {
+        const p = document.getElementById("logs-panel");
+        p.innerHTML += `<div class="log-line t-${type}">[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+        p.scrollTop = p.scrollHeight;
+    }
+
+    function renderLogs(logs) {
+        const p = document.getElementById("logs-panel");
+        logs.forEach(l => {
+            p.innerHTML += `<div class="log-line t-${l.type}">[${new Date(l.timestamp).toLocaleTimeString()}] ${l.text}</div>`;
+        });
+        p.scrollTop = p.scrollHeight;
+    }
+
+    // --- KEYS ---
+    document.addEventListener("keydown", (e) => {
+        if (e.target.tagName === "INPUT") return;
+        switch(e.key.toLowerCase()) {
+            case "w": case "arrowup": sendDir(0, -1); break;
+            case "s": case "arrowdown": sendDir(0, 1); break;
+            case "a": case "arrowleft": sendDir(-1, 0); break;
+            case "d": case "arrowright": sendDir(1, 0); break;
+            case " ": sendWait(); break;
+        }
+    });
+
+</script>
+</body>
+</html>

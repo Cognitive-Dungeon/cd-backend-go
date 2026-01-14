@@ -91,7 +91,7 @@ func (b *SnapshotBuilder) BuildSnapshot(playerGuid engine.ObjectGuid) *api.Serve
 			}
 
 			if guid == playerGuid {
-				resp.MyEntityID = guid.String()
+				resp.MyEntityID = strconv.FormatUint(uint64(guid), 10)
 				resp.ActiveEntityID = guid.String()
 
 				// --- Сборка Spellbook ---

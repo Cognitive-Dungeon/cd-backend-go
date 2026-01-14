@@ -2,13 +2,15 @@ package gateway
 
 import (
 	"cognitive-server/internal/api"
+	"cognitive-server/internal/core/types"
 	"cognitive-server/internal/core/types/enums"
 	"cognitive-server/pkg/eventbus"
+	"cognitive-server/pkg/logger"
 )
 
 // NetworkCallback — абстракция над сетью (Server)
 type NetworkCallback interface {
-	SendToAgent(agentID string, msg interface{})
+	SendToAgent(objectGuid types.ObjectGuid, msg interface{})
 }
 
 func (g *GameGateway) SetNetworkCallback(cb NetworkCallback) {
@@ -19,12 +21,15 @@ func (g *GameGateway) SetNetworkCallback(cb NetworkCallback) {
 		eventbus.EventType(enums.EventChatOut),
 		g.onChatOut,
 	)
+	logger.Log.Infof("Network callbacks setted: EventChatOut")
 }
 
 func (g *GameGateway) onChatOut(ev enums.ChatOutEvent) {
+
 	// 1. Получаем Controller получателя
 	ctrl := g.engine.Instance.GetController(ev.Receiver)
 	if ctrl == nil {
+		logger.Log.Warnf("[ChatDebug] Controller not found for receiver: %v. Message dropped.", ev.Receiver)
 		return
 	}
 
@@ -40,11 +45,10 @@ func (g *GameGateway) onChatOut(ev enums.ChatOutEvent) {
 		Data: api.ChatMessage{
 			Type:       uint8(ev.Type),
 			SenderName: senderName,
-			SenderGuid: ev.Sender.String(),
+			SenderGuid: ev.Sender, // Или приведение к string ID
 			Text:       ev.Text,
 		},
 	}
 
-	// 4. Отправляем через network.Service
-	g.network.SendToAgent(ctrl.AgentID, msg)
+	g.network.SendToAgent(ev.Receiver, msg)
 }

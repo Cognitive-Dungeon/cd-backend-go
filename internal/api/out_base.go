@@ -1,5 +1,7 @@
 package api
 
+import "cognitive-server/internal/core/types"
+
 // --- ИСХОДЯЩИЕ (Server -> Client) ---
 
 // ServerResponse — главный пакет обновления мира.
@@ -22,10 +24,10 @@ type GridMeta struct {
 }
 
 type ChatMessage struct {
-	Type       uint8  `json:"type"`
-	SenderName string `json:"senderName"`
-	SenderGuid string `json:"senderGuid"`
-	Text       string `json:"text"`
+	Type       uint8            `json:"type"`
+	SenderName string           `json:"senderName"`
+	SenderGuid types.ObjectGuid `json:"senderGuid"`
+	Text       string           `json:"text"`
 }
 
 type AsyncMessage struct {

@@ -30,7 +30,7 @@ func New(eng *engine.Engine) *GameGateway {
 // Для простоты пока сделаем channel-based callback внутри.
 func (g *GameGateway) HandleLogin(token string, callback func(engine.ObjectGuid)) {
 	if token == "" {
-		token = "Unnamed"
+		return
 	}
 
 	g.engine.PushCommand(func() {
