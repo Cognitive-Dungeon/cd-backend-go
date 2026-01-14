@@ -3,7 +3,6 @@ package engine
 import (
 	"cognitive-server/internal/core/types/enums"
 	"cognitive-server/pkg/eventbus"
-	"cognitive-server/pkg/logger"
 )
 
 type MovementSystem struct {
@@ -54,20 +53,15 @@ func (s *MovementSystem) onMoveRequest(ev enums.MoveRequestEvent) {
 
 	// 4. Проверка проходимости
 	if !s.Instance.Grid.IsWalkable(to) {
-		logger.Log.Debugf("Movement blocked for %s at [%d, %d]", ev.Object, to.X, to.Y)
-		// Тут можно кинуть EventMovementFailed, если нужно проиграть звук удара
 		return
 	}
 
 	// 3. Мутация состояния (Apply)
 	pos.TilePos = to
 
-	logger.Log.Debugf("Object %s moved: [%d,%d] -> [%d,%d]", ev.Object, from.X, from.Y, to.X, to.Y)
-
 	// 4. Уведомление (Reaction)
 	// Кидаем событие, что движение состоялось.
 	// На него подпишется:
-	// - NetworkSystem (чтобы отправить пакет клиентам)
 	// - AggroSystem (чтобы сагрить мобов)
 	// - TriggerSystem (наступил на ловушку)
 	s.Bus.Publish(eventbus.EventType(enums.EventObjectMoved), enums.ObjectMovedEvent{

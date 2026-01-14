@@ -6,6 +6,8 @@ import (
 	"cognitive-server/internal/network/connection"
 	"cognitive-server/pkg/logger"
 	"encoding/json"
+
+	"github.com/sirupsen/logrus"
 )
 
 type CastGateway interface {
@@ -25,11 +27,13 @@ func (h *CastHandler) Action() string { return "CAST" }
 func (h *CastHandler) Handle(c *connection.Client, msg api.InboundMessage) {
 	var p api.CastPayload
 	if err := json.Unmarshal(msg.Payload, &p); err != nil {
-		logger.Log.Warnf(
-			"[proto] invalid CAST payload from %v: %v",
-			c.Session().ObjectGuid(),
-			err,
-		)
+		logger.Log.WithError(err).
+			WithFields(logrus.Fields{
+				"layer":  "proto",
+				"action": msg.Action,
+				"guid":   c.Session().ObjectGuid(),
+			}).
+			Warn("invalid payload")
 		return
 	}
 	h.gateway.HandleCast(c.Session().ObjectGuid(), p)

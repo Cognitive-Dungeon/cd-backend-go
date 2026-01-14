@@ -9,19 +9,20 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/sirupsen/logrus"
 )
 
 type Client struct {
-	conn      *websocket.Conn
+	conn *websocket.Conn
+
+	session *session.Session
+
 	sink      MessageSink
 	snapshots SnapshotProvider
 	events    ClientEvents
 
-	session *session.Session
-
 	sendChan chan interface{}
-
-	closed atomic.Bool
+	closed   atomic.Bool
 }
 
 func NewClient(
@@ -44,24 +45,28 @@ func (c *Client) Session() *session.Session {
 	return c.session
 }
 
-func (c *Client) OnLogin(guid types.ObjectGuid) {
-	c.session.Authenticate(guid)
-	c.events.OnAuthenticated(c, c.session)
-}
-
 func (c *Client) ReadLoop() {
+	log := logger.Log.WithFields(logrus.Fields{
+		"layer":  "conn",
+		"remote": c.conn.RemoteAddr().String(),
+	})
+
 	defer c.cleanup()
 
 	for {
 		var msg api.InboundMessage
 		if err := c.conn.ReadJSON(&msg); err != nil {
+
+			// Неожиданное закрытие — логируем
 			if websocket.IsUnexpectedCloseError(
 				err,
 				websocket.CloseGoingAway,
 				websocket.CloseAbnormalClosure,
 			) {
-				logger.Log.Warnf("[conn] read error: %v", err)
+				log.WithError(err).Warn("unexpected websocket close")
 			}
+
+			// Обычное закрытие — молча
 			return
 		}
 
@@ -70,7 +75,12 @@ func (c *Client) ReadLoop() {
 }
 
 func (c *Client) WriteLoop() {
-	ticker := time.NewTicker(50 * time.Millisecond) // Вернули как было
+	log := logger.Log.WithFields(logrus.Fields{
+		"layer":  "conn",
+		"remote": c.conn.RemoteAddr().String(),
+	})
+
+	ticker := time.NewTicker(50 * time.Millisecond)
 	defer func() {
 		ticker.Stop()
 		c.cleanup()
@@ -78,30 +88,44 @@ func (c *Client) WriteLoop() {
 
 	for {
 		select {
-		// 🔁 Мир
 		case <-ticker.C:
-			// Получаем снапшот через Gateway
 			snapshot := c.snapshots.GetSnapshotFor(c)
-
 			if snapshot == nil {
 				continue
 			}
 
 			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := c.conn.WriteJSON(snapshot); err != nil {
-				logger.Log.Debugf("[conn] snapshot write failed: %v", err)
+				log.WithError(err).Debug("snapshot write failed")
 				return
 			}
 
-		// 💬 Асинхронные сообщения (чат, нотификации)
-		case msg := <-c.sendChan:
+		case msg, ok := <-c.sendChan:
+			if !ok {
+				// Канал закрыт — корректно выходим
+				return
+			}
+
 			if err := c.conn.WriteJSON(msg); err != nil {
-				logger.Log.Debugf("[conn] msg write failed, closing client: %v", err)
+				log.WithError(err).Debug("async message write failed")
 				return
 			}
-
 		}
 	}
+}
+
+func (c *Client) Send(msg interface{}) bool {
+	select {
+	case c.sendChan <- msg:
+		return true
+	default:
+		return false
+	}
+}
+
+func (c *Client) OnLogin(guid types.ObjectGuid) {
+	c.session.Authenticate(guid)
+	c.events.OnAuthenticated(c, c.session)
 }
 
 func (c *Client) cleanup() {
@@ -109,8 +133,19 @@ func (c *Client) cleanup() {
 		return
 	}
 
+	log := logger.Log.WithFields(logrus.Fields{
+		"layer":  "conn",
+		"remote": c.conn.RemoteAddr().String(),
+	})
+
+	if c.session.IsAuthenticated() {
+		log = log.WithField("guid", c.session.ObjectGuid())
+	}
+
+	log.Debug("client disconnected")
+
 	c.events.OnDisconnected(c)
 
-	c.conn.Close()
+	_ = c.conn.Close()
 	close(c.sendChan)
 }

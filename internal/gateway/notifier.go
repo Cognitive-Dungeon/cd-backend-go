@@ -10,10 +10,18 @@ import (
 
 // NetworkCallback — абстракция над сетью (Server)
 type NetworkCallback interface {
-	SendToAgent(objectGuid types.ObjectGuid, msg interface{})
+	SendToAgent(objectGuid types.ObjectGuid, msg interface{}) bool
 }
 
 func (g *GameGateway) SetNetworkCallback(cb NetworkCallback) {
+	log := logger.Log.WithField("layer", "gateway")
+
+	if cb == nil {
+		log.Warn("network callback cleared")
+		g.network = nil
+		return
+	}
+
 	g.network = cb
 
 	eventbus.Subscribe(
@@ -21,15 +29,29 @@ func (g *GameGateway) SetNetworkCallback(cb NetworkCallback) {
 		eventbus.EventType(enums.EventChatOut),
 		g.onChatOut,
 	)
-	logger.Log.Infof("Network callbacks setted: EventChatOut")
+
+	log.Info("network callback set: EventChatOut subscribed")
 }
 
 func (g *GameGateway) onChatOut(ev enums.ChatOutEvent) {
+	log := logger.Log.WithFields(map[string]interface{}{
+		"layer":    "gateway",
+		"event":    "chat_out",
+		"sender":   ev.Sender,
+		"receiver": ev.Receiver,
+		"type":     ev.Type,
+	})
 
-	// 1. Получаем Controller получателя
+	// 0. Проверка сети
+	if g.network == nil {
+		log.Warn("network callback not set, chat dropped")
+		return
+	}
+
+	// 1. Проверяем валидность получателя
 	ctrl := g.engine.Instance.GetController(ev.Receiver)
 	if ctrl == nil {
-		logger.Log.Warnf("[ChatDebug] Controller not found for receiver: %v. Message dropped.", ev.Receiver)
+		log.Warn("receiver controller not found, chat dropped")
 		return
 	}
 
@@ -37,6 +59,8 @@ func (g *GameGateway) onChatOut(ev enums.ChatOutEvent) {
 	senderName := "Unknown"
 	if name := g.engine.Instance.GetName(ev.Sender); name != nil {
 		senderName = name.Name
+	} else {
+		log.Debug("sender name not found, using fallback")
 	}
 
 	// 3. Формируем DTO
@@ -45,10 +69,13 @@ func (g *GameGateway) onChatOut(ev enums.ChatOutEvent) {
 		Data: api.ChatMessage{
 			Type:       uint8(ev.Type),
 			SenderName: senderName,
-			SenderGuid: ev.Sender, // Или приведение к string ID
+			SenderGuid: ev.Sender,
 			Text:       ev.Text,
 		},
 	}
 
-	g.network.SendToAgent(ev.Receiver, msg)
+	// 4. Пытаемся отправить
+	if ok := g.network.SendToAgent(ev.Receiver, msg); !ok {
+		log.Warn("chat delivery failed")
+	}
 }

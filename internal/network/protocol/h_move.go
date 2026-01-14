@@ -6,6 +6,8 @@ import (
 	"cognitive-server/internal/network/connection"
 	"cognitive-server/pkg/logger"
 	"encoding/json"
+
+	"github.com/sirupsen/logrus"
 )
 
 type MoveGateway interface {
@@ -25,11 +27,13 @@ func (h *MoveHandler) Action() string { return "MOVE" }
 func (h *MoveHandler) Handle(c *connection.Client, msg api.InboundMessage) {
 	var p api.MovePayload
 	if err := json.Unmarshal(msg.Payload, &p); err != nil {
-		logger.Log.Warnf(
-			"[proto] invalid MOVE payload from %v: %v",
-			c.Session().ObjectGuid(),
-			err,
-		)
+		logger.Log.WithError(err).
+			WithFields(logrus.Fields{
+				"layer":  "proto",
+				"action": msg.Action,
+				"guid":   c.Session().ObjectGuid(),
+			}).
+			Warn("invalid payload")
 		return
 	}
 	h.gateway.HandleMove(c.Session().ObjectGuid(), p)
