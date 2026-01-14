@@ -7,7 +7,7 @@ import (
 	"cognitive-server/internal/engine"
 	"cognitive-server/internal/engine/view"
 	"cognitive-server/pkg/eventbus"
-	"cognitive-server/pkg/logger"
+	"errors"
 	"strings"
 )
 
@@ -25,13 +25,12 @@ func New(eng *engine.Engine) *GameGateway {
 	}
 }
 
-// HandleLogin обрабатывает вход игрока и возвращает его GUID.
-// Выполняется синхронно (блокирует до выполнения в движке), либо асинхронно (тогда возвращает channel).
-// Для простоты пока сделаем channel-based callback внутри.
-func (g *GameGateway) HandleLogin(token string, callback func(engine.ObjectGuid)) {
+func (g *GameGateway) Login(token string) (engine.ObjectGuid, error) {
 	if token == "" {
-		return
+		return 0, errors.New("empty token")
 	}
+
+	result := make(chan engine.ObjectGuid, 1)
 
 	g.engine.PushCommand(func() {
 		inst := g.engine.Instance
@@ -45,15 +44,14 @@ func (g *GameGateway) HandleLogin(token string, callback func(engine.ObjectGuid)
 			WithRender(types.MakeGlyph(0x00FF00, '@')).
 			WithController(engine.ControllerComponent{AgentID: token}).
 			WithSpells(engine.SpellbookComponent{
-				KnownSpells: []uint32{1, 2, 4}, // Умеет бить, фаербол и блинк
+				KnownSpells: []uint32{1, 2, 4},
 				Cooldowns:   make(map[uint32]float64),
 			})
 
-		logger.Log.Infof("Gateway: Login '%s' -> %s", token, guid)
-
-		// Возвращаем результат вызывающему
-		callback(guid)
+		result <- guid
 	})
+
+	return <-result, nil
 }
 
 // HandleMove обрабатывает запрос на движение (DTO -> Event)

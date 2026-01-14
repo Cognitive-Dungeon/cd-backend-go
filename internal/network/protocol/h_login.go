@@ -8,7 +8,7 @@ import (
 )
 
 type LoginGateway interface {
-	HandleLogin(token string, cb func(engine.ObjectGuid))
+	Login(token string) (engine.ObjectGuid, error)
 }
 
 type LoginHandler struct {
@@ -32,7 +32,10 @@ func (h *LoginHandler) Handle(c *server.Client, msg api.InboundMessage) {
 		token = p.Token
 	}
 
-	h.gateway.HandleLogin(token, func(guid engine.ObjectGuid) {
-		c.OnLogin(guid)
-	})
+	guid, err := h.gateway.Login(token)
+	if err != nil {
+		return
+	}
+
+	c.OnLogin(guid)
 }
