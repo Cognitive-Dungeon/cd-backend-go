@@ -58,156 +58,156 @@ func NewInstance() *Instance {
 }
 
 // addChunk добавляет новую страницу для всех компонентов
-func (w *Instance) addChunk() {
-	w.Generations = append(w.Generations, make([]uint16, ChunkSize))
-	w.Guids = append(w.Guids, make([]ObjectGuid, ChunkSize))
+func (inst *Instance) addChunk() {
+	inst.Generations = append(inst.Generations, make([]uint16, ChunkSize))
+	inst.Guids = append(inst.Guids, make([]ObjectGuid, ChunkSize))
 
-	w.Positions = append(w.Positions, make([]*PositionComponent, ChunkSize))
-	w.Stats = append(w.Stats, make([]*StatsComponent, ChunkSize))
-	w.Names = append(w.Names, make([]*NameComponent, ChunkSize))
-	w.Renders = append(w.Renders, make([]*RenderComponent, ChunkSize))
-	w.Spells = append(w.Spells, make([]*SpellbookComponent, ChunkSize))
+	inst.Positions = append(inst.Positions, make([]*PositionComponent, ChunkSize))
+	inst.Stats = append(inst.Stats, make([]*StatsComponent, ChunkSize))
+	inst.Names = append(inst.Names, make([]*NameComponent, ChunkSize))
+	inst.Renders = append(inst.Renders, make([]*RenderComponent, ChunkSize))
+	inst.Spells = append(inst.Spells, make([]*SpellbookComponent, ChunkSize))
 
-	w.Controllers = append(w.Controllers, make([]*ControllerComponent, ChunkSize))
+	inst.Controllers = append(inst.Controllers, make([]*ControllerComponent, ChunkSize))
 }
 
 // CreateObject выдает новый ID.
-func (w *Instance) CreateObject(typ ObjectType) ObjectGuid {
+func (inst *Instance) CreateObject(typ ObjectType) ObjectGuid {
 	var idx uint32
 
 	// 1. Ищем свободный слот
-	if len(w.freeIndices) > 0 {
+	if len(inst.freeIndices) > 0 {
 		// Pop из стека свободных
-		idx = w.freeIndices[len(w.freeIndices)-1]
-		w.freeIndices = w.freeIndices[:len(w.freeIndices)-1]
+		idx = inst.freeIndices[len(inst.freeIndices)-1]
+		inst.freeIndices = inst.freeIndices[:len(inst.freeIndices)-1]
 	} else {
 		// Берем новый
-		idx = w.nextIndex
-		w.nextIndex++
+		idx = inst.nextIndex
+		inst.nextIndex++
 
 		// Если индекс вылез за пределы текущих чанков — добавляем новый
 		// (idx >> ChunkShift) дает индекс нужного чанка
-		if int(idx>>ChunkShift) >= len(w.Guids) {
-			w.addChunk()
+		if int(idx>>ChunkShift) >= len(inst.Guids) {
+			inst.addChunk()
 		}
 	}
 
-	chunkIdx, slotIdx := w.locate(idx)
+	chunkIdx, slotIdx := inst.locate(idx)
 
 	// 2. Инкрементируем поколение (Generation)
-	w.Generations[chunkIdx][slotIdx]++
-	gen := w.Generations[chunkIdx][slotIdx]
+	inst.Generations[chunkIdx][slotIdx]++
+	gen := inst.Generations[chunkIdx][slotIdx]
 
 	// 3. Собираем GUID (Shard пока 0)
 	// TODO: Прокинуть сюда ShardID
 	guid := types.PackObjectGuid(0, uint8(typ), gen, idx)
 
 	// 4. Регистрируем
-	w.Guids[chunkIdx][slotIdx] = guid
+	inst.Guids[chunkIdx][slotIdx] = guid
 
 	return guid
 
 }
 
-func (w *Instance) clearSlot(chunk, slot uint32) {
-	w.Positions[chunk][slot] = nil
-	w.Stats[chunk][slot] = nil
-	w.Names[chunk][slot] = nil
-	w.Renders[chunk][slot] = nil
-	w.Spells[chunk][slot] = nil
-	w.Controllers[chunk][slot] = nil
+func (inst *Instance) clearSlot(chunk, slot uint32) {
+	inst.Positions[chunk][slot] = nil
+	inst.Stats[chunk][slot] = nil
+	inst.Names[chunk][slot] = nil
+	inst.Renders[chunk][slot] = nil
+	inst.Spells[chunk][slot] = nil
+	inst.Controllers[chunk][slot] = nil
 }
 
 // DestroyObject удаляет объект (но не стирает память сразу, просто помечает слот)
-func (w *Instance) DestroyObject(guid ObjectGuid) {
+func (inst *Instance) DestroyObject(guid ObjectGuid) {
 	idx := guid.Index()
-	chunkIdx, slotIdx := w.locate(idx)
+	chunkIdx, slotIdx := inst.locate(idx)
 
 	// Bounds check (на всякий случай)
-	if int(chunkIdx) >= len(w.Guids) {
+	if int(chunkIdx) >= len(inst.Guids) {
 		return
 	}
 
 	// Валидация: удаляем только если GUID совпадает
-	if !w.Guids[chunkIdx][slotIdx].IsEqual(guid) {
+	if !inst.Guids[chunkIdx][slotIdx].IsEqual(guid) {
 		return
 	}
 
 	// Очищаем компоненты (зануляем поинтеры, чтобы GC собрал данные)
-	w.clearSlot(chunkIdx, slotIdx)
+	inst.clearSlot(chunkIdx, slotIdx)
 
-	w.Guids[chunkIdx][slotIdx] = types.NilObjectGuid
+	inst.Guids[chunkIdx][slotIdx] = types.NilObjectGuid
 
 	// Возвращаем индекс в пул свободных
-	w.freeIndices = append(w.freeIndices, idx)
+	inst.freeIndices = append(inst.freeIndices, idx)
 }
 
 // IsValid проверяет жив ли объект по GUID
-func (w *Instance) IsValid(guid ObjectGuid) bool {
+func (inst *Instance) IsValid(guid ObjectGuid) bool {
 	idx := guid.Index()
-	chunkIdx, slotIdx := w.locate(idx)
+	chunkIdx, slotIdx := inst.locate(idx)
 
-	if int(chunkIdx) >= len(w.Guids) {
+	if int(chunkIdx) >= len(inst.Guids) {
 		return false
 	}
 
-	return w.Guids[chunkIdx][slotIdx].IsEqual(guid)
+	return inst.Guids[chunkIdx][slotIdx].IsEqual(guid)
 }
 
 // locate - вычисляет координаты хранения объекта по его глобальному индексу.
 //
 // chunk — индекс чанка
 // slot  — позиция внутри чанка
-func (w *Instance) locate(idx uint32) (chunk, slot uint32) {
+func (inst *Instance) locate(idx uint32) (chunk, slot uint32) {
 	return idx >> ChunkShift, idx & ChunkMask
 }
 
-func (w *Instance) GetPosition(guid ObjectGuid) *PositionComponent {
-	if !w.IsValid(guid) {
+func (inst *Instance) GetPosition(guid ObjectGuid) *PositionComponent {
+	if !inst.IsValid(guid) {
 		return nil
 	}
-	chunk, slot := w.locate(guid.Index())
-	return w.Positions[chunk][slot]
+	chunk, slot := inst.locate(guid.Index())
+	return inst.Positions[chunk][slot]
 }
 
-func (w *Instance) GetStats(guid ObjectGuid) *StatsComponent {
-	if !w.IsValid(guid) {
+func (inst *Instance) GetStats(guid ObjectGuid) *StatsComponent {
+	if !inst.IsValid(guid) {
 		return nil
 	}
-	chunk, slot := w.locate(guid.Index())
-	return w.Stats[chunk][slot]
+	chunk, slot := inst.locate(guid.Index())
+	return inst.Stats[chunk][slot]
 }
 
-func (w *Instance) GetName(guid ObjectGuid) *NameComponent {
-	if !w.IsValid(guid) {
+func (inst *Instance) GetName(guid ObjectGuid) *NameComponent {
+	if !inst.IsValid(guid) {
 		return nil
 	}
-	chunk, slot := w.locate(guid.Index())
-	return w.Names[chunk][slot]
+	chunk, slot := inst.locate(guid.Index())
+	return inst.Names[chunk][slot]
 }
 
-func (w *Instance) GetRender(guid ObjectGuid) *RenderComponent {
-	if !w.IsValid(guid) {
+func (inst *Instance) GetRender(guid ObjectGuid) *RenderComponent {
+	if !inst.IsValid(guid) {
 		return nil
 	}
-	chunk, slot := w.locate(guid.Index())
-	return w.Renders[chunk][slot]
+	chunk, slot := inst.locate(guid.Index())
+	return inst.Renders[chunk][slot]
 }
 
-func (w *Instance) GetSpells(guid ObjectGuid) *SpellbookComponent {
-	if !w.IsValid(guid) {
+func (inst *Instance) GetSpells(guid ObjectGuid) *SpellbookComponent {
+	if !inst.IsValid(guid) {
 		return nil
 	}
-	chunk, slot := w.locate(guid.Index())
-	return w.Spells[chunk][slot]
+	chunk, slot := inst.locate(guid.Index())
+	return inst.Spells[chunk][slot]
 }
 
-func (w *Instance) GetController(guid ObjectGuid) *ControllerComponent {
-	if !w.IsValid(guid) {
+func (inst *Instance) GetController(guid ObjectGuid) *ControllerComponent {
+	if !inst.IsValid(guid) {
 		return nil
 	}
-	chunk, slot := w.locate(guid.Index())
-	return w.Controllers[chunk][slot]
+	chunk, slot := inst.locate(guid.Index())
+	return inst.Controllers[chunk][slot]
 }
 
 type EntityBuilder struct {
@@ -217,10 +217,10 @@ type EntityBuilder struct {
 	slot  uint32
 }
 
-func (w *Instance) NewEntityBuilder(id ObjectGuid) *EntityBuilder {
-	chunk, slot := w.locate(id.Index())
+func (inst *Instance) NewEntityBuilder(id ObjectGuid) *EntityBuilder {
+	chunk, slot := inst.locate(id.Index())
 	return &EntityBuilder{
-		inst:  w,
+		inst:  inst,
 		id:    id,
 		chunk: chunk,
 		slot:  slot,

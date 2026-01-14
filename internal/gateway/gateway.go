@@ -132,55 +132,79 @@ func (g *GameGateway) HandleCast(guid engine.ObjectGuid, payload api.CastPayload
 	})
 }
 
-func (g *GameGateway) HandleChat(guid engine.ObjectGuid, p api.ChatPayload) {
+func (g *GameGateway) HandleChat(sourceGuid engine.ObjectGuid, p api.ChatPayload) {
 	log := logger.Log.WithFields(logrus.Fields{
 		"layer": "gateway",
-		"guid":  guid,
+		"guid":  sourceGuid,
 	})
 
-	text := strings.TrimSpace(p.Message)
-	if text == "" {
+	rawText := strings.TrimSpace(p.Message)
+
+	if rawText == "" {
 		log.Debug("empty chat ignored")
 		return
 	}
 
-	if !g.engine.Instance.IsValid(guid) {
-		log.Warn("chat from invalid object ignored")
-		return
-	}
-
-	msgType := types.ChatTypeSay
-	target := engine.ObjectGuid(0)
-
-	if strings.HasPrefix(text, "/") {
-		parts := strings.SplitN(text, " ", 2)
-		cmd := strings.ToLower(parts[0])
-		if len(parts) > 1 {
-			text = parts[1]
-		}
-
-		switch cmd {
-		case "/s", "/say":
-			msgType = types.ChatTypeSay
-		case "/y", "/yell":
-			msgType = types.ChatTypeYell
-		case "/e", "/emote":
-			msgType = types.ChatTypeEmote
-		}
-	}
-
 	g.engine.PushCommand(func() {
-		if !g.engine.Instance.IsValid(guid) {
+		// Проверка отправителя
+		if !g.engine.Instance.IsValid(sourceGuid) {
+			log.Warn("chat from invalid object ignored")
 			return
+		}
+
+		msgType := types.ChatTypeSay
+		target := engine.ObjectGuid(0)
+		finalText := rawText
+
+		// Парсинг команд
+		if strings.HasPrefix(rawText, "/") {
+			parts := strings.SplitN(rawText, " ", 3) // /w Name Msg
+			cmd := strings.ToLower(parts[0])
+
+			switch cmd {
+			case "/s", "/say":
+				msgType = types.ChatTypeSay
+				if len(parts) > 1 {
+					finalText = rawText[len(cmd)+1:]
+				}
+
+			case "/y", "/yell":
+				msgType = types.ChatTypeYell
+				if len(parts) > 1 {
+					finalText = rawText[len(cmd)+1:]
+				}
+
+			case "/e", "/emote":
+				msgType = types.ChatTypeEmote
+				if len(parts) > 1 {
+					finalText = rawText[len(cmd)+1:]
+				}
+
+			case "/w", "/whisper":
+				msgType = types.ChatTypeWhisper
+				if len(parts) < 3 {
+					// TODO: Отправить системное сообщение "Usage: /w Name Message"
+					return
+				}
+				targetName := parts[1]
+				finalText = parts[2]
+
+				// Ищем цель в ECS (мы внутри PushCommand, это безопасно)
+				target = g.engine.Instance.FindObjectByName(targetName)
+				if target == 0 {
+					// TODO: Отправить системное сообщение "Player not found"
+					return
+				}
+			}
 		}
 
 		g.engine.Bus.Publish(
 			eventbus.EventType(enums.EventChatRequest),
 			enums.ChatRequestEvent{
-				Source:  guid,
+				Source:  sourceGuid,
 				Type:    msgType,
 				Target:  target,
-				Message: text,
+				Message: finalText,
 			},
 		)
 	})

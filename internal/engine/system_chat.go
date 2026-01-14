@@ -23,64 +23,43 @@ func NewChatSystem(inst *Instance, bus *eventbus.EventBus) *ChatSystem {
 }
 
 func (s *ChatSystem) onChat(ev enums.ChatRequestEvent) {
+	// 1. Получаем позицию отправителя
 	senderPos := s.Instance.GetPosition(ev.Source)
 	if senderPos == nil {
 		return
+	} // Отправителя нет в мире
+
+	var recipients []ObjectGuid
+
+	// 2. Выбираем стратегию рассылки
+	switch ev.Type {
+	case types.ChatTypeWhisper:
+		// Личное сообщение: Видит цель и сам отправитель
+		if ev.Target != 0 {
+			recipients = append(recipients, ev.Target)
+			recipients = append(recipients, ev.Source)
+		}
+
+	case types.ChatTypeSay, types.ChatTypeEmote:
+		recipients = s.Instance.FindObjectsInRange(senderPos.TilePos, SayRange)
+
+	case types.ChatTypeYell:
+		recipients = s.Instance.FindObjectsInRange(senderPos.TilePos, YellRange)
 	}
 
-	radius := 0
-	switch ev.Type {
-	case types.ChatTypeSay, types.ChatTypeEmote:
-		radius = SayRange
-	case types.ChatTypeYell:
-		radius = YellRange
-	case types.ChatTypeWhisper:
+	// 3. Рассылка
+	for _, receiverGuid := range recipients {
+		// Пропускаем NPC (у них нет контроллера, значит некому слать JSON)
+		// Если в будущем NPC научатся читать чат (LLM), уберем эту проверку.
+		if s.Instance.GetController(receiverGuid) == nil {
+			continue
+		}
+
 		s.Bus.Publish(eventbus.EventType(enums.EventChatOut), enums.ChatOutEvent{
-			Receiver: ev.Target,
+			Receiver: receiverGuid,
 			Sender:   ev.Source,
 			Type:     ev.Type,
 			Text:     ev.Message,
 		})
-		return
 	}
-
-	// Broadcast
-	for chunkIdx, chunk := range s.Instance.Guids {
-		for slotIdx, guid := range chunk {
-			if guid == 0 {
-				continue
-			}
-
-			ctrl := s.Instance.Controllers[chunkIdx][slotIdx]
-			if ctrl == nil {
-				continue
-			}
-
-			pos := s.Instance.Positions[chunkIdx][slotIdx]
-			if pos == nil {
-				continue
-			}
-
-			if tileDistance(senderPos.TilePos, pos.TilePos) <= radius {
-				s.Bus.Publish(eventbus.EventType(enums.EventChatOut), enums.ChatOutEvent{
-					Receiver: guid,
-					Sender:   ev.Source,
-					Type:     ev.Type,
-					Text:     ev.Message,
-				})
-			}
-		}
-	}
-}
-
-func tileDistance(a, b types.TilePos) int {
-	dx := int(a.X - b.X)
-	if dx < 0 {
-		dx = -dx
-	}
-	dy := int(a.Y - b.Y)
-	if dy < 0 {
-		dy = -dy
-	}
-	return dx + dy
 }
