@@ -25,7 +25,7 @@ type Client struct {
 	closed atomic.Bool
 }
 
-func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
+func (s *Server) HandleWS(w http.ResponseWriter, r *http.Request) {
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		logger.Log.Errorf("WS Upgrade error: %v", err)

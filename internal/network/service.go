@@ -4,10 +4,10 @@ import (
 	"cognitive-server/internal/config"
 	"cognitive-server/internal/engine"
 	"cognitive-server/internal/gateway"
+	"cognitive-server/internal/network/transport"
 	"cognitive-server/internal/server"
 	"cognitive-server/pkg/logger"
 	"context"
-	"net/http"
 )
 
 type Service struct {
@@ -27,12 +27,13 @@ func New(cfg *config.ServerConfig, eng *engine.Engine) *Service {
 
 func (n *Service) Start() {
 	// Передаем Gateway в сервер
-	n.srv = server.New(n.gw, n.cfg.Port)
+	n.srv = server.New(n.gw)
+	httpSrv := transport.NewHTTP(n.cfg.Port, n.srv)
 	n.gw.SetNetworkCallback(n.srv)
 
 	go func() {
-		logger.Log.Infof("🌐 Network: Starting listener on port %d...", n.cfg.Port)
-		if err := n.srv.Run(); err != nil && err != http.ErrServerClosed {
+		logger.Log.Infof("🌐 Network: Starting on port %d...", n.cfg.Port)
+		if err := httpSrv.Run(); err != nil {
 			logger.Log.Errorf("🌐 Network Error: %v", err)
 		}
 	}()
