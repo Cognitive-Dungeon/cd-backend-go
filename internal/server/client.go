@@ -101,12 +101,10 @@ func (c *Client) writeLoop() {
 
 func (c *Client) cleanup() {
 	if c.closed.Swap(true) {
-		return // уже закрыт
+		return
 	}
 
-	if c.session.ObjectGuid() != types.NilObjectGuid {
-		c.server.unregisterClient(c.session.ObjectGuid())
-	}
+	c.server.onClientDisconnected(c)
 
 	c.conn.Close()
 	close(c.sendChan)
