@@ -9,6 +9,7 @@ import (
 	"cognitive-server/pkg/eventbus"
 	"errors"
 	"strings"
+	"time"
 )
 
 // GameGateway — фасад для взаимодействия внешнего мира с движком.
@@ -51,7 +52,12 @@ func (g *GameGateway) Login(token string) (engine.ObjectGuid, error) {
 		result <- guid
 	})
 
-	return <-result, nil
+	select {
+	case guid := <-result:
+		return guid, nil
+	case <-time.After(2 * time.Second):
+		return 0, errors.New("login timeout")
+	}
 }
 
 // HandleMove обрабатывает запрос на движение (DTO -> Event)

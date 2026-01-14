@@ -54,13 +54,15 @@ func (c *Client) ReadLoop() {
 
 	for {
 		var msg api.InboundMessage
-		err := c.conn.ReadJSON(&msg)
-		if err != nil {
-			// Обычный разрыв соединения
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				logger.Log.Warnf("WS Error: %v", err)
+		if err := c.conn.ReadJSON(&msg); err != nil {
+			if websocket.IsUnexpectedCloseError(
+				err,
+				websocket.CloseGoingAway,
+				websocket.CloseAbnormalClosure,
+			) {
+				logger.Log.Warnf("[conn] read error: %v", err)
 			}
-			break
+			return
 		}
 
 		c.sink.HandleMessage(c, msg)
@@ -81,14 +83,22 @@ func (c *Client) WriteLoop() {
 			// Получаем снапшот через Gateway
 			snapshot := c.snapshots.GetSnapshotFor(c)
 
+			if snapshot == nil {
+				continue
+			}
+
 			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := c.conn.WriteJSON(snapshot); err != nil {
+				logger.Log.Debugf("[conn] snapshot write failed: %v", err)
 				return
 			}
 
 		// 💬 Асинхронные сообщения (чат, нотификации)
 		case msg := <-c.sendChan:
-			c.conn.WriteJSON(msg)
+			if err := c.conn.WriteJSON(msg); err != nil {
+				logger.Log.Debugf("[conn] msg write failed, closing client: %v", err)
+				return
+			}
 
 		}
 	}

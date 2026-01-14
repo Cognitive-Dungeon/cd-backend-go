@@ -73,5 +73,13 @@ func (s *Server) GetSnapshotFor(c *connection.Client) *api.ServerResponse {
 	if !c.Session().IsAuthenticated() {
 		return nil
 	}
-	return s.gateway.GetSnapshot(c.Session().ObjectGuid())
+
+	snapshot := s.gateway.GetSnapshot(c.Session().ObjectGuid())
+	if snapshot == nil {
+		logger.Log.Warnf(
+			"[snapshot] nil snapshot for %v",
+			c.Session().ObjectGuid(),
+		)
+	}
+	return snapshot
 }

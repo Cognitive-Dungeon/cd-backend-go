@@ -4,6 +4,7 @@ import (
 	"cognitive-server/internal/api"
 	"cognitive-server/internal/engine"
 	"cognitive-server/internal/network/connection"
+	"cognitive-server/pkg/logger"
 	"encoding/json"
 )
 
@@ -24,6 +25,11 @@ func (h *CastHandler) Action() string { return "CAST" }
 func (h *CastHandler) Handle(c *connection.Client, msg api.InboundMessage) {
 	var p api.CastPayload
 	if err := json.Unmarshal(msg.Payload, &p); err != nil {
+		logger.Log.Warnf(
+			"[proto] invalid CAST payload from %v: %v",
+			c.Session().ObjectGuid(),
+			err,
+		)
 		return
 	}
 	h.gateway.HandleCast(c.Session().ObjectGuid(), p)

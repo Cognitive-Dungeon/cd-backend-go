@@ -21,7 +21,11 @@ func NewDispatcher(handlers ...CommandHandler) *Dispatcher {
 func (d *Dispatcher) Handle(c *connection.Client, msg api.InboundMessage) {
 	h, ok := d.handlers[msg.Action]
 	if !ok {
-		logger.Log.Warnf("Unknown action: %s", msg.Action)
+		logger.Log.Warnf(
+			"[proto] unknown action '%s' (session=%v)",
+			msg.Action,
+			c.Session().ObjectGuid(),
+		)
 		return
 	}
 
