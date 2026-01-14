@@ -2,7 +2,7 @@ package protocol
 
 import (
 	"cognitive-server/internal/api"
-	"cognitive-server/internal/server"
+	"cognitive-server/internal/network/connection"
 	"cognitive-server/pkg/logger"
 )
 
@@ -18,7 +18,7 @@ func NewDispatcher(handlers ...CommandHandler) *Dispatcher {
 	return &Dispatcher{handlers: m}
 }
 
-func (d *Dispatcher) Handle(c *server.Client, msg api.InboundMessage) {
+func (d *Dispatcher) Handle(c *connection.Client, msg api.InboundMessage) {
 	h, ok := d.handlers[msg.Action]
 	if !ok {
 		logger.Log.Warnf("Unknown action: %s", msg.Action)

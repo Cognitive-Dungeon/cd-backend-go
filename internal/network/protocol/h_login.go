@@ -3,7 +3,7 @@ package protocol
 import (
 	"cognitive-server/internal/api"
 	"cognitive-server/internal/engine"
-	"cognitive-server/internal/server"
+	"cognitive-server/internal/network/connection"
 	"encoding/json"
 )
 
@@ -21,7 +21,7 @@ func NewLoginHandler(gateway LoginGateway) *LoginHandler {
 
 func (h *LoginHandler) Action() string { return "LOGIN" }
 
-func (h *LoginHandler) Handle(c *server.Client, msg api.InboundMessage) {
+func (h *LoginHandler) Handle(c *connection.Client, msg api.InboundMessage) {
 	token := msg.Token
 
 	if token == "" && len(msg.Payload) > 0 {

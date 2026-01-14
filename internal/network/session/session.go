@@ -1,4 +1,4 @@
-package server
+package session
 
 import "cognitive-server/internal/core/types"
 

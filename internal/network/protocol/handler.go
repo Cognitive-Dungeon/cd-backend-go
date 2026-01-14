@@ -2,10 +2,10 @@ package protocol
 
 import (
 	"cognitive-server/internal/api"
-	"cognitive-server/internal/server"
+	"cognitive-server/internal/network/connection"
 )
 
 type CommandHandler interface {
 	Action() string
-	Handle(c *server.Client, msg api.InboundMessage)
+	Handle(c *connection.Client, msg api.InboundMessage)
 }

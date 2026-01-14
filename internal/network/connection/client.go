@@ -1,10 +1,10 @@
-package server
+package connection
 
 import (
 	"cognitive-server/internal/api"
 	"cognitive-server/internal/core/types"
+	"cognitive-server/internal/network/session"
 	"cognitive-server/pkg/logger"
-	"net/http"
 	"sync/atomic"
 	"time"
 
@@ -12,49 +12,44 @@ import (
 )
 
 type Client struct {
-	conn   *websocket.Conn
-	server *Server
+	conn      *websocket.Conn
+	sink      MessageSink
+	snapshots SnapshotProvider
+	events    ClientEvents
 
-	session *Session
+	session *session.Session
 
 	sendChan chan interface{}
 
 	closed atomic.Bool
 }
 
-func (c *Client) Session() *Session {
-	return c.session
+func NewClient(
+	conn *websocket.Conn,
+	sink MessageSink,
+	snapshots SnapshotProvider,
+	events ClientEvents,
+) *Client {
+	return &Client{
+		conn:      conn,
+		sink:      sink,
+		snapshots: snapshots,
+		events:    events,
+		session:   session.NewSession(),
+		sendChan:  make(chan interface{}, 64),
+	}
 }
 
-func (c *Client) onAuthenticated() {
-	c.server.onClientAuthenticated(c)
+func (c *Client) Session() *session.Session {
+	return c.session
 }
 
 func (c *Client) OnLogin(guid types.ObjectGuid) {
 	c.session.Authenticate(guid)
-	c.onAuthenticated()
+	c.events.OnAuthenticated(c, c.session)
 }
 
-func (s *Server) HandleWS(w http.ResponseWriter, r *http.Request) {
-	conn, err := s.upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		logger.Log.Errorf("WS Upgrade error: %v", err)
-		return
-	}
-
-	client := &Client{
-		conn:     conn,
-		server:   s,
-		session:  NewSession(),
-		sendChan: make(chan interface{}, 64),
-	}
-
-	// Мы НЕ спавним игрока сразу. Мы ждем команду LOGIN.
-	// Запускаем только чтение.
-	go client.readLoop()
-}
-
-func (c *Client) readLoop() {
+func (c *Client) ReadLoop() {
 	defer c.cleanup()
 
 	for {
@@ -68,11 +63,11 @@ func (c *Client) readLoop() {
 			break
 		}
 
-		c.server.handler.Handle(c, msg)
+		c.sink.HandleMessage(c, msg)
 	}
 }
 
-func (c *Client) writeLoop() {
+func (c *Client) WriteLoop() {
 	ticker := time.NewTicker(50 * time.Millisecond) // Вернули как было
 	defer func() {
 		ticker.Stop()
@@ -84,7 +79,7 @@ func (c *Client) writeLoop() {
 		// 🔁 Мир
 		case <-ticker.C:
 			// Получаем снапшот через Gateway
-			snapshot := c.server.Gateway.GetSnapshot(c.session.objectGuid)
+			snapshot := c.snapshots.GetSnapshotFor(c)
 
 			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := c.conn.WriteJSON(snapshot); err != nil {
@@ -104,7 +99,7 @@ func (c *Client) cleanup() {
 		return
 	}
 
-	c.server.onClientDisconnected(c)
+	c.events.OnDisconnected(c)
 
 	c.conn.Close()
 	close(c.sendChan)

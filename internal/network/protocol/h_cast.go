@@ -3,7 +3,7 @@ package protocol
 import (
 	"cognitive-server/internal/api"
 	"cognitive-server/internal/engine"
-	"cognitive-server/internal/server"
+	"cognitive-server/internal/network/connection"
 	"encoding/json"
 )
 
@@ -21,7 +21,7 @@ func NewCastHandler(gw CastGateway) *CastHandler {
 
 func (h *CastHandler) Action() string { return "CAST" }
 
-func (h *CastHandler) Handle(c *server.Client, msg api.InboundMessage) {
+func (h *CastHandler) Handle(c *connection.Client, msg api.InboundMessage) {
 	var p api.CastPayload
 	if err := json.Unmarshal(msg.Payload, &p); err != nil {
 		return
