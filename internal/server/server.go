@@ -62,3 +62,10 @@ func (s *Server) unregisterClient(guid types.ObjectGuid) {
 
 	delete(s.clients, guid)
 }
+
+func (s *Server) onClientAuthenticated(c *Client) {
+	guid := c.objectGuid
+
+	s.registerClient(guid, c)
+	go c.writeLoop()
+}

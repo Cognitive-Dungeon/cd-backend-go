@@ -23,6 +23,23 @@ type Client struct {
 	closed atomic.Bool
 }
 
+func (c *Client) ObjectGuid() types.ObjectGuid {
+	return c.objectGuid
+}
+
+func (c *Client) SetObjectGuid(guid types.ObjectGuid) {
+	c.objectGuid = guid
+}
+
+func (c *Client) onAuthenticated() {
+	c.server.onClientAuthenticated(c)
+}
+
+func (c *Client) OnLogin(guid types.ObjectGuid) {
+	c.objectGuid = guid
+	c.onAuthenticated()
+}
+
 func (s *Server) HandleWS(w http.ResponseWriter, r *http.Request) {
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {

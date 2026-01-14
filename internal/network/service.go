@@ -4,6 +4,7 @@ import (
 	"cognitive-server/internal/config"
 	"cognitive-server/internal/engine"
 	"cognitive-server/internal/gateway"
+	"cognitive-server/internal/network/protocol"
 	"cognitive-server/internal/network/transport"
 	"cognitive-server/internal/server"
 	"cognitive-server/pkg/logger"
@@ -27,7 +28,12 @@ func New(cfg *config.ServerConfig, eng *engine.Engine) *Service {
 
 func (n *Service) Start() {
 	// Передаем Gateway в сервер
-	dispatcher := server.NewDispatcher(n.gw)
+	dispatcher := protocol.NewDispatcher(
+		protocol.NewLoginHandler(n.gw),
+		protocol.NewMoveHandler(n.gw),
+		protocol.NewCastHandler(n.gw),
+		protocol.NewChatHandler(n.gw),
+	)
 	n.srv = server.New(n.gw, dispatcher)
 	httpSrv := transport.NewHTTP(n.cfg.Port, n.srv)
 	n.gw.SetNetworkCallback(n.srv)
