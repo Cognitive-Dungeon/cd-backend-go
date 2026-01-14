@@ -2,16 +2,20 @@ package main
 
 import (
 	"cognitive-server/internal/app"
-	"log"
+	"cognitive-server/pkg/logger"
+	"os"
 )
 
 func main() {
-	application, appErr := app.New()
-	if appErr != nil {
-		log.Fatalf("App init failed: %v", appErr)
+	application, err := app.New()
+	if err != nil {
+		logger.Log.WithError(err).
+			Fatal("application initialization failed")
 	}
 
-	if runErr := application.Run(); runErr != nil {
-		log.Fatalf("App run failed: %v", runErr)
+	if err := application.Run(); err != nil {
+		logger.Log.WithError(err).
+			Error("application stopped with error")
+		os.Exit(1)
 	}
 }

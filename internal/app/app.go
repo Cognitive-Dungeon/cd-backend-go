@@ -28,8 +28,11 @@ func New() (*App, error) {
 
 	logger.Init(cfg.Log)
 
-	logger.Log.Info("🚀 Initializing Cognitive Dungeon...")
-	logger.Log.Info(version.String())
+	log := logger.Log.WithField("layer", "app")
+
+	log.Info("🚀 Initializing Cognitive Dungeon...")
+	log.WithField("version", version.String()).
+		Info("build info")
 
 	eng := engine.New(&cfg.Sim)
 	net := network.New(&cfg.Server, eng)
@@ -42,32 +45,45 @@ func New() (*App, error) {
 
 // Run запускает приложение и блокирует выполнение до сигнала остановки.
 func (a *App) Run() error {
-	// Запускаем сеть
-	a.Network.Start()
+	log := logger.Log.WithField("layer", "app")
 
-	// Запускаем движок (блокирует поток)
-	go a.Engine.Run()
+	log.Info("starting application")
 
-	return a.waitShutdown()
-}
-
-func (a *App) waitShutdown() error {
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-
-	<-stop
-	logger.Log.Info("🛑 Shutting down...")
-
-	// Graceful shutdown logic
-	// Например, сохранение состояния миров
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// Контекст жизни всего приложения
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Запуск компонентов
+	a.Network.Start()
+	go a.Engine.Run()
+
+	// Ожидание сигнала
+	sig := waitSignal()
+	log.WithField("signal", sig.String()).
+		Info("shutdown signal received")
+
+	// Graceful shutdown
+	return a.shutdown(ctx)
+}
+
+func waitSignal() os.Signal {
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	return <-stop
+}
+
+func (a *App) shutdown(parent context.Context) error {
+	log := logger.Log.WithField("layer", "app")
+
+	ctx, cancel := context.WithTimeout(parent, 5*time.Second)
+	defer cancel()
+
+	log.Info("stopping engine")
 	a.Engine.Stop(ctx)
+
+	log.Info("stopping network")
 	a.Network.Stop(ctx)
 
-	// Тут можно добавить a.httpServer.Shutdown(ctx) если реализовать
-
-	logger.Log.Info("Bye.")
+	log.Info("shutdown complete")
 	return nil
 }
