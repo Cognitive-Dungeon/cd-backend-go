@@ -27,7 +27,8 @@ func New(cfg *config.ServerConfig, eng *engine.Engine) *Service {
 
 func (n *Service) Start() {
 	// Передаем Gateway в сервер
-	n.srv = server.New(n.gw)
+	dispatcher := server.NewDispatcher(n.gw)
+	n.srv = server.New(n.gw, dispatcher)
 	httpSrv := transport.NewHTTP(n.cfg.Port, n.srv)
 	n.gw.SetNetworkCallback(n.srv)
 

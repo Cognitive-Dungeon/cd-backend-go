@@ -14,13 +14,15 @@ import (
 type Server struct {
 	Gateway  *gateway.GameGateway
 	upgrader websocket.Upgrader
+	handler  MessageHandler
 	clients  map[types.ObjectGuid]*Client
 	mu       sync.RWMutex
 }
 
-func New(gw *gateway.GameGateway) *Server {
+func New(gw *gateway.GameGateway, handler MessageHandler) *Server {
 	return &Server{
 		Gateway: gw,
+		handler: handler,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true },
 		},

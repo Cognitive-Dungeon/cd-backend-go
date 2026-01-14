@@ -3,9 +3,7 @@ package server
 import (
 	"cognitive-server/internal/api"
 	"cognitive-server/internal/core/types"
-	"cognitive-server/internal/engine"
 	"cognitive-server/pkg/logger"
-	"encoding/json"
 	"net/http"
 	"sync/atomic"
 	"time"
@@ -57,68 +55,8 @@ func (c *Client) readLoop() {
 			break
 		}
 
-		c.handleMessage(msg)
+		c.server.handler.Handle(c, msg)
 	}
-}
-
-func (c *Client) handleMessage(msg api.InboundMessage) {
-	// Если мы еще не залогинены, принимаем только LOGIN
-	// ЛОГ №1: Видим ли мы вообще сообщение?
-	logger.Log.Debugf("WS Recv: Action=%s Payload=%s", msg.Action, string(msg.Payload))
-	if c.objectGuid == 0 && msg.Action != "LOGIN" {
-		logger.Log.Warn("Ignored command before LOGIN")
-		return
-	}
-
-	switch msg.Action {
-	case "LOGIN":
-		// 1. Берем токен из корня
-		token := msg.Token
-
-		// 2. Если пусто, пробуем достать из Payload
-		if token == "" && len(msg.Payload) > 0 {
-			var loginPayload struct {
-				Token string `json:"token"`
-			}
-			if err := json.Unmarshal(msg.Payload, &loginPayload); err == nil {
-				token = loginPayload.Token
-			}
-		}
-
-		c.server.Gateway.HandleLogin(token, func(guid engine.ObjectGuid) {
-			c.objectGuid = guid
-			c.server.registerClient(guid, c)
-			// Запускаем отправку данных
-			go c.writeLoop()
-		})
-
-	case "MOVE":
-		var payload api.MovePayload
-		if err := json.Unmarshal(msg.Payload, &payload); err == nil {
-			// Gateway сам разберется с векторами и enum-ами
-			c.server.Gateway.HandleMove(c.objectGuid, payload)
-		}
-
-	case "CAST":
-		var payload api.CastPayload
-		// ЛОГ №2: Ошибка JSON парсинга
-		if err := json.Unmarshal(msg.Payload, &payload); err == nil {
-			c.server.Gateway.HandleCast(c.objectGuid, payload)
-		} else {
-			logger.Log.Errorf("CAST Unmarshal Error: %v. Payload: %s", err, string(msg.Payload))
-		}
-
-	case "CHAT":
-		var payload api.ChatPayload
-		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
-			return
-		}
-		c.server.Gateway.HandleChat(c.objectGuid, payload)
-
-	default:
-		logger.Log.Warnf("Unknown Action: %s", msg.Action)
-	}
-
 }
 
 func (c *Client) writeLoop() {
