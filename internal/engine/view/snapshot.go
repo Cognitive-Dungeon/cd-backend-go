@@ -5,6 +5,7 @@ import (
 	"cognitive-server/internal/core/types"
 	"cognitive-server/internal/core/types/enums"
 	"cognitive-server/internal/engine"
+	"cognitive-server/pkg/ecs"
 	"strconv"
 )
 
@@ -20,26 +21,22 @@ func New(eng *engine.Engine) *SnapshotBuilder {
 // BuildSnapshot создает DTO состояния мира
 func (b *SnapshotBuilder) BuildSnapshot(playerGuid engine.ObjectGuid) *api.ServerResponse {
 	inst := b.Engine.Instance
+	w := inst.World
 
 	resp := &api.ServerResponse{
 		Type: "UPDATE",
-		Tick: 0, // TODO: брать из Engine
+		Tick: 0,
 		Grid: &api.GridMeta{Width: int(inst.Grid.Width), Height: int(inst.Grid.Height)},
 	}
 
-	// 1. Карта
+	// 1. Карта (без изменений)
 	for y := int32(0); y < int32(inst.Grid.Height); y++ {
 		for x := int32(0); x < int32(inst.Grid.Width); x++ {
 			tileType := enums.TileFloor
 			if !inst.Grid.IsWalkable(engine.TilePos{X: types.TileCoord(x), Y: types.TileCoord(y)}) {
 				tileType = enums.TileWall
 			}
-
-			view := api.TileView{
-				X: int(x), Y: int(y),
-				IsVisible: true,
-			}
-
+			view := api.TileView{X: int(x), Y: int(y), IsVisible: true}
 			if tileType == enums.TileWall {
 				view.Symbol = "#"
 				view.Color = "#555"
@@ -53,80 +50,64 @@ func (b *SnapshotBuilder) BuildSnapshot(playerGuid engine.ObjectGuid) *api.Serve
 	}
 
 	// 2. Сущности
-	for chunkIdx, chunk := range inst.Guids {
-		for slotIdx, guid := range chunk {
-			if guid == 0 {
-				continue
-			}
+	// Итерируемся по всем, у кого есть Position и Render.
+	// Это аналог "Select * from Entities where Position and Render"
+	for id, join := range ecs.View2[engine.PositionComponent, engine.RenderComponent](w, engine.CID_Position, engine.CID_Render) {
+		pos := join.First
+		render := join.Second
 
-			pos := inst.Positions[chunkIdx][slotIdx]
-			render := inst.Renders[chunkIdx][slotIdx]
-			stats := inst.Stats[chunkIdx][slotIdx]
-			name := inst.Names[chunkIdx][slotIdx]
+		guid := types.ObjectGuid(id) // Конвертация обратно
 
-			if pos == nil || render == nil {
-				continue
-			}
-
-			entView := api.EntityView{
-				ID:   strconv.FormatUint(uint64(guid), 10),
-				Name: "Unknown",
-				Type: "UNIT",
-			}
-
-			if name != nil {
-				entView.Name = name.Name
-			}
-
-			entView.Pos.X = int(pos.TilePos.X)
-			entView.Pos.Y = int(pos.TilePos.Y)
-			entView.Render.Symbol = string([]byte{render.Glyph.Char()})
-			entView.Render.Color = render.Glyph.HexColor()
-
-			if stats != nil {
-				entView.Stats = &api.StatsView{
-					HP:    int(stats.Health),
-					MaxHP: int(stats.MaxHealth),
-				}
-			}
-
-			if guid == playerGuid {
-				resp.MyEntityID = strconv.FormatUint(uint64(guid), 10)
-				resp.ActiveEntityID = guid.String()
-
-				// --- Сборка Spellbook ---
-				// Получаем компонент книги заклинаний
-				spellbook := inst.Spells[chunkIdx][slotIdx]
-				if spellbook != nil {
-					for _, spellID := range spellbook.KnownSpells {
-						// Достаем инфо из Registry
-						// Приводим uint32 -> types.SpellID
-						info, found := b.Engine.SpellRegistry.Get(types.SpellID(spellID))
-						if !found {
-							continue
-						}
-
-						sView := api.SpellView{
-							ID:       uint32(info.ID),
-							Name:     info.Name,
-							Cost:     int(info.CostValue),
-							Range:    info.Range,
-							Cooldown: int(info.Cooldown),
-						}
-
-						if info.CostType == types.SpellResourceMana {
-							sView.CostType = "MANA"
-						} else if info.CostType == types.SpellResourceHealth {
-							sView.CostType = "HP"
-						}
-
-						resp.Spells = append(resp.Spells, sView)
-					}
-				}
-			}
-
-			resp.Entities = append(resp.Entities, entView)
+		entView := api.EntityView{
+			ID:   strconv.FormatUint(uint64(guid), 10),
+			Name: "Unknown",
+			Type: "UNIT",
 		}
+
+		entView.Pos.X = int(pos.X)
+		entView.Pos.Y = int(pos.Y)
+		entView.Render.Symbol = string([]byte{render.Glyph.Char()})
+		entView.Render.Color = render.Glyph.HexColor()
+
+		// Опционально: Имя
+		if name := ecs.GetStorage[engine.NameComponent](w, engine.CID_Name).Get(id); name != nil {
+			entView.Name = name.Name
+		}
+
+		// Опционально: Статы
+		if stats := ecs.GetStorage[engine.StatsComponent](w, engine.CID_Stats).Get(id); stats != nil {
+			entView.Stats = &api.StatsView{
+				HP:    int(stats.Health),
+				MaxHP: int(stats.MaxHealth),
+			}
+		}
+
+		// Логика для текущего игрока
+		if guid == playerGuid {
+			resp.MyEntityID = entView.ID
+			resp.ActiveEntityID = guid.String()
+
+			// Spellbook
+			if sb := ecs.GetStorage[engine.SpellbookComponent](w, engine.CID_Spellbook).Get(id); sb != nil {
+				for _, spellID := range sb.KnownSpells {
+					info, found := b.Engine.SpellRegistry.Get(types.SpellID(spellID))
+					if !found {
+						continue
+					}
+
+					sView := api.SpellView{
+						ID: uint32(info.ID), Name: info.Name, Cost: int(info.CostValue),
+						Range: info.Range, Cooldown: int(info.Cooldown),
+					}
+					if info.CostType == types.SpellResourceMana {
+						sView.CostType = "MANA"
+					}
+					resp.Spells = append(resp.Spells, sView)
+				}
+			}
+		}
+
+		resp.Entities = append(resp.Entities, entView)
 	}
 
 	return resp

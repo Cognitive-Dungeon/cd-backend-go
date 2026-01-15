@@ -2,6 +2,7 @@ package engine
 
 import (
 	"cognitive-server/internal/core/types/enums"
+	"cognitive-server/pkg/ecs"
 	"cognitive-server/pkg/eventbus"
 	"cognitive-server/pkg/logger"
 )
@@ -18,27 +19,35 @@ func NewDamageSystem(inst *Instance, bus *eventbus.EventBus) *DamageSystem {
 }
 
 func (s *DamageSystem) onDamage(ev enums.DamageEvent) {
-	targetStats := s.Instance.GetStats(ev.Target)
+	// 1. Получаем доступ к компоненту здоровья через ECS
+	targetID := ecs.EntityID(ev.Target)
+
+	// Используем глобальный ID компонента CID_Stats для быстрого доступа
+	statsStorage := ecs.GetStorage[StatsComponent](s.Instance.World, CID_Stats)
+	targetStats := statsStorage.Get(targetID)
+
+	// Проверяем, существует ли цель и жива ли она
 	if targetStats == nil || targetStats.IsDead {
 		return
 	}
 
-	// 1. Расчет митигации (Броня, Резисты)
+	// 2. Расчет митигации (Броня, Резисты)
 	// В будущем тут будет: damage = damage * (1 - armor/100)
 	finalDamage := ev.Amount
 
-	// 2. Применение
+	// 3. Применение (прямое изменение данных по указателю из ECS)
 	targetStats.Health -= finalDamage
 
 	logger.Log.Infof("DMG: %s took %d damage from %s", ev.Target, finalDamage, ev.Source)
 
-	// 3. Проверка на смерть
+	// 4. Проверка на смерть
 	if targetStats.Health <= 0 {
 		targetStats.Health = 0
 		targetStats.IsDead = true
 
 		// Публикуем событие смерти.
-		// DamageSystem НЕ должна менять визуал или удалять объект.
+		// DamageSystem по-прежнему работает реактивно через EventBus,
+		// так как это удобно для цепочки событий (урон -> смерть -> лут).
 		s.Bus.Publish(eventbus.EventType(enums.EventObjectDied), enums.ObjectDiedEvent{
 			Object: ev.Target,
 			Killer: ev.Source,

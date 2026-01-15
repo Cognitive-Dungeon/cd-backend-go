@@ -2,6 +2,19 @@ package engine
 
 import "cognitive-server/internal/core/types"
 
+type ComponentID = int
+
+var (
+	// State (Persistent)
+	CID_Position, CID_Render, CID_Stats, CID_Name, CID_Spellbook, CID_Controller ComponentID
+
+	// Input (Request)
+	CID_CmdMove, CID_CmdCast ComponentID
+
+	// Logic (Intent)
+	CID_IntentMove, CID_IntentCast ComponentID
+)
+
 // RenderComponent — Визуал.
 // Храним упакованный Glyph (4 байта) вместо строк.
 type RenderComponent struct {
@@ -28,11 +41,11 @@ type NameComponent struct {
 	Name string
 }
 
-// SpellbookComponent — Что существо умеет кастовать.
+// SpellbookComponent хранит состояние книги заклинаний сущности.
 type SpellbookComponent struct {
 	KnownSpells []uint32           // ID спеллов из справочника
 	Cooldowns   map[uint32]float64 // ID -> Время, когда спелл откатится (в секундах или тиках)
-	GCD         float64            // Timestamp когда ограничение на каст спадёт
+	GCD         float64            // Timestamp окончания Глобального КД
 }
 
 // ControllerComponent — Связь с внешним миром.

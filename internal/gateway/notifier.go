@@ -4,6 +4,8 @@ import (
 	"cognitive-server/internal/api"
 	"cognitive-server/internal/core/types"
 	"cognitive-server/internal/core/types/enums"
+	"cognitive-server/internal/engine"
+	"cognitive-server/pkg/ecs"
 	"cognitive-server/pkg/eventbus"
 	"cognitive-server/pkg/logger"
 )
@@ -48,17 +50,25 @@ func (g *GameGateway) onChatOut(ev enums.ChatOutEvent) {
 		return
 	}
 
-	// 1. Проверяем валидность получателя
-	ctrl := g.engine.Instance.GetController(ev.Receiver)
-	if ctrl == nil {
+	world := g.engine.Instance.World
+	receiverID := ecs.EntityID(ev.Receiver)
+
+	// 1. Проверяем валидность получателя (есть ли у него контроллер)
+	// Получаем хранилище контроллеров по глобальному ID
+	ctrlStorage := ecs.GetStorage[engine.ControllerComponent](world, engine.CID_Controller)
+
+	if ctrlStorage.Get(receiverID) == nil {
 		log.Warn("receiver controller not found, chat dropped")
 		return
 	}
 
 	// 2. Получаем имя отправителя
 	senderName := "Unknown"
-	if name := g.engine.Instance.GetName(ev.Sender); name != nil {
-		senderName = name.Name
+	senderID := ecs.EntityID(ev.Sender)
+
+	nameStorage := ecs.GetStorage[engine.NameComponent](world, engine.CID_Name)
+	if nameComp := nameStorage.Get(senderID); nameComp != nil {
+		senderName = nameComp.Name
 	} else {
 		log.Debug("sender name not found, using fallback")
 	}

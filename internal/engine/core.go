@@ -4,6 +4,7 @@ import (
 	"cognitive-server/internal/config"
 	"cognitive-server/internal/core/types"
 	"cognitive-server/internal/core/types/enums"
+	"cognitive-server/pkg/ecs"
 	"cognitive-server/pkg/eventbus"
 	"cognitive-server/pkg/logger"
 	"context"
@@ -16,14 +17,14 @@ type Engine struct {
 	cfg *config.SimulationConfig
 	Bus *eventbus.EventBus
 
-	Instance *Instance
-
-	MovementSys   *MovementSystem
+	Instance      *Instance
 	SpellRegistry *SpellRegistry // Храним реестр
-	SpellSys      *SpellSystem
-	DamageSys     *DamageSystem
-	DeathSys      *DeathSystem
-	ChatSys       *ChatSystem
+
+	// Реактивные системы храним, чтобы они не были собраны GC
+	// (хотя EventBus держит ссылки на хендлеры, лучше держать их явно)
+	DamageSys *DamageSystem
+	DeathSys  *DeathSystem
+	ChatSys   *ChatSystem
 
 	// Канал для входящих "задач" от сети
 	commandQueue chan func()
@@ -53,48 +54,23 @@ func New(cfg *config.SimulationConfig) *Engine {
 	}
 	logger.Log.Info("✨ Spell Registry loaded")
 
-	// 2. Системы
-	moveSystem := NewMovementSystem(inst, bus)
-	spellSystem := NewSpellSystem(inst, bus, spellReg)
-	damageSystem := NewDamageSystem(inst, bus)
-	deathSystem := NewDeathSystem(inst, bus)
-	chatSystem := NewChatSystem(inst, bus)
+	// Эти системы не вызываются в Tick(), они реагируют на события.
+	damageSys := NewDamageSystem(inst, bus)
+	deathSys := NewDeathSystem(inst, bus)
+	chatSys := NewChatSystem(inst, bus)
 
-	// --- ТЕСТОВЫЙ СПАВН (Чтобы проверить, что ECS работает) ---
-	// Создадим "Игрока"
-	playerGuid := inst.CreateObject(enums.ObjectTypePlayer)
-	inst.NewEntityBuilder(playerGuid).
-		WithName(NameComponent{Name: "Leeroy Jenkins"}).
-		WithRender(types.MakeGlyph(0x00FF00, '@')).
-		WithStats(StatsComponent{Health: 100, MaxHealth: 100, Mana: 100, MaxMana: 100}).
-		WithPosition(PositionComponent{TilePos{X: 10, Y: 10}}).
-		WithSpells(SpellbookComponent{
-			KnownSpells: []uint32{1, 2, 4}, // Умеет бить, фаербол и блинк
-			Cooldowns:   make(map[uint32]float64),
-		})
-
-	dummyGuid := inst.CreateObject(enums.ObjectTypeCreature)
-	inst.NewEntityBuilder(dummyGuid).
-		WithName(NameComponent{Name: "Target Dummy"}).
-		WithRender(types.MakeGlyph(0xFF0000, 'D')).
-		WithStats(StatsComponent{Health: 50, MaxHealth: 50}).
-		WithPosition(PositionComponent{types.TilePos{X: 12, Y: 10}})
-
-	chunk, slot := inst.locate(playerGuid.Index())
-	logger.Log.Infof("Spawned Player at %v with GUID %s", inst.Positions[chunk][slot], playerGuid)
+	// --- ТЕСТОВЫЙ СПАВН ---
+	spawnTestEntities(inst)
 
 	return &Engine{
 		cfg:           cfg,
 		Bus:           bus,
 		Instance:      inst,
-		MovementSys:   moveSystem,
 		SpellRegistry: spellReg,
-		SpellSys:      spellSystem,
-		DamageSys:     damageSystem,
-		DeathSys:      deathSystem,
-		ChatSys:       chatSystem,
-
-		commandQueue: make(chan func(), 1024),
+		DamageSys:     damageSys,
+		DeathSys:      deathSys,
+		ChatSys:       chatSys,
+		commandQueue:  make(chan func(), 1024),
 	}
 }
 
@@ -129,8 +105,11 @@ func (e *Engine) PushCommand(cmd func()) {
 // Tick — один кадр симуляции.
 // Выполняется строго в одной горутине.
 func (e *Engine) Tick() {
+	w := e.Instance.World
 	// 1. Разгребаем очередь команд (Non-blocking drain)
 	// Мы выполняем все накопившиеся команды за раз
+	// 1. INPUT PHASE
+	// Обрабатываем очередь команд (Network -> CmdMove)
 loop:
 	for {
 		select {
@@ -142,6 +121,43 @@ loop:
 		}
 	}
 
-	// 2. Здесь будет обновление кулдаунов, аур и AI
-	// e.UpdateMechanics()
+	SystemInput(w)                       // Move Cmd -> Intent
+	SystemSpellInput(w, e.SpellRegistry) // Cast Cmd -> Intent
+	w.ClearScope(ecs.ScopeInput)         // Удаляем сырые команды
+
+	// 2. LOGIC PHASE
+	// Система Movement: IntentMove -> Position change
+	SystemMovement(w, e.Instance.Grid, e.Bus)
+	SystemSpellLogic(w, e.SpellRegistry, e.Bus)
+
+	// Здесь будут остальные системы (Combat, Spell и т.д.)
+
+	w.ClearScope(ecs.ScopeLogic) // Удаляем интенты
+
+	// 3. END FRAME
+	w.EndFrame() // Удаляем Events
+}
+
+func spawnTestEntities(inst *Instance) {
+	// Игрок
+	playerGuid := inst.CreateObject(enums.ObjectTypePlayer)
+	inst.NewEntityBuilder(playerGuid).
+		WithName(NameComponent{Name: "Leeroy"}).
+		WithRender(types.MakeGlyph(0x00FF00, '@')).
+		WithStats(StatsComponent{Health: 100, MaxHealth: 100, Mana: 100, MaxMana: 100}).
+		WithPosition(PositionComponent{types.TilePos{X: 10, Y: 10}}).
+		WithSpells(SpellbookComponent{
+			KnownSpells: []uint32{1, 2, 4}, // Attack, Fireball, Blink
+			Cooldowns:   make(map[uint32]float64),
+		})
+
+	// Манекен
+	dummyGuid := inst.CreateObject(enums.ObjectTypeCreature)
+	inst.NewEntityBuilder(dummyGuid).
+		WithName(NameComponent{Name: "Training Dummy"}).
+		WithRender(types.MakeGlyph(0xFF0000, 'D')).
+		WithStats(StatsComponent{Health: 1000, MaxHealth: 1000}).
+		WithPosition(PositionComponent{types.TilePos{X: 12, Y: 10}})
+
+	logger.Log.Infof("Spawned Entities: Player=%s, Dummy=%s", playerGuid, dummyGuid)
 }

@@ -6,6 +6,7 @@ import (
 	"cognitive-server/internal/core/types/enums"
 	"cognitive-server/internal/engine"
 	"cognitive-server/internal/engine/view"
+	"cognitive-server/pkg/ecs"
 	"cognitive-server/pkg/eventbus"
 	"cognitive-server/pkg/logger"
 	"errors"
@@ -98,16 +99,23 @@ func (g *GameGateway) HandleMove(guid engine.ObjectGuid, payload api.MovePayload
 	}
 
 	g.engine.PushCommand(func() {
-		g.engine.Bus.Publish(
-			eventbus.EventType(enums.EventMoveRequest),
-			enums.MoveRequestEvent{
-				Object:    guid,
-				Direction: dir,
-			},
-		)
+		// Используем ECS API для добавления команды
+		// Это безопасно, пока PushCommand выполняется в главном потоке перед Input фазой.
+
+		id := ecs.EntityID(guid)
+
+		// Проверяем, существует ли сущность (есть ли у неё позиция, например)
+		if ecs.GetStorage[engine.PositionComponent](g.engine.Instance.World, engine.CID_Position).Get(id) == nil {
+			return
+		}
+
+		ecs.GetStorage[engine.CmdMove](g.engine.Instance.World, engine.CID_CmdMove).Add(id, engine.CmdMove{
+			Direction: dir,
+		})
 	})
 }
 
+// HandleCast обрабатывает запрос клиента на каст.
 func (g *GameGateway) HandleCast(guid engine.ObjectGuid, payload api.CastPayload) {
 	log := logger.Log.WithFields(logrus.Fields{
 		"layer":   "gateway",
@@ -115,20 +123,26 @@ func (g *GameGateway) HandleCast(guid engine.ObjectGuid, payload api.CastPayload
 		"spellID": payload.SpellID,
 	})
 
-	if !g.engine.Instance.IsValid(guid) {
-		log.Warn("cast for invalid object ignored")
+	// Валидация входных данных (базовая)
+	if payload.SpellID == 0 {
 		return
 	}
 
 	g.engine.PushCommand(func() {
-		g.engine.Bus.Publish(
-			eventbus.EventType(enums.EventCastRequest),
-			enums.CastRequestEvent{
-				Caster:  guid,
-				Target:  payload.TargetID,
-				SpellID: payload.SpellID,
-			},
-		)
+		id := ecs.EntityID(guid)
+
+		// Проверяем, жив ли кастер
+		stats := ecs.GetStorage[engine.StatsComponent](g.engine.Instance.World, engine.CID_Stats).Get(id)
+		if stats == nil || stats.IsDead {
+			log.Warn("cast ignored: entity dead or invalid")
+			return
+		}
+
+		// Создаем CmdCast компонент (ScopeInput)
+		ecs.GetStorage[engine.CmdCast](g.engine.Instance.World, engine.CID_CmdCast).Add(id, engine.CmdCast{
+			SpellID:  payload.SpellID,
+			TargetID: payload.TargetID,
+		})
 	})
 }
 

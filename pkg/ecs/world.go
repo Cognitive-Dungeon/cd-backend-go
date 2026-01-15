@@ -55,8 +55,8 @@ func Register[T any](w *World, scope Scope) int {
 // Это самый быстрый способ доступа (доступ по индексу массива).
 //
 // id должен быть получен из функции Register.
-func GetStorage[T any](w *World, id int) *Storage[T] {
-	return w.storages[id].(*Storage[T])
+func GetStorage[T any](w *World, storageID int) *Storage[T] {
+	return w.storages[storageID].(*Storage[T])
 }
 
 // GetStorageByType — медленный доступ через reflect.

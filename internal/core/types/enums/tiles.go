@@ -7,7 +7,7 @@ const (
 	TileWall
 )
 
-type Direction int8
+type Direction = uint8
 
 const (
 	DirNone Direction = iota

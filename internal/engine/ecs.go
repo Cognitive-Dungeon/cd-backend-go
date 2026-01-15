@@ -3,6 +3,7 @@ package engine
 import (
 	"cognitive-server/internal/core/types"
 	"cognitive-server/internal/core/types/enums"
+	"cognitive-server/pkg/ecs"
 )
 
 type (
@@ -24,237 +25,99 @@ const (
 // Instance - Контейнер для всех данных инстанса.
 // Хранит состояние конкретного подземелья или континента.
 type Instance struct {
-	// Генерация ID
-	freeIndices []uint32 // Стек освободившихся индексов (для переиспользования)
-	nextIndex   uint32   // Следующий чистый индекс
-
-	Generations [][]uint16 // Версии слотов (для валидации GUID)
-	// Обратная связь: Индекс -> GUID (чтобы проверить валидность)
-	Guids [][]ObjectGuid
-
-	// --- Component Storages ---
-
-	Positions [][]*PositionComponent
-	Stats     [][]*StatsComponent
-	Names     [][]*NameComponent
-	Renders   [][]*RenderComponent
-	Spells    [][]*SpellbookComponent
-	// Casts     map[EntityID]*CastComponent (добавлю позже)
-	Controllers [][]*ControllerComponent
-
-	// Данные
-	Grid *Grid
+	World     *ecs.World
+	Grid      *Grid
+	nextIndex uint32
 }
 
 // NewInstance - создает пустой мир
 func NewInstance() *Instance {
-	// Создаем первый чанк сразу
+	w := ecs.NewWorld()
 	inst := &Instance{
-		freeIndices: make([]uint32, 0),
-		nextIndex:   0, // Начинаем с 0
+		World:     w,
+		nextIndex: 1,
 	}
-	inst.addChunk()
+	inst.registerComponents()
 	return inst
 }
 
-// addChunk добавляет новую страницу для всех компонентов
-func (inst *Instance) addChunk() {
-	inst.Generations = append(inst.Generations, make([]uint16, ChunkSize))
-	inst.Guids = append(inst.Guids, make([]ObjectGuid, ChunkSize))
+func (inst *Instance) registerComponents() {
+	// State
+	CID_Position = ecs.Register[PositionComponent](inst.World, ecs.ScopePersistent)
+	CID_Render = ecs.Register[RenderComponent](inst.World, ecs.ScopePersistent)
+	CID_Stats = ecs.Register[StatsComponent](inst.World, ecs.ScopePersistent)
+	CID_Name = ecs.Register[NameComponent](inst.World, ecs.ScopePersistent)
+	CID_Spellbook = ecs.Register[SpellbookComponent](inst.World, ecs.ScopePersistent)
+	CID_Controller = ecs.Register[ControllerComponent](inst.World, ecs.ScopePersistent)
 
-	inst.Positions = append(inst.Positions, make([]*PositionComponent, ChunkSize))
-	inst.Stats = append(inst.Stats, make([]*StatsComponent, ChunkSize))
-	inst.Names = append(inst.Names, make([]*NameComponent, ChunkSize))
-	inst.Renders = append(inst.Renders, make([]*RenderComponent, ChunkSize))
-	inst.Spells = append(inst.Spells, make([]*SpellbookComponent, ChunkSize))
+	// Input
+	CID_CmdMove = ecs.Register[CmdMove](inst.World, ecs.ScopeInput)
+	CID_CmdCast = ecs.Register[CmdCast](inst.World, ecs.ScopeInput)
 
-	inst.Controllers = append(inst.Controllers, make([]*ControllerComponent, ChunkSize))
+	// Logic
+	CID_IntentMove = ecs.Register[IntentMove](inst.World, ecs.ScopeLogic)
+	CID_IntentCast = ecs.Register[IntentCast](inst.World, ecs.ScopeLogic)
 }
 
-// CreateObject выдает новый ID.
 func (inst *Instance) CreateObject(typ ObjectType) ObjectGuid {
-	var idx uint32
+	idx := inst.nextIndex
+	inst.nextIndex++
 
-	// 1. Ищем свободный слот
-	if len(inst.freeIndices) > 0 {
-		// Pop из стека свободных
-		idx = inst.freeIndices[len(inst.freeIndices)-1]
-		inst.freeIndices = inst.freeIndices[:len(inst.freeIndices)-1]
-	} else {
-		// Берем новый
-		idx = inst.nextIndex
-		inst.nextIndex++
-
-		// Если индекс вылез за пределы текущих чанков — добавляем новый
-		// (idx >> ChunkShift) дает индекс нужного чанка
-		if int(idx>>ChunkShift) >= len(inst.Guids) {
-			inst.addChunk()
-		}
-	}
-
-	chunkIdx, slotIdx := inst.locate(idx)
-
-	// 2. Инкрементируем поколение (Generation)
-	inst.Generations[chunkIdx][slotIdx]++
-	gen := inst.Generations[chunkIdx][slotIdx]
-
-	// 3. Собираем GUID (Shard пока 0)
-	// TODO: Прокинуть сюда ShardID
-	guid := types.PackObjectGuid(0, uint8(typ), gen, idx)
-
-	// 4. Регистрируем
-	inst.Guids[chunkIdx][slotIdx] = guid
-
-	return guid
-
+	// Для простоты пока Gen = 1.
+	// В продакшене тут нужна логика переиспользования индексов (free list).
+	return types.PackObjectGuid(0, uint8(typ), 1, idx)
 }
 
-func (inst *Instance) clearSlot(chunk, slot uint32) {
-	inst.Positions[chunk][slot] = nil
-	inst.Stats[chunk][slot] = nil
-	inst.Names[chunk][slot] = nil
-	inst.Renders[chunk][slot] = nil
-	inst.Spells[chunk][slot] = nil
-	inst.Controllers[chunk][slot] = nil
-}
-
-// DestroyObject удаляет объект (но не стирает память сразу, просто помечает слот)
-func (inst *Instance) DestroyObject(guid ObjectGuid) {
-	idx := guid.Index()
-	chunkIdx, slotIdx := inst.locate(idx)
-
-	// Bounds check (на всякий случай)
-	if int(chunkIdx) >= len(inst.Guids) {
-		return
-	}
-
-	// Валидация: удаляем только если GUID совпадает
-	if !inst.Guids[chunkIdx][slotIdx].IsEqual(guid) {
-		return
-	}
-
-	// Очищаем компоненты (зануляем поинтеры, чтобы GC собрал данные)
-	inst.clearSlot(chunkIdx, slotIdx)
-
-	inst.Guids[chunkIdx][slotIdx] = types.NilObjectGuid
-
-	// Возвращаем индекс в пул свободных
-	inst.freeIndices = append(inst.freeIndices, idx)
-}
-
-// IsValid проверяет жив ли объект по GUID
+// IsValid проверяет существование сущности.
+// В новом ECS мы просто проверяем наличие хоть какого-то компонента или используем ecs.World методы,
+// но пока оставим заглушку, т.к. Storage сам проверяет валидность ID при Get.
 func (inst *Instance) IsValid(guid ObjectGuid) bool {
-	idx := guid.Index()
-	chunkIdx, slotIdx := inst.locate(idx)
-
-	if int(chunkIdx) >= len(inst.Guids) {
-		return false
-	}
-
-	return inst.Guids[chunkIdx][slotIdx].IsEqual(guid)
+	return guid != 0
 }
 
-// locate - вычисляет координаты хранения объекта по его глобальному индексу.
-//
-// chunk — индекс чанка
-// slot  — позиция внутри чанка
-func (inst *Instance) locate(idx uint32) (chunk, slot uint32) {
-	return idx >> ChunkShift, idx & ChunkMask
-}
-
-func (inst *Instance) GetPosition(guid ObjectGuid) *PositionComponent {
-	if !inst.IsValid(guid) {
-		return nil
-	}
-	chunk, slot := inst.locate(guid.Index())
-	return inst.Positions[chunk][slot]
-}
-
-func (inst *Instance) GetStats(guid ObjectGuid) *StatsComponent {
-	if !inst.IsValid(guid) {
-		return nil
-	}
-	chunk, slot := inst.locate(guid.Index())
-	return inst.Stats[chunk][slot]
-}
-
-func (inst *Instance) GetName(guid ObjectGuid) *NameComponent {
-	if !inst.IsValid(guid) {
-		return nil
-	}
-	chunk, slot := inst.locate(guid.Index())
-	return inst.Names[chunk][slot]
-}
-
-func (inst *Instance) GetRender(guid ObjectGuid) *RenderComponent {
-	if !inst.IsValid(guid) {
-		return nil
-	}
-	chunk, slot := inst.locate(guid.Index())
-	return inst.Renders[chunk][slot]
-}
-
-func (inst *Instance) GetSpells(guid ObjectGuid) *SpellbookComponent {
-	if !inst.IsValid(guid) {
-		return nil
-	}
-	chunk, slot := inst.locate(guid.Index())
-	return inst.Spells[chunk][slot]
-}
-
-func (inst *Instance) GetController(guid ObjectGuid) *ControllerComponent {
-	if !inst.IsValid(guid) {
-		return nil
-	}
-	chunk, slot := inst.locate(guid.Index())
-	return inst.Controllers[chunk][slot]
+// Helper для конвертации ID
+func toECS(guid ObjectGuid) ecs.EntityID {
+	return ecs.EntityID(guid) // Прямое приведение, так как битовая структура совпадает
 }
 
 type EntityBuilder struct {
-	inst  *Instance
-	id    ObjectGuid
-	chunk uint32
-	slot  uint32
+	inst *Instance
+	id   ecs.EntityID
 }
 
-func (inst *Instance) NewEntityBuilder(id ObjectGuid) *EntityBuilder {
-	chunk, slot := inst.locate(id.Index())
+func (inst *Instance) NewEntityBuilder(guid ObjectGuid) *EntityBuilder {
 	return &EntityBuilder{
-		inst:  inst,
-		id:    id,
-		chunk: chunk,
-		slot:  slot,
+		inst: inst,
+		id:   toECS(guid),
 	}
 }
 
-func (b *EntityBuilder) WithPosition(pos PositionComponent) *EntityBuilder {
-	b.inst.Positions[b.chunk][b.slot] = &pos
+func (b *EntityBuilder) WithPosition(val PositionComponent) *EntityBuilder {
+	ecs.GetStorage[PositionComponent](b.inst.World, CID_Position).Add(b.id, val)
 	return b
 }
 
-func (b *EntityBuilder) WithStats(stats StatsComponent) *EntityBuilder {
-	b.inst.Stats[b.chunk][b.slot] = &stats
+func (b *EntityBuilder) WithStats(val StatsComponent) *EntityBuilder {
+	ecs.GetStorage[StatsComponent](b.inst.World, CID_Stats).Add(b.id, val)
 	return b
 }
 
-func (b *EntityBuilder) WithName(name NameComponent) *EntityBuilder {
-	b.inst.Names[b.chunk][b.slot] = &name
+func (b *EntityBuilder) WithName(val NameComponent) *EntityBuilder {
+	ecs.GetStorage[NameComponent](b.inst.World, CID_Name).Add(b.id, val)
 	return b
 }
 
 func (b *EntityBuilder) WithRender(g Glyph) *EntityBuilder {
-	b.inst.Renders[b.chunk][b.slot] = &RenderComponent{
-		Glyph: g,
-	}
+	ecs.GetStorage[RenderComponent](b.inst.World, CID_Render).Add(b.id, RenderComponent{Glyph: g})
 	return b
 }
 
-func (b *EntityBuilder) WithSpells(spells SpellbookComponent) *EntityBuilder {
-	b.inst.Spells[b.chunk][b.slot] = &spells
+func (b *EntityBuilder) WithSpells(val SpellbookComponent) *EntityBuilder {
+	ecs.GetStorage[SpellbookComponent](b.inst.World, CID_Spellbook).Add(b.id, val)
 	return b
 }
 
-func (b *EntityBuilder) WithController(ctrl ControllerComponent) *EntityBuilder {
-	b.inst.Controllers[b.chunk][b.slot] = &ctrl
+func (b *EntityBuilder) WithController(val ControllerComponent) *EntityBuilder {
+	ecs.GetStorage[ControllerComponent](b.inst.World, CID_Controller).Add(b.id, val)
 	return b
 }

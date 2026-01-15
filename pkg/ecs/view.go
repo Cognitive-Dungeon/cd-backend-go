@@ -2,9 +2,12 @@ package ecs
 
 import "iter"
 
-// Seq3 расширяет стандартный пакет iter для трех значений.
-// Позволяет писать: for id, a, b := range View2(...)
-type Seq3[A, B, C any] func(yield func(A, B, C) bool)
+// Join2 — структура-обертка для возврата двух компонентов в итераторе.
+// Используется, так как range поддерживает максимум 2 переменные.
+type Join2[A, B any] struct {
+	First  *A
+	Second *B
+}
 
 // View1 создает итератор по всем сущностям, имеющим компонент A.
 // Аргумент cid — ComponentID для A (для быстрого доступа).
@@ -27,11 +30,12 @@ func View1[A any](w *World, cid int) iter.Seq2[EntityID, *A] {
 
 // View2 создает итератор по сущностям, имеющим ОБА компонента (A и B).
 // Реализует паттерн "Driver", выбирая кратчайший список для итерации.
-func View2[A, B any](w *World, cidA, cidB int) Seq3[EntityID, *A, *B] {
+// Возвращает пару: EntityID, Join2{*A, *B}.
+func View2[A, B any](w *World, cidA, cidB int) iter.Seq2[EntityID, Join2[A, B]] {
 	storeA := GetStorage[A](w, cidA)
 	storeB := GetStorage[B](w, cidB)
 
-	return func(yield func(EntityID, *A, *B) bool) {
+	return func(yield func(EntityID, Join2[A, B]) bool) {
 		lenA := len(storeA.values)
 		lenB := len(storeB.values)
 
@@ -48,7 +52,8 @@ func View2[A, B any](w *World, cidA, cidB int) Seq3[EntityID, *A, *B] {
 				valB := storeB.Get(id)
 
 				if valB != nil {
-					if !yield(id, &valsA[i], valB) {
+					// Упаковываем в структуру
+					if !yield(id, Join2[A, B]{First: &valsA[i], Second: valB}) {
 						return
 					}
 				}
@@ -64,8 +69,8 @@ func View2[A, B any](w *World, cidA, cidB int) Seq3[EntityID, *A, *B] {
 				valA := storeA.Get(id)
 
 				if valA != nil {
-					// Соблюдаем порядок возврата: A, B
-					if !yield(id, valA, &valsB[i]) {
+					// Соблюдаем порядок (First=A, Second=B)
+					if !yield(id, Join2[A, B]{First: valA, Second: &valsB[i]}) {
 						return
 					}
 				}
