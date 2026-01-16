@@ -46,15 +46,12 @@ func (g *GameGateway) HandleLogin(token string) (engine.ObjectGuid, error) {
 		guid := inst.CreateObject(enums.ObjectTypePlayer)
 
 		inst.NewEntityBuilder(guid).
-			WithName(engine.NameComponent{Name: token}).
-			WithPosition(engine.PositionComponent{TilePos: engine.TilePos{X: 10, Y: 10}}).
-			WithStats(engine.StatsComponent{Health: 100, MaxHealth: 100}).
-			WithRender(types.MakeGlyph(0x00FF00, '@')).
-			WithController(engine.ControllerComponent{AgentID: token}).
-			WithSpells(engine.SpellbookComponent{
-				KnownSpells: []uint32{1, 2, 4},
-				Cooldowns:   make(map[uint32]float64),
-			})
+			WithName(token).
+			WithPosition(10, 10).
+			WithStats(100, 100).
+			WithRender('@', 0x00FF00).
+			WithController(token).
+			WithSpells(1, 2, 4)
 
 		result <- guid
 	})

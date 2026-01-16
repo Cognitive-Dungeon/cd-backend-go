@@ -37,6 +37,26 @@ func (id EntityID) IsNil() bool {
 	return id == 0
 }
 
+// --- Marker Interfaces (Compile-time constraints) ---
+
+type Request interface{ isRequest() }
+type Intent interface{ isIntent() }
+type State interface{ isState() }
+
+// --- Embeddable Markers (Helper structs) ---
+
+type RequestMarker struct{}
+
+func (RequestMarker) isRequest() {}
+
+type IntentMarker struct{}
+
+func (IntentMarker) isIntent() {}
+
+type StateMarker struct{}
+
+func (StateMarker) isState() {}
+
 // Scope определяет время жизни компонента.
 // Используется для автоматической очистки временных данных (Request/Intent/Event).
 type Scope uint8

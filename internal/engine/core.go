@@ -2,7 +2,6 @@ package engine
 
 import (
 	"cognitive-server/internal/config"
-	"cognitive-server/internal/core/types"
 	"cognitive-server/internal/core/types/enums"
 	"cognitive-server/pkg/ecs"
 	"cognitive-server/pkg/eventbus"
@@ -145,22 +144,19 @@ func spawnTestEntities(inst *Instance) {
 	// Игрок
 	playerGuid := inst.CreateObject(enums.ObjectTypePlayer)
 	inst.NewEntityBuilder(playerGuid).
-		WithName(NameComponent{Name: "Leeroy"}).
-		WithRender(types.MakeGlyph(0x00FF00, '@')).
-		WithStats(StatsComponent{Health: 100, MaxHealth: 100, Mana: 100, MaxMana: 100}).
-		WithPosition(PositionComponent{types.TilePos{X: 10, Y: 10}}).
-		WithSpells(SpellbookComponent{
-			KnownSpells: []uint32{1, 2, 4}, // Attack, Fireball, Blink
-			Cooldowns:   make(map[uint32]float64),
-		})
+		WithName("Leeroy").
+		WithRender('@', 0x00FF00).
+		WithStats(100, 100).
+		WithPosition(10, 10).
+		WithSpells(1, 2, 4)
 
 	// Манекен
 	dummyGuid := inst.CreateObject(enums.ObjectTypeCreature)
 	inst.NewEntityBuilder(dummyGuid).
-		WithName(NameComponent{Name: "Training Dummy"}).
-		WithRender(types.MakeGlyph(0xFF0000, 'D')).
-		WithStats(StatsComponent{Health: 1000, MaxHealth: 1000}).
-		WithPosition(PositionComponent{types.TilePos{X: 12, Y: 10}})
+		WithName("Training Dummy").
+		WithRender('D', 0xFF0000).
+		WithStats(1000, 1000).
+		WithPosition(12, 10)
 
 	logger.Log.Infof("Spawned Entities: Player=%s, Dummy=%s", playerGuid, dummyGuid)
 }

@@ -1,6 +1,9 @@
 package engine
 
-import "cognitive-server/internal/core/types"
+import (
+	"cognitive-server/internal/core/types"
+	"cognitive-server/pkg/ecs"
+)
 
 type ComponentID = int
 
@@ -18,17 +21,20 @@ var (
 // RenderComponent — Визуал.
 // Храним упакованный Glyph (4 байта) вместо строк.
 type RenderComponent struct {
+	ecs.StateMarker
 	Glyph types.Glyph
 }
 
 // PositionComponent — где находится сущность.
 // Дискретная сетка (Tile-based).
 type PositionComponent struct {
-	types.TilePos
+	ecs.StateMarker
+	types.TilePos // Анонимное поле: методы InRadius/Distance доступны напрямую!
 }
 
 // StatsComponent — ХП, Мана, Сила.
 type StatsComponent struct {
+	ecs.StateMarker
 	IsDead    bool
 	Health    int32
 	MaxHealth int32
@@ -38,11 +44,13 @@ type StatsComponent struct {
 
 // NameComponent — Имя для логов и клиента.
 type NameComponent struct {
+	ecs.StateMarker
 	Name string
 }
 
 // SpellbookComponent хранит состояние книги заклинаний сущности.
 type SpellbookComponent struct {
+	ecs.StateMarker
 	KnownSpells []uint32           // ID спеллов из справочника
 	Cooldowns   map[uint32]float64 // ID -> Время, когда спелл откатится (в секундах или тиках)
 	GCD         float64            // Timestamp окончания Глобального КД
@@ -51,5 +59,6 @@ type SpellbookComponent struct {
 // ControllerComponent — Связь с внешним миром.
 // Если этот компонент есть — сущность управляется Агентом (человеком или AI-ботом через сеть).
 type ControllerComponent struct {
+	ecs.StateMarker
 	AgentID string // ID сессии / Сокета / LLM Context ID
 }

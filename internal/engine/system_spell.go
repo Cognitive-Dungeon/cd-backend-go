@@ -145,8 +145,6 @@ func LogicSpellLogic(ctx LogicContext) {
 				})
 			}
 		}
-
-		logger.Log.Infof("Entity %d cast %s on %d", id, spellDef.Name, intent.TargetID)
 	}
 }
 
