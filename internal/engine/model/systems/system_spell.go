@@ -1,8 +1,10 @@
-package engine
+package systems
 
 import (
 	"cognitive-server/internal/core/types"
 	"cognitive-server/internal/core/types/enums"
+	ecs2 "cognitive-server/internal/engine/model"
+	"cognitive-server/internal/engine/model/components"
 	"cognitive-server/pkg/ecs"
 	"cognitive-server/pkg/eventbus"
 	"cognitive-server/pkg/logger"
@@ -13,11 +15,11 @@ import (
 // InputSpellSystem обрабатывает запросы на каст (CmdCast).
 // Проверяет: наличие спелла в книге, кулдауны, GCD.
 // Генерирует: IntentCast.
-func InputSpellSystem(ctx InputContext) {
+func InputSpellSystem(ctx ecs2.InputContext) {
 	now := float64(time.Now().UnixMilli())
 
 	// Итерируемся по тем, кто хочет кастовать и имеет книгу заклинаний
-	for id, join := range ecs.View2[CmdCast, SpellbookComponent](ctx.World, CID_CmdCast, CID_Spellbook) {
+	for id, join := range ecs.View2[components.CmdCast, components.SpellbookComponent](ctx.World, components.CID_CmdCast, components.CID_Spellbook) {
 		cmd := join.First
 		spellbook := join.Second
 
@@ -50,7 +52,7 @@ func InputSpellSystem(ctx InputContext) {
 
 		// Если все ок — создаем Намерение (Intent)
 		// Мы пока не списываем ресурсы и не вешаем КД, это делается в фазе Logic
-		ecs.Add(ctx.Commands, CID_IntentCast, id, IntentCast{
+		ecs.Add(ctx.Commands, components.CID_IntentCast, id, components.IntentCast{
 			SpellID:  cmd.SpellID,
 			TargetID: cmd.TargetID,
 		})
@@ -60,12 +62,12 @@ func InputSpellSystem(ctx InputContext) {
 // LogicSpellLogic применяет валидированные намерения.
 // Проверяет: дистанцию, наличие цели, ресурсы (мана).
 // Генерирует: Урон/Хил (события), запускает КД.
-func LogicSpellLogic(ctx LogicContext) {
+func LogicSpellLogic(ctx ecs2.LogicContext) {
 	now := float64(time.Now().UnixMilli())
 
 	// Итерируемся: IntentCast + Position + Stats + Spellbook
 	// Нам нужно много компонентов, поэтому используем View2 и добираем остальное через Get
-	for id, join := range ecs.View2[IntentCast, PositionComponent](ctx.World, CID_IntentCast, CID_Position) {
+	for id, join := range ecs.View2[components.IntentCast, components.PositionComponent](ctx.World, components.CID_IntentCast, components.CID_Position) {
 		intent := join.First
 		pos := join.Second
 
@@ -73,8 +75,8 @@ func LogicSpellLogic(ctx LogicContext) {
 		spellDef, _ := ctx.SpellRegistry.Get(intent.SpellID)
 
 		// Получаем недостающие компоненты
-		stats := ecs.GetStorage[StatsComponent](ctx.World, CID_Stats).Get(id)
-		spellbook := ecs.GetStorage[SpellbookComponent](ctx.World, CID_Spellbook).Get(id)
+		stats := ecs.GetStorage[components.StatsComponent](ctx.World, components.CID_Stats).Get(id)
+		spellbook := ecs.GetStorage[components.SpellbookComponent](ctx.World, components.CID_Spellbook).Get(id)
 
 		if stats == nil || spellbook == nil {
 			continue
@@ -85,7 +87,7 @@ func LogicSpellLogic(ctx LogicContext) {
 
 		// --- Валидация Цели и Дистанции ---
 		targetECS := ecs.EntityID(intent.TargetID)
-		targetPos := ecs.GetStorage[PositionComponent](ctx.World, CID_Position).Get(targetECS)
+		targetPos := ecs.GetStorage[components.PositionComponent](ctx.World, components.CID_Position).Get(targetECS)
 
 		// Если цель нужна, но ее нет или она далеко
 		if targetPos != nil {

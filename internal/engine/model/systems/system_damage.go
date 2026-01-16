@@ -1,18 +1,20 @@
-package engine
+package systems
 
 import (
 	"cognitive-server/internal/core/types/enums"
+	ecs2 "cognitive-server/internal/engine/model"
+	"cognitive-server/internal/engine/model/components"
 	"cognitive-server/pkg/ecs"
 	"cognitive-server/pkg/eventbus"
 	"cognitive-server/pkg/logger"
 )
 
 type DamageSystem struct {
-	Instance *Instance
+	Instance *ecs2.Instance
 	Bus      *eventbus.EventBus
 }
 
-func NewDamageSystem(inst *Instance, bus *eventbus.EventBus) *DamageSystem {
+func NewDamageSystem(inst *ecs2.Instance, bus *eventbus.EventBus) *DamageSystem {
 	sys := &DamageSystem{Instance: inst, Bus: bus}
 	eventbus.Subscribe(bus, eventbus.EventType(enums.EventDamageApply), sys.onDamage)
 	return sys
@@ -23,7 +25,7 @@ func (s *DamageSystem) onDamage(ev enums.DamageEvent) {
 	targetID := ecs.EntityID(ev.Target)
 
 	// Используем глобальный ID компонента CID_Stats для быстрого доступа
-	statsStorage := ecs.GetStorage[StatsComponent](s.Instance.World, CID_Stats)
+	statsStorage := ecs.GetStorage[components.StatsComponent](s.Instance.World, components.CID_Stats)
 	targetStats := statsStorage.Get(targetID)
 
 	// Проверяем, существует ли цель и жива ли она

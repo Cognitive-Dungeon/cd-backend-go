@@ -2,7 +2,7 @@ package protocol
 
 import (
 	"cognitive-server/internal/api"
-	"cognitive-server/internal/engine"
+	"cognitive-server/internal/engine/model"
 	"cognitive-server/internal/network/connection"
 	"cognitive-server/pkg/logger"
 	"encoding/json"
@@ -11,7 +11,7 @@ import (
 )
 
 type MoveGateway interface {
-	HandleMove(engine.ObjectGuid, api.MovePayload)
+	HandleMove(model.ObjectGuid, api.MovePayload)
 }
 
 type MoveHandler struct {

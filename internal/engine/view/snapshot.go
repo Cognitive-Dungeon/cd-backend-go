@@ -5,6 +5,9 @@ import (
 	"cognitive-server/internal/core/types"
 	"cognitive-server/internal/core/types/enums"
 	"cognitive-server/internal/engine"
+	"cognitive-server/internal/engine/data"
+	ecs2 "cognitive-server/internal/engine/model"
+	"cognitive-server/internal/engine/model/components"
 	"cognitive-server/pkg/ecs"
 	"strconv"
 )
@@ -19,7 +22,7 @@ func New(eng *engine.Engine) *SnapshotBuilder {
 }
 
 // BuildSnapshot создает DTO состояния мира
-func (b *SnapshotBuilder) BuildSnapshot(playerGuid engine.ObjectGuid) *api.ServerResponse {
+func (b *SnapshotBuilder) BuildSnapshot(playerGuid ecs2.ObjectGuid) *api.ServerResponse {
 	inst := b.Engine.Instance
 	w := inst.World
 
@@ -33,7 +36,7 @@ func (b *SnapshotBuilder) BuildSnapshot(playerGuid engine.ObjectGuid) *api.Serve
 	for y := int32(0); y < int32(inst.Grid.Height); y++ {
 		for x := int32(0); x < int32(inst.Grid.Width); x++ {
 			tileType := enums.TileFloor
-			if !inst.Grid.IsWalkable(engine.TilePos{X: types.TileCoord(x), Y: types.TileCoord(y)}) {
+			if !inst.Grid.IsWalkable(data.TilePos{X: types.TileCoord(x), Y: types.TileCoord(y)}) {
 				tileType = enums.TileWall
 			}
 			view := api.TileView{X: int(x), Y: int(y), IsVisible: true}
@@ -52,7 +55,7 @@ func (b *SnapshotBuilder) BuildSnapshot(playerGuid engine.ObjectGuid) *api.Serve
 	// 2. Сущности
 	// Итерируемся по всем, у кого есть Position и Render.
 	// Это аналог "Select * from Entities where Position and Render"
-	for id, join := range ecs.View2[engine.PositionComponent, engine.RenderComponent](w, engine.CID_Position, engine.CID_Render) {
+	for id, join := range ecs.View2[components.PositionComponent, components.RenderComponent](w, components.CID_Position, components.CID_Render) {
 		pos := join.First
 		render := join.Second
 
@@ -70,12 +73,12 @@ func (b *SnapshotBuilder) BuildSnapshot(playerGuid engine.ObjectGuid) *api.Serve
 		entView.Render.Color = render.Glyph.HexColor()
 
 		// Опционально: Имя
-		if name := ecs.GetStorage[engine.NameComponent](w, engine.CID_Name).Get(id); name != nil {
+		if name := ecs.GetStorage[components.NameComponent](w, components.CID_Name).Get(id); name != nil {
 			entView.Name = name.Name
 		}
 
 		// Опционально: Статы
-		if stats := ecs.GetStorage[engine.StatsComponent](w, engine.CID_Stats).Get(id); stats != nil {
+		if stats := ecs.GetStorage[components.StatsComponent](w, components.CID_Stats).Get(id); stats != nil {
 			entView.Stats = &api.StatsView{
 				HP:    int(stats.Health),
 				MaxHP: int(stats.MaxHealth),
@@ -88,7 +91,7 @@ func (b *SnapshotBuilder) BuildSnapshot(playerGuid engine.ObjectGuid) *api.Serve
 			resp.ActiveEntityID = guid.String()
 
 			// Spellbook
-			if sb := ecs.GetStorage[engine.SpellbookComponent](w, engine.CID_Spellbook).Get(id); sb != nil {
+			if sb := ecs.GetStorage[components.SpellbookComponent](w, components.CID_Spellbook).Get(id); sb != nil {
 				for _, spellID := range sb.KnownSpells {
 					info, found := b.Engine.SpellRegistry.Get(types.SpellID(spellID))
 					if !found {

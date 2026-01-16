@@ -1,8 +1,10 @@
-package engine
+package model
 
 import (
 	"cognitive-server/internal/core/types"
 	"cognitive-server/internal/core/types/enums"
+	"cognitive-server/internal/engine/data"
+	"cognitive-server/internal/engine/model/components"
 	"cognitive-server/pkg/ecs"
 )
 
@@ -26,7 +28,7 @@ const (
 // Хранит состояние конкретного подземелья или континента.
 type Instance struct {
 	World     *ecs.World
-	Grid      *Grid
+	Grid      *data.Grid
 	nextIndex uint32
 }
 
@@ -43,20 +45,20 @@ func NewInstance() *Instance {
 
 func (inst *Instance) registerComponents() {
 	// State
-	CID_Position = ecs.RegisterState[PositionComponent](inst.World)
-	CID_Render = ecs.RegisterState[RenderComponent](inst.World)
-	CID_Stats = ecs.RegisterState[StatsComponent](inst.World)
-	CID_Name = ecs.RegisterState[NameComponent](inst.World)
-	CID_Spellbook = ecs.RegisterState[SpellbookComponent](inst.World)
-	CID_Controller = ecs.RegisterState[ControllerComponent](inst.World)
+	components.CID_Position = ecs.RegisterState[components.PositionComponent](inst.World)
+	components.CID_Render = ecs.RegisterState[components.RenderComponent](inst.World)
+	components.CID_Stats = ecs.RegisterState[components.StatsComponent](inst.World)
+	components.CID_Name = ecs.RegisterState[components.NameComponent](inst.World)
+	components.CID_Spellbook = ecs.RegisterState[components.SpellbookComponent](inst.World)
+	components.CID_Controller = ecs.RegisterState[components.ControllerComponent](inst.World)
 
 	// Input
-	CID_CmdMove = ecs.RegisterInput[CmdMove](inst.World)
-	CID_CmdCast = ecs.RegisterInput[CmdCast](inst.World)
+	components.CID_CmdMove = ecs.RegisterInput[components.CmdMove](inst.World)
+	components.CID_CmdCast = ecs.RegisterInput[components.CmdCast](inst.World)
 
 	// Logic
-	CID_IntentMove = ecs.RegisterLogic[IntentMove](inst.World)
-	CID_IntentCast = ecs.RegisterLogic[IntentCast](inst.World)
+	components.CID_IntentMove = ecs.RegisterLogic[components.IntentMove](inst.World)
+	components.CID_IntentCast = ecs.RegisterLogic[components.IntentCast](inst.World)
 }
 
 func (inst *Instance) CreateObject(typ ObjectType) ObjectGuid {
@@ -93,48 +95,48 @@ func (inst *Instance) NewEntityBuilder(guid ObjectGuid) *EntityBuilder {
 }
 
 func (b *EntityBuilder) WithPosition(x, y int) *EntityBuilder {
-	comp := PositionComponent{
+	comp := components.PositionComponent{
 		TilePos: types.TilePos{X: types.TileCoord(x), Y: types.TileCoord(y)},
 	}
-	ecs.GetStorage[PositionComponent](b.inst.World, CID_Position).Add(b.id, comp)
+	ecs.GetStorage[components.PositionComponent](b.inst.World, components.CID_Position).Add(b.id, comp)
 	return b
 }
 
 func (b *EntityBuilder) WithStats(hp, mana int32) *EntityBuilder {
-	comp := StatsComponent{
+	comp := components.StatsComponent{
 		Health:    hp,
 		MaxHealth: hp,
 		Mana:      mana,
 		MaxMana:   mana,
 	}
-	ecs.GetStorage[StatsComponent](b.inst.World, CID_Stats).Add(b.id, comp)
+	ecs.GetStorage[components.StatsComponent](b.inst.World, components.CID_Stats).Add(b.id, comp)
 	return b
 }
 
 func (b *EntityBuilder) WithName(name string) *EntityBuilder {
-	ecs.GetStorage[NameComponent](b.inst.World, CID_Name).Add(b.id, NameComponent{Name: name})
+	ecs.GetStorage[components.NameComponent](b.inst.World, components.CID_Name).Add(b.id, components.NameComponent{Name: name})
 	return b
 }
 
 func (b *EntityBuilder) WithRender(char byte, color uint32) *EntityBuilder {
-	comp := RenderComponent{
+	comp := components.RenderComponent{
 		Glyph: types.MakeGlyph(color, char),
 	}
-	ecs.GetStorage[RenderComponent](b.inst.World, CID_Render).Add(b.id, comp)
+	ecs.GetStorage[components.RenderComponent](b.inst.World, components.CID_Render).Add(b.id, comp)
 	return b
 }
 
 func (b *EntityBuilder) WithSpells(spells ...uint32) *EntityBuilder {
-	comp := SpellbookComponent{
+	comp := components.SpellbookComponent{
 		KnownSpells: spells,
 		Cooldowns:   make(map[uint32]float64),
 		GCD:         0,
 	}
-	ecs.GetStorage[SpellbookComponent](b.inst.World, CID_Spellbook).Add(b.id, comp)
+	ecs.GetStorage[components.SpellbookComponent](b.inst.World, components.CID_Spellbook).Add(b.id, comp)
 	return b
 }
 
 func (b *EntityBuilder) WithController(agentID string) *EntityBuilder {
-	ecs.GetStorage[ControllerComponent](b.inst.World, CID_Controller).Add(b.id, ControllerComponent{AgentID: agentID})
+	ecs.GetStorage[components.ControllerComponent](b.inst.World, components.CID_Controller).Add(b.id, components.ControllerComponent{AgentID: agentID})
 	return b
 }

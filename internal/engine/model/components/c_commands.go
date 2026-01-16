@@ -1,4 +1,4 @@
-package engine
+package components
 
 import (
 	"cognitive-server/internal/core/types"

@@ -3,6 +3,9 @@ package engine
 import (
 	"cognitive-server/internal/config"
 	"cognitive-server/internal/core/types/enums"
+	"cognitive-server/internal/engine/data"
+	ecs2 "cognitive-server/internal/engine/model"
+	"cognitive-server/internal/engine/model/systems"
 	"cognitive-server/pkg/ecs"
 	"cognitive-server/pkg/eventbus"
 	"cognitive-server/pkg/logger"
@@ -16,14 +19,14 @@ type Engine struct {
 	cfg *config.SimulationConfig
 	Bus *eventbus.EventBus
 
-	Instance      *Instance
-	SpellRegistry *SpellRegistry // Храним реестр
+	Instance      *ecs2.Instance
+	SpellRegistry *data.SpellRegistry // Храним реестр
 
 	// Реактивные системы храним, чтобы они не были собраны GC
 	// (хотя EventBus держит ссылки на хендлеры, лучше держать их явно)
-	DamageSys *DamageSystem
-	DeathSys  *DeathSystem
-	ChatSys   *ChatSystem
+	DamageSys *systems.DamageSystem
+	DeathSys  *systems.DeathSystem
+	ChatSys   *systems.ChatSystem
 
 	// Канал для входящих "задач" от сети
 	commandQueue chan func()
@@ -32,20 +35,20 @@ type Engine struct {
 }
 
 func New(cfg *config.SimulationConfig) *Engine {
-	bus := eventbus.New(64) // TODO: Конкретизировать размер шины
-	inst := NewInstance()   // <--- Создаем мир
-	inst.Grid = NewGrid(20, 20)
+	bus := eventbus.New(64)    // TODO: Конкретизировать размер шины
+	inst := ecs2.NewInstance() // <--- Создаем мир
+	inst.Grid = data.NewGrid(20, 20)
 
 	// Стены (тест)
-	for i := TileCoord(0); i < 20; i++ {
-		inst.Grid.SetTile(TilePos{X: i, Y: 0}, enums.TileWall)
-		inst.Grid.SetTile(TilePos{X: i, Y: 19}, enums.TileWall)
-		inst.Grid.SetTile(TilePos{X: 0, Y: i}, enums.TileWall)
-		inst.Grid.SetTile(TilePos{X: 19, Y: i}, enums.TileWall)
+	for i := data.TileCoord(0); i < 20; i++ {
+		inst.Grid.SetTile(data.TilePos{X: i, Y: 0}, enums.TileWall)
+		inst.Grid.SetTile(data.TilePos{X: i, Y: 19}, enums.TileWall)
+		inst.Grid.SetTile(data.TilePos{X: 0, Y: i}, enums.TileWall)
+		inst.Grid.SetTile(data.TilePos{X: 19, Y: i}, enums.TileWall)
 	}
 
 	// 1. Загрузка данных
-	spellReg := NewSpellRegistry()
+	spellReg := data.NewSpellRegistry()
 	// Внимание: путь к assets должен быть корректным относительно точки запуска
 	// При запуске из корня проекта: assets/spells.json
 	if err := spellReg.LoadFromFile("assets/spells.json"); err != nil {
@@ -54,9 +57,9 @@ func New(cfg *config.SimulationConfig) *Engine {
 	logger.Log.Info("✨ Spell Registry loaded")
 
 	// Эти системы не вызываются в Tick(), они реагируют на события.
-	damageSys := NewDamageSystem(inst, bus)
-	deathSys := NewDeathSystem(inst, bus)
-	chatSys := NewChatSystem(inst, bus)
+	damageSys := systems.NewDamageSystem(inst, bus)
+	deathSys := systems.NewDeathSystem(inst, bus)
+	chatSys := systems.NewChatSystem(inst, bus)
 
 	// --- ТЕСТОВЫЙ СПАВН ---
 	spawnTestEntities(inst)
@@ -119,18 +122,18 @@ loop:
 			break loop
 		}
 	}
-	inputCtx := NewInputContext(w, e.SpellRegistry)
+	inputCtx := ecs2.NewInputContext(w, e.SpellRegistry)
 
-	InputMoveSystem(inputCtx)  // Move Cmd -> Intent
-	InputSpellSystem(inputCtx) // Cast Cmd -> Intent
+	systems.InputMoveSystem(inputCtx)  // Move Cmd -> Intent
+	systems.InputSpellSystem(inputCtx) // Cast Cmd -> Intent
 	inputCtx.Commit()
 	w.ClearScope(ecs.ScopeInput) // Удаляем сырые команды
 
 	// 2. LOGIC PHASE
-	logicCtx := NewLogicContext(w, e.Instance.Grid, e.Bus, e.SpellRegistry)
+	logicCtx := ecs2.NewLogicContext(w, e.Instance.Grid, e.Bus, e.SpellRegistry)
 	// Система Movement: IntentMove -> Position change
-	LogicMoveSystem(logicCtx)
-	LogicSpellLogic(logicCtx)
+	systems.LogicMoveSystem(logicCtx)
+	systems.LogicSpellLogic(logicCtx)
 
 	// Здесь будут остальные системы (Combat, Spell и т.д.)
 
@@ -140,7 +143,7 @@ loop:
 	w.EndFrame() // Удаляем Events
 }
 
-func spawnTestEntities(inst *Instance) {
+func spawnTestEntities(inst *ecs2.Instance) {
 	// Игрок
 	playerGuid := inst.CreateObject(enums.ObjectTypePlayer)
 	inst.NewEntityBuilder(playerGuid).

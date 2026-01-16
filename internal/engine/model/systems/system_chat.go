@@ -1,8 +1,10 @@
-package engine
+package systems
 
 import (
 	"cognitive-server/internal/core/types"
 	"cognitive-server/internal/core/types/enums"
+	"cognitive-server/internal/engine/model"
+	"cognitive-server/internal/engine/model/components"
 	"cognitive-server/pkg/ecs"
 	"cognitive-server/pkg/eventbus"
 )
@@ -13,11 +15,11 @@ const (
 )
 
 type ChatSystem struct {
-	Instance *Instance
+	Instance *model.Instance
 	Bus      *eventbus.EventBus
 }
 
-func NewChatSystem(inst *Instance, bus *eventbus.EventBus) *ChatSystem {
+func NewChatSystem(inst *model.Instance, bus *eventbus.EventBus) *ChatSystem {
 	sys := &ChatSystem{Instance: inst, Bus: bus}
 	eventbus.Subscribe(bus, eventbus.EventType(enums.EventChatRequest), sys.onChat)
 	return sys
@@ -29,7 +31,7 @@ func (s *ChatSystem) onChat(ev enums.ChatRequestEvent) {
 
 	// 1. Получаем позицию отправителя напрямую из ECS
 	// Используем глобальный ID компонента для скорости
-	posStorage := ecs.GetStorage[PositionComponent](world, CID_Position)
+	posStorage := ecs.GetStorage[components.PositionComponent](world, components.CID_Position)
 	senderPos := posStorage.Get(senderID)
 
 	if senderPos == nil {
@@ -57,7 +59,7 @@ func (s *ChatSystem) onChat(ev enums.ChatRequestEvent) {
 
 	// 3. Рассылка
 	// Получаем хранилище контроллеров один раз перед циклом
-	ctrlStorage := ecs.GetStorage[ControllerComponent](world, CID_Controller)
+	ctrlStorage := ecs.GetStorage[components.ControllerComponent](world, components.CID_Controller)
 
 	for _, receiverGuid := range recipients {
 		receiverID := ecs.EntityID(receiverGuid)

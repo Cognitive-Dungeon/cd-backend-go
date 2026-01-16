@@ -1,19 +1,22 @@
-package engine
+package systems
 
 import (
 	"cognitive-server/internal/core/types"
 	"cognitive-server/internal/core/types/enums"
+	"cognitive-server/internal/engine/data"
+	ecs2 "cognitive-server/internal/engine/model"
+	"cognitive-server/internal/engine/model/components"
 	"cognitive-server/pkg/ecs"
 	"cognitive-server/pkg/eventbus"
 )
 
 // InputMoveSystem обрабатывает сырые команды (Cmd) и превращает их в намерения (Intent).
 // Здесь можно проверить станы, руты, страх и т.д.
-func InputMoveSystem(ctx InputContext) {
+func InputMoveSystem(ctx ecs2.InputContext) {
 
 	// Итерируемся по всем, у кого есть запрос на движение
 	// View1 принимает (World, ComponentID)
-	for id, cmd := range ecs.View1[CmdMove](ctx.World, CID_CmdMove) {
+	for id, cmd := range ecs.View1[components.CmdMove](ctx.World, components.CID_CmdMove) {
 		dx, dy := 0, 0
 		switch cmd.Direction {
 		case enums.DirUp:
@@ -29,24 +32,24 @@ func InputMoveSystem(ctx InputContext) {
 		if dx != 0 || dy != 0 {
 			// Добавляем намерение.
 			// Используем ecs.Add через CommandBuffer
-			ecs.Add(ctx.Commands, CID_IntentMove, id, IntentMove{Dx: int32(dx), Dy: int32(dy)})
+			ecs.Add(ctx.Commands, components.CID_IntentMove, id, components.IntentMove{Dx: int32(dx), Dy: int32(dy)})
 		}
 	}
 }
 
 // LogicMoveSystem применяет намерения к физическому миру.
 // Проверяет коллизии и обновляет координаты.
-func LogicMoveSystem(ctx LogicContext) {
+func LogicMoveSystem(ctx ecs2.LogicContext) {
 	// Итерируемся по сущностям, у которых есть IntentMove И Position.
 	// Используем View2 с ID компонентов для скорости.
-	for id, join := range ecs.View2[IntentMove, PositionComponent](ctx.World, CID_IntentMove, CID_Position) {
+	for id, join := range ecs.View2[components.IntentMove, components.PositionComponent](ctx.World, components.CID_IntentMove, components.CID_Position) {
 
 		intent := join.First
 		pos := join.Second
 
-		targetX := pos.X + TileCoord(intent.Dx)
-		targetY := pos.Y + TileCoord(intent.Dy)
-		targetPos := types.TilePos{X: TileCoord(targetX), Y: TileCoord(targetY)}
+		targetX := pos.X + data.TileCoord(intent.Dx)
+		targetY := pos.Y + data.TileCoord(intent.Dy)
+		targetPos := types.TilePos{X: targetX, Y: targetY}
 
 		// Проверка коллизий
 		if ctx.Grid.IsWalkable(targetPos) {

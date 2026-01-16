@@ -5,6 +5,8 @@ import (
 	"cognitive-server/internal/core/types"
 	"cognitive-server/internal/core/types/enums"
 	"cognitive-server/internal/engine"
+	ecs2 "cognitive-server/internal/engine/model"
+	"cognitive-server/internal/engine/model/components"
 	"cognitive-server/internal/engine/view"
 	"cognitive-server/pkg/ecs"
 	"cognitive-server/pkg/eventbus"
@@ -30,7 +32,7 @@ func New(eng *engine.Engine) *GameGateway {
 	}
 }
 
-func (g *GameGateway) HandleLogin(token string) (engine.ObjectGuid, error) {
+func (g *GameGateway) HandleLogin(token string) (ecs2.ObjectGuid, error) {
 	log := logger.Log.WithField("layer", "gateway")
 
 	if token == "" {
@@ -38,7 +40,7 @@ func (g *GameGateway) HandleLogin(token string) (engine.ObjectGuid, error) {
 		return 0, errors.New("empty token")
 	}
 
-	result := make(chan engine.ObjectGuid, 1)
+	result := make(chan ecs2.ObjectGuid, 1)
 
 	g.engine.PushCommand(func() {
 		inst := g.engine.Instance
@@ -69,7 +71,7 @@ func (g *GameGateway) HandleLogin(token string) (engine.ObjectGuid, error) {
 }
 
 // HandleMove обрабатывает запрос на движение (DTO -> Event)
-func (g *GameGateway) HandleMove(guid engine.ObjectGuid, payload api.MovePayload) {
+func (g *GameGateway) HandleMove(guid ecs2.ObjectGuid, payload api.MovePayload) {
 	log := logger.Log.WithFields(logrus.Fields{
 		"layer": "gateway",
 		"guid":  guid,
@@ -102,18 +104,18 @@ func (g *GameGateway) HandleMove(guid engine.ObjectGuid, payload api.MovePayload
 		id := ecs.EntityID(guid)
 
 		// Проверяем, существует ли сущность (есть ли у неё позиция, например)
-		if ecs.GetStorage[engine.PositionComponent](g.engine.Instance.World, engine.CID_Position).Get(id) == nil {
+		if ecs.GetStorage[components.PositionComponent](g.engine.Instance.World, components.CID_Position).Get(id) == nil {
 			return
 		}
 
-		ecs.GetStorage[engine.CmdMove](g.engine.Instance.World, engine.CID_CmdMove).Add(id, engine.CmdMove{
+		ecs.GetStorage[components.CmdMove](g.engine.Instance.World, components.CID_CmdMove).Add(id, components.CmdMove{
 			Direction: dir,
 		})
 	})
 }
 
 // HandleCast обрабатывает запрос клиента на каст.
-func (g *GameGateway) HandleCast(guid engine.ObjectGuid, payload api.CastPayload) {
+func (g *GameGateway) HandleCast(guid ecs2.ObjectGuid, payload api.CastPayload) {
 	log := logger.Log.WithFields(logrus.Fields{
 		"layer":   "gateway",
 		"guid":    guid,
@@ -129,21 +131,21 @@ func (g *GameGateway) HandleCast(guid engine.ObjectGuid, payload api.CastPayload
 		id := ecs.EntityID(guid)
 
 		// Проверяем, жив ли кастер
-		stats := ecs.GetStorage[engine.StatsComponent](g.engine.Instance.World, engine.CID_Stats).Get(id)
+		stats := ecs.GetStorage[components.StatsComponent](g.engine.Instance.World, components.CID_Stats).Get(id)
 		if stats == nil || stats.IsDead {
 			log.Warn("cast ignored: entity dead or invalid")
 			return
 		}
 
 		// Создаем CmdCast компонент (ScopeInput)
-		ecs.GetStorage[engine.CmdCast](g.engine.Instance.World, engine.CID_CmdCast).Add(id, engine.CmdCast{
+		ecs.GetStorage[components.CmdCast](g.engine.Instance.World, components.CID_CmdCast).Add(id, components.CmdCast{
 			SpellID:  payload.SpellID,
 			TargetID: payload.TargetID,
 		})
 	})
 }
 
-func (g *GameGateway) HandleChat(sourceGuid engine.ObjectGuid, p api.ChatPayload) {
+func (g *GameGateway) HandleChat(sourceGuid ecs2.ObjectGuid, p api.ChatPayload) {
 	log := logger.Log.WithFields(logrus.Fields{
 		"layer": "gateway",
 		"guid":  sourceGuid,
@@ -164,7 +166,7 @@ func (g *GameGateway) HandleChat(sourceGuid engine.ObjectGuid, p api.ChatPayload
 		}
 
 		msgType := types.ChatTypeSay
-		target := engine.ObjectGuid(0)
+		target := ecs2.ObjectGuid(0)
 		finalText := rawText
 
 		// Парсинг команд
@@ -222,7 +224,7 @@ func (g *GameGateway) HandleChat(sourceGuid engine.ObjectGuid, p api.ChatPayload
 }
 
 // GetSnapshot возвращает состояние мира для клиента
-func (g *GameGateway) GetSnapshot(guid engine.ObjectGuid) *api.ServerResponse {
+func (g *GameGateway) GetSnapshot(guid ecs2.ObjectGuid) *api.ServerResponse {
 	log := logger.Log.WithFields(logrus.Fields{
 		"layer": "gateway",
 		"guid":  guid,
