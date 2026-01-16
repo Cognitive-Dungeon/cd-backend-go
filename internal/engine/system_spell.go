@@ -10,20 +10,19 @@ import (
 	"time"
 )
 
-// SystemSpellInput обрабатывает запросы на каст (CmdCast).
+// InputSpellSystem обрабатывает запросы на каст (CmdCast).
 // Проверяет: наличие спелла в книге, кулдауны, GCD.
 // Генерирует: IntentCast.
-func SystemSpellInput(w *ecs.World, registry *SpellRegistry) {
-	cb := ecs.NewCommandBuffer(w)
+func InputSpellSystem(ctx InputContext) {
 	now := float64(time.Now().UnixMilli())
 
 	// Итерируемся по тем, кто хочет кастовать и имеет книгу заклинаний
-	for id, join := range ecs.View2[CmdCast, SpellbookComponent](w, CID_CmdCast, CID_Spellbook) {
+	for id, join := range ecs.View2[CmdCast, SpellbookComponent](ctx.World, CID_CmdCast, CID_Spellbook) {
 		cmd := join.First
 		spellbook := join.Second
 
 		// 1. Проверка существования спелла в базе
-		_, found := registry.Get(cmd.SpellID)
+		_, found := ctx.SpellRegistry.Get(cmd.SpellID)
 		if !found {
 			logger.Log.Warnf("Entity %d tried to cast unknown spell %d", id, cmd.SpellID)
 			continue
@@ -51,33 +50,31 @@ func SystemSpellInput(w *ecs.World, registry *SpellRegistry) {
 
 		// Если все ок — создаем Намерение (Intent)
 		// Мы пока не списываем ресурсы и не вешаем КД, это делается в фазе Logic
-		ecs.Add(cb, CID_IntentCast, id, IntentCast{
+		ecs.Add(ctx.Commands, CID_IntentCast, id, IntentCast{
 			SpellID:  cmd.SpellID,
 			TargetID: cmd.TargetID,
 		})
 	}
-
-	cb.Execute()
 }
 
-// SystemSpellLogic применяет валидированные намерения.
+// LogicSpellLogic применяет валидированные намерения.
 // Проверяет: дистанцию, наличие цели, ресурсы (мана).
 // Генерирует: Урон/Хил (события), запускает КД.
-func SystemSpellLogic(w *ecs.World, registry *SpellRegistry, bus *eventbus.EventBus) {
+func LogicSpellLogic(ctx LogicContext) {
 	now := float64(time.Now().UnixMilli())
 
 	// Итерируемся: IntentCast + Position + Stats + Spellbook
 	// Нам нужно много компонентов, поэтому используем View2 и добираем остальное через Get
-	for id, join := range ecs.View2[IntentCast, PositionComponent](w, CID_IntentCast, CID_Position) {
+	for id, join := range ecs.View2[IntentCast, PositionComponent](ctx.World, CID_IntentCast, CID_Position) {
 		intent := join.First
 		pos := join.Second
 
 		// Получаем определение спелла (оно точно есть, проверено в Input)
-		spellDef, _ := registry.Get(intent.SpellID)
+		spellDef, _ := ctx.SpellRegistry.Get(intent.SpellID)
 
 		// Получаем недостающие компоненты
-		stats := ecs.GetStorage[StatsComponent](w, CID_Stats).Get(id)
-		spellbook := ecs.GetStorage[SpellbookComponent](w, CID_Spellbook).Get(id)
+		stats := ecs.GetStorage[StatsComponent](ctx.World, CID_Stats).Get(id)
+		spellbook := ecs.GetStorage[SpellbookComponent](ctx.World, CID_Spellbook).Get(id)
 
 		if stats == nil || spellbook == nil {
 			continue
@@ -88,7 +85,7 @@ func SystemSpellLogic(w *ecs.World, registry *SpellRegistry, bus *eventbus.Event
 
 		// --- Валидация Цели и Дистанции ---
 		targetECS := ecs.EntityID(intent.TargetID)
-		targetPos := ecs.GetStorage[PositionComponent](w, CID_Position).Get(targetECS)
+		targetPos := ecs.GetStorage[PositionComponent](ctx.World, CID_Position).Get(targetECS)
 
 		// Если цель нужна, но ее нет или она далеко
 		if targetPos != nil {
@@ -133,7 +130,7 @@ func SystemSpellLogic(w *ecs.World, registry *SpellRegistry, bus *eventbus.Event
 
 			switch effect.Type {
 			case types.SpellEffectSchoolDamage:
-				bus.Publish(eventbus.EventType(enums.EventDamageApply), enums.DamageEvent{
+				ctx.Bus.Publish(eventbus.EventType(enums.EventDamageApply), enums.DamageEvent{
 					Source: types.ObjectGuid(id),
 					Target: effectTarget,
 					Amount: effect.BaseValue,
@@ -141,7 +138,7 @@ func SystemSpellLogic(w *ecs.World, registry *SpellRegistry, bus *eventbus.Event
 				})
 
 			case types.SpellEffectHeal:
-				bus.Publish(eventbus.EventType(enums.EventHealApply), enums.HealEvent{
+				ctx.Bus.Publish(eventbus.EventType(enums.EventHealApply), enums.HealEvent{
 					Source: types.ObjectGuid(id),
 					Target: effectTarget,
 					Amount: effect.BaseValue,

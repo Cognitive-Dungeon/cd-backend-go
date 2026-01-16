@@ -120,15 +120,18 @@ loop:
 			break loop
 		}
 	}
+	inputCtx := NewInputContext(w, e.SpellRegistry)
 
-	SystemInput(w)                       // Move Cmd -> Intent
-	SystemSpellInput(w, e.SpellRegistry) // Cast Cmd -> Intent
-	w.ClearScope(ecs.ScopeInput)         // Удаляем сырые команды
+	InputMoveSystem(inputCtx)  // Move Cmd -> Intent
+	InputSpellSystem(inputCtx) // Cast Cmd -> Intent
+	inputCtx.Commit()
+	w.ClearScope(ecs.ScopeInput) // Удаляем сырые команды
 
 	// 2. LOGIC PHASE
+	logicCtx := NewLogicContext(w, e.Instance.Grid, e.Bus, e.SpellRegistry)
 	// Система Movement: IntentMove -> Position change
-	SystemMovement(w, e.Instance.Grid, e.Bus)
-	SystemSpellLogic(w, e.SpellRegistry, e.Bus)
+	LogicMoveSystem(logicCtx)
+	LogicSpellLogic(logicCtx)
 
 	// Здесь будут остальные системы (Combat, Spell и т.д.)
 
