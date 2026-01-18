@@ -14,8 +14,9 @@ import "math"
 //
 // Для сравнения с радиусом необходимо сравнивать с квадратом радиуса.
 func (a TilePos) DistanceSquared(b TilePos) int64 {
-	dx := int64(a.X - b.X)
-	dy := int64(a.Y - b.Y)
+	d := a.Sub(b)
+	dx := int64(d.X)
+	dy := int64(d.Y)
 	return dx*dx + dy*dy
 }
 
@@ -30,8 +31,9 @@ func (a TilePos) DistanceSquared(b TilePos) int64 {
 //
 // НЕ рекомендуется для использования в горячих участках симуляции.
 func (a TilePos) EuclideanDistance(b TilePos) float32 {
-	dx := float32(a.X - b.X)
-	dy := float32(a.Y - b.Y)
+	d := (a.Sub(b))
+	dx := float32(d.X)
+	dy := float32(d.Y)
 	return float32(math.Sqrt(float64(dx*dx + dy*dy)))
 }
 
@@ -48,8 +50,9 @@ func (a TilePos) EuclideanDistance(b TilePos) float32 {
 //
 // Работает быстрее евклидового расстояния и не использует операции с плавающей точкой.
 func (a TilePos) ManhattanDistance(b TilePos) int32 {
-	dx := abs32(int32(a.X - b.X))
-	dy := abs32(int32(a.Y - b.Y))
+	d := a.Sub(b)
+	dx := abs32(int32(d.X))
+	dy := abs32(int32(d.Y))
 	return dx + dy
 }
 
@@ -62,8 +65,9 @@ func (a TilePos) ManhattanDistance(b TilePos) int32 {
 //   - расчёта количества шагов при 8-направленном движении
 //   - симуляций, где диагональное перемещение эквивалентно прямому
 func (a TilePos) ChebyshevDistance(b TilePos) int32 {
-	dx := abs32(int32(a.X - b.X))
-	dy := abs32(int32(a.Y - b.Y))
+	d := a.Sub(b)
+	dx := abs32(int32(d.X))
+	dy := abs32(int32(d.Y))
 	if dx > dy {
 		return dx
 	}
@@ -81,8 +85,9 @@ func (a TilePos) ChebyshevDistance(b TilePos) int32 {
 //
 // Возвращаемое значение является целочисленной оценкой стоимости пути.
 func (a TilePos) OctileDistance(b TilePos) int32 {
-	dx := abs32(int32(a.X - b.X))
-	dy := abs32(int32(a.Y - b.Y))
+	d := a.Sub(b)
+	dx := abs32(int32(d.X))
+	dy := abs32(int32(d.Y))
 
 	if dx < dy {
 		return 14*dx + 10*(dy-dx)

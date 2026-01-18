@@ -46,3 +46,27 @@ func Line(from, to TilePos, visit func(TilePos) bool) {
 		}
 	}
 }
+
+// LineExclusive строит линию, исключая начальную позицию from.
+func LineExclusive(from, to TilePos, visit func(TilePos) bool) {
+	first := true
+	Line(from, to, func(p TilePos) bool {
+		if first {
+			first = false
+			return true
+		}
+		return visit(p)
+	})
+}
+
+// Ray испускает луч из позиции from в направлении dir
+// на расстояние maxLen тайлов.
+func Ray(from TilePos, dir TilePos, maxLen int32, visit func(TilePos) bool) {
+	cur := from
+	for i := int32(0); i < maxLen; i++ {
+		cur = cur.Add(dir)
+		if !visit(cur) {
+			return
+		}
+	}
+}
