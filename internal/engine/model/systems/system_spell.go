@@ -7,6 +7,7 @@ import (
 	"cognitive-server/internal/engine/model/components"
 	"cognitive-server/pkg/ecs"
 	"cognitive-server/pkg/eventbus"
+	"cognitive-server/pkg/grid"
 	"cognitive-server/pkg/logger"
 	"math"
 	"time"
@@ -150,7 +151,7 @@ func LogicSpellLogic(ctx ecs2.LogicContext) {
 	}
 }
 
-func distance(p1, p2 types.TilePos) float64 {
+func distance(p1, p2 grid.TilePos) float64 {
 	dx := float64(p1.X - p2.X)
 	dy := float64(p1.Y - p2.Y)
 	return math.Sqrt(dx*dx + dy*dy)

@@ -3,6 +3,7 @@ package components
 import (
 	"cognitive-server/internal/core/types"
 	"cognitive-server/pkg/ecs"
+	"cognitive-server/pkg/grid"
 )
 
 type ComponentID = int
@@ -29,7 +30,7 @@ type RenderComponent struct {
 // Дискретная сетка (Tile-based).
 type PositionComponent struct {
 	ecs.StateMarker
-	types.TilePos // Анонимное поле: методы InRadius/Distance доступны напрямую!
+	grid.TilePos // Анонимное поле: методы InRadius/Distance доступны напрямую!
 }
 
 // StatsComponent — ХП, Мана, Сила.

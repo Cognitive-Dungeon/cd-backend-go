@@ -1,6 +1,9 @@
 package enums
 
-import "cognitive-server/internal/core/types"
+import (
+	"cognitive-server/internal/core/types"
+	"cognitive-server/pkg/grid"
+)
 
 type EventType uint8
 
@@ -26,8 +29,8 @@ type MoveRequestEvent struct {
 // ObjectMovedEvent - Факт передвижения
 type ObjectMovedEvent struct {
 	Object types.ObjectGuid
-	From   types.TilePos
-	To     types.TilePos
+	From   grid.TilePos
+	To     grid.TilePos
 }
 
 type CastRequestEvent struct {

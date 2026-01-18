@@ -8,6 +8,7 @@ import (
 	"cognitive-server/internal/engine/model/components"
 	"cognitive-server/pkg/ecs"
 	"cognitive-server/pkg/eventbus"
+	"cognitive-server/pkg/grid"
 )
 
 // InputMoveSystem обрабатывает сырые команды (Cmd) и превращает их в намерения (Intent).
@@ -49,7 +50,7 @@ func LogicMoveSystem(ctx ecs2.LogicContext) {
 
 		targetX := pos.X + data.TileCoord(intent.Dx)
 		targetY := pos.Y + data.TileCoord(intent.Dy)
-		targetPos := types.TilePos{X: targetX, Y: targetY}
+		targetPos := grid.TilePos{X: targetX, Y: targetY}
 
 		// Проверка коллизий
 		if ctx.Grid.IsWalkable(targetPos) {

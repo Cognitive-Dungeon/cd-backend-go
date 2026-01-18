@@ -4,10 +4,11 @@ import (
 	"cognitive-server/internal/core/types"
 	"cognitive-server/internal/engine/model/components"
 	"cognitive-server/pkg/ecs"
+	"cognitive-server/pkg/grid"
 )
 
 // FindObjectsInRange возвращает список GUID объектов в радиусе.
-func (inst *Instance) FindObjectsInRange(center types.TilePos, radius int32) []types.ObjectGuid {
+func (inst *Instance) FindObjectsInRange(center grid.TilePos, radius int32) []types.ObjectGuid {
 	var result []types.ObjectGuid
 
 	// Итерируемся только по сущностям, имеющим PositionComponent.

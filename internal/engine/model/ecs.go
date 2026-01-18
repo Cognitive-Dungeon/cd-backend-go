@@ -6,6 +6,7 @@ import (
 	"cognitive-server/internal/engine/data"
 	"cognitive-server/internal/engine/model/components"
 	"cognitive-server/pkg/ecs"
+	"cognitive-server/pkg/grid"
 )
 
 type (
@@ -96,7 +97,7 @@ func (inst *Instance) NewEntityBuilder(guid ObjectGuid) *EntityBuilder {
 
 func (b *EntityBuilder) WithPosition(x, y int) *EntityBuilder {
 	comp := components.PositionComponent{
-		TilePos: types.TilePos{X: types.TileCoord(x), Y: types.TileCoord(y)},
+		TilePos: grid.TilePos{X: grid.TileCoord(x), Y: grid.TileCoord(y)},
 	}
 	ecs.GetStorage[components.PositionComponent](b.inst.World, components.CID_Position).Add(b.id, comp)
 	return b

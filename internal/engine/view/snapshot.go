@@ -9,6 +9,7 @@ import (
 	ecs2 "cognitive-server/internal/engine/model"
 	"cognitive-server/internal/engine/model/components"
 	"cognitive-server/pkg/ecs"
+	"cognitive-server/pkg/grid"
 	"strconv"
 )
 
@@ -36,7 +37,7 @@ func (b *SnapshotBuilder) BuildSnapshot(playerGuid ecs2.ObjectGuid) *api.ServerR
 	for y := int32(0); y < int32(inst.Grid.Height); y++ {
 		for x := int32(0); x < int32(inst.Grid.Width); x++ {
 			tileType := enums.TileFloor
-			if !inst.Grid.IsWalkable(data.TilePos{X: types.TileCoord(x), Y: types.TileCoord(y)}) {
+			if !inst.Grid.IsWalkable(data.TilePos{X: grid.TileCoord(x), Y: grid.TileCoord(y)}) {
 				tileType = enums.TileWall
 			}
 			view := api.TileView{X: int(x), Y: int(y), IsVisible: true}

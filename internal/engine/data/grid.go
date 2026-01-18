@@ -1,14 +1,14 @@
 package data
 
 import (
-	"cognitive-server/internal/core/types"
 	"cognitive-server/internal/core/types/enums"
+	"cognitive-server/pkg/grid"
 )
 
 type (
 	Tile      = enums.Tile
-	TileCoord = types.TileCoord
-	TilePos   = types.TilePos
+	TileCoord = grid.TileCoord
+	TilePos   = grid.TilePos
 )
 
 // Grid — физическое представление уровня (стены, пол).
