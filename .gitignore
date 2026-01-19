@@ -28,3 +28,4 @@ Thumbs.db
 # Здесь будут лежать API ключи, их нельзя пушить!
 .env
 .env.local
+/tools/tiled/cognitive-dungeon.tiled-session

@@ -1,0 +1,36 @@
+[
+  {
+    "name": "void",
+    "id": 0,
+    "symbol": " ",
+    "color": "#000000",
+    "flags": [],
+    "desc": "Ничто. Пустота."
+  },
+  {
+    "name": "floor_dirt",
+    "id": 1,
+    "symbol": ".",
+    "color": "#AA5500",
+    "flags": ["walkable"],
+    "desc": "Грязный земляной пол."
+  },
+  {
+    "name": "wall_stone",
+    "id": 2,
+    "symbol": "#",
+    "color": "#AAAAAA",
+    "bg_color": "#444444",
+    "flags": ["solid", "opaque"],
+    "desc": "Холодная каменная стена."
+  },
+  {
+    "name": "lava",
+    "id": 4,
+    "symbol": "≈",
+    "color": "#FF5555",
+    "bg_color": "#550000",
+    "flags": ["liquid"],
+    "desc": "Бурлящая магма."
+  }
+]

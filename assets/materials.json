@@ -1,0 +1,42 @@
+[
+  {
+    "gid": 1,
+    "material_id": 0,
+    "flags": 0,
+    "variant": 0,
+    "name": "void",
+    "llm_desc": "Ничто. Пустота.",
+    "char": " ",
+    "color": "#000000"
+  },
+  {
+    "gid": 2,
+    "material_id": 1,
+    "flags": 8,
+    "variant": 0,
+    "name": "floor_dirt",
+    "llm_desc": "Грязный земляной пол.",
+    "char": ".",
+    "color": "#AA5500"
+  },
+  {
+    "gid": 3,
+    "material_id": 2,
+    "flags": 3,
+    "variant": 0,
+    "name": "wall_stone",
+    "llm_desc": "Холодная каменная стена.",
+    "char": "#",
+    "color": "#AAAAAA"
+  },
+  {
+    "gid": 4,
+    "material_id": 4,
+    "flags": 4,
+    "variant": 0,
+    "name": "lava",
+    "llm_desc": "Бурлящая магма.",
+    "char": "≈",
+    "color": "#FF5555"
+  }
+]
