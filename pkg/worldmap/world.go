@@ -5,6 +5,9 @@ import (
 	"sync"
 )
 
+// chunkKey - внутренний ключ для мапы (X, Y, Z упакованные).
+type chunkKey uint64
+
 // TileInfo — расширенная информация о тайле для внешних систем.
 // Возвращается методами анализа (GetContext).
 type TileInfo struct {
@@ -101,4 +104,85 @@ func (w *World) Reset() {
 	for k := range w.chunks {
 		delete(w.chunks, k)
 	}
+}
+
+// PutChunk позволяет загрузить готовый чанк целиком.
+// Это основной метод для генераторов и загрузчиков карт.
+// Он заменяет существующий чанк, если таковой был.
+func (w *World) PutChunk(pos geo.Location, c *Chunk) {
+	// Нормализуем ключ (на случай, если передали координаты тайла, а не чанка)
+	chunkKey := GetChunkKey(pos)
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	w.chunks[chunkKey] = c
+}
+
+// GetChunk возвращает указатель на чанк (или nil).
+// ВНИМАНИЕ: Возвращает прямой указатель. Изменять чанк напрямую
+// небезопасно без внешней синхронизации, если игра уже запущена.
+// Используйте для чтения или сериализации.
+func (w *World) GetChunk(pos geo.Location) *Chunk {
+	chunkKey := GetChunkKey(pos)
+
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
+	return w.chunks[chunkKey]
+}
+
+// RangeChunks итерируется по всем загруженным чанкам.
+// Если f возвращает false, итерация прекращается.
+func (w *World) RangeChunks(f func(pos geo.Location, c *Chunk) bool) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
+	for pos, c := range w.chunks {
+		if !f(pos, c) {
+			break
+		}
+	}
+}
+
+// Bounds возвращает границы загруженного мира (Min, Max в координатах чанков).
+// Полезно для рендера всей карты или миникарты.
+func (w *World) Bounds() (min, max geo.Location) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
+	first := true
+	var minX, minY, minZ int
+	var maxX, maxY, maxZ int
+
+	for pos := range w.chunks {
+		x, y, z := pos.XYZ()
+		if first {
+			minX, minY, minZ = x, y, z
+			maxX, maxY, maxZ = x, y, z
+			first = false
+			continue
+		}
+
+		if x < minX {
+			minX = x
+		}
+		if x > maxX {
+			maxX = x
+		}
+		if y < minY {
+			minY = y
+		}
+		if y > maxY {
+			maxY = y
+		}
+		if z < minZ {
+			minZ = z
+		}
+		if z > maxZ {
+			maxZ = z
+		}
+	}
+
+	return geo.Pos(minX, minY, minZ), geo.Pos(maxX, maxY, maxZ)
 }

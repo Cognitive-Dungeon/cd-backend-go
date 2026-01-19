@@ -8,14 +8,14 @@ const (
 	ChunkSize  = 16
 	ChunkShift = 4  // 2^4 = 16
 	ChunkMask  = 15 // 0xF (0000...1111)
-	ChunkTotal = ChunkSize * ChunkSize
+	ChunkArea  = ChunkSize * ChunkSize
 )
 
 // Chunk — сегмент карты размером 16x16 тайлов.
 type Chunk struct {
 	// Плоский массив для лучшей локальности кэша процессора.
 	// Индекс = y * 16 + x
-	Tiles [ChunkTotal]Tile
+	Tiles [ChunkArea]Tile
 }
 
 // NewChunk создает новый пустой чанк.

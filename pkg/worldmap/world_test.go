@@ -60,3 +60,24 @@ func TestWorld_ChunksCreatedLazily(t *testing.T) {
 		t.Errorf("Expected 1 chunk, got %d", count)
 	}
 }
+
+func TestWorld_PutChunk(t *testing.T) {
+	w := NewWorld()
+	c := NewChunk()
+
+	// Заполним чанк данными локально
+	c.SetTile(0, 0, Tile{Material: 99, Flags: FlagSolid})
+
+	// Вставим сразу весь чанк
+	targetPos := geo.Pos(5, 5, 0) // Это попадет в чанк (0,0,0) т.к. 5 < 16
+	chunkKey := GetChunkKey(targetPos)
+
+	w.PutChunk(chunkKey, c)
+
+	// Проверим через GetTile
+	tile := w.GetTile(geo.Pos(0, 0, 0)) // (0,0) внутри чанка (0,0,0)
+
+	if tile.Material != 99 {
+		t.Errorf("PutChunk failed: expected material 99, got %d", tile.Material)
+	}
+}

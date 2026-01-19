@@ -4,11 +4,11 @@ package worldmap
 type TileFlag uint8
 
 const (
-	FlagNone   TileFlag = 0
-	FlagSolid  TileFlag = 1 << 0 // Блокирует движение
-	FlagOpaque TileFlag = 1 << 1 // Блокирует свет (FOV)
-	FlagLiquid TileFlag = 1 << 2 // Жидкость (вода, лава)
-	FlagGas    TileFlag = 1 << 3 // Газ (дым, пар)
+	FlagNone     TileFlag = 0
+	FlagSolid    TileFlag = 1 << 0 // Блокирует движение
+	FlagOpaque   TileFlag = 1 << 1 // Блокирует свет (FOV)
+	FlagLiquid   TileFlag = 1 << 2 // Жидкость (вода, лава)
+	FlagWalkable TileFlag = 1 << 3 // Явно помечаем, что можно ходить (пол)
 )
 
 // Has проверяет наличие флага.
