@@ -5,32 +5,290 @@
     "symbol": " ",
     "color": "#000000",
     "flags": [],
-    "desc": "Ничто. Пустота."
+    "desc": "Абсолютное ничто. Пустота за пределами реальности."
   },
   {
     "name": "floor_dirt",
     "id": 1,
     "symbol": ".",
-    "color": "#AA5500",
+    "color": "#8B4513",
     "flags": ["walkable"],
-    "desc": "Грязный земляной пол."
+    "desc": "Утоптанная земля, покрытая пылью веков."
+  },
+  {
+    "name": "floor_stone",
+    "id": 2,
+    "symbol": ".",
+    "color": "#555555",
+    "flags": ["walkable"],
+    "desc": "Холодный пол, выложенный грубыми каменными плитами."
+  },
+  {
+    "name": "floor_wood",
+    "id": 3,
+    "symbol": ".",
+    "color": "#DEB887",
+    "flags": ["walkable"],
+    "desc": "Старый дощатый настил. Доски скрипят под ногами."
   },
   {
     "name": "wall_stone",
-    "id": 2,
+    "id": 10,
     "symbol": "#",
     "color": "#AAAAAA",
-    "bg_color": "#444444",
+    "bg_color": "#222222",
     "flags": ["solid", "opaque"],
-    "desc": "Холодная каменная стена."
+    "desc": "Массивная каменная кладка. Выглядит непробиваемой."
+  },
+  {
+    "name": "wall_brick",
+    "id": 11,
+    "symbol": "#",
+    "color": "#A52A2A",
+    "bg_color": "#400000",
+    "flags": ["solid", "opaque"],
+    "desc": "Стена из красного кирпича, местами покрытая мхом."
+  },
+  {
+    "name": "door_closed",
+    "id": 12,
+    "symbol": "+",
+    "color": "#CD853F",
+    "flags": ["solid", "opaque"],
+    "desc": "Тяжелая дубовая дверь, окованная железом. Она закрыта."
+  },
+  {
+    "name": "door_open",
+    "id": 13,
+    "symbol": "'",
+    "color": "#CD853F",
+    "flags": ["walkable"],
+    "desc": "Открытая дверь. Петли слегка поржавели."
+  },
+  {
+    "name": "window_glass",
+    "id": 14,
+    "symbol": "#",
+    "color": "#87CEEB",
+    "flags": ["solid"],
+    "desc": "Прочное стекло в раме. Вы видите, что происходит снаружи, но пройти нельзя."
+  },
+  {
+    "name": "stairs_down",
+    "id": 20,
+    "symbol": ">",
+    "color": "#FFFFFF",
+    "flags": ["walkable"],
+    "desc": "Темный спуск, ведущий вглубь подземелья."
+  },
+  {
+    "name": "stairs_up",
+    "id": 21,
+    "symbol": "<",
+    "color": "#FFFFFF",
+    "flags": ["walkable"],
+    "desc": "Лестница, ведущая на поверхность или верхний этаж."
+  },
+  {
+    "name": "grass",
+    "id": 30,
+    "symbol": ".",
+    "color": "#006400",
+    "flags": ["walkable"],
+    "desc": "Короткая зеленая трава."
+  },
+  {
+    "name": "tall_grass",
+    "id": 31,
+    "symbol": "\"",
+    "color": "#32CD32",
+    "flags": ["walkable"],
+    "desc": "Высокая трава, в которой легко может спрятаться мелкий хищник."
+  },
+  {
+    "name": "tree_pine",
+    "id": 32,
+    "symbol": "♠",
+    "color": "#2E8B57",
+    "flags": ["solid", "opaque"],
+    "desc": "Высокая вечнозеленая сосна. Пахнет смолой."
+  },
+  {
+    "name": "tree_dead",
+    "id": 33,
+    "symbol": "♣",
+    "color": "#8B4513",
+    "flags": ["solid"],
+    "desc": "Мертвое, высохшее дерево. Его ветви похожи на костлявые руки."
+  },
+  {
+    "name": "bush",
+    "id": 34,
+    "symbol": "*",
+    "color": "#00FF00",
+    "flags": ["walkable"],
+    "desc": "Густой кустарник."
+  },
+  {
+    "name": "water_shallow",
+    "id": 35,
+    "symbol": "~",
+    "color": "#1E90FF",
+    "flags": ["liquid", "walkable"],
+    "desc": "Мелкая вода. Можно перейти вброд, но ноги намокнут."
+  },
+  {
+    "name": "water_deep",
+    "id": 36,
+    "symbol": "≈",
+    "color": "#00008B",
+    "bg_color": "#000033",
+    "flags": ["liquid"],
+    "desc": "Глубокая, темная вода. Течение здесь сильное."
   },
   {
     "name": "lava",
-    "id": 4,
+    "id": 37,
     "symbol": "≈",
-    "color": "#FF5555",
-    "bg_color": "#550000",
+    "color": "#FF4500",
+    "bg_color": "#800000",
     "flags": ["liquid"],
-    "desc": "Бурлящая магма."
+    "desc": "Кипящая магма. Жар невыносим."
+  },
+  {
+    "name": "mountain_peak",
+    "id": 38,
+    "symbol": "▲",
+    "color": "#DDDDDD",
+    "flags": ["solid", "opaque"],
+    "desc": "Крутой скалистый пик, на который невозможно взобраться."
+  },
+  {
+    "name": "chest_closed",
+    "id": 50,
+    "symbol": "■",
+    "color": "#D2691E",
+    "flags": ["solid"],
+    "desc": "Деревянный сундук. Интересно, что внутри?"
+  },
+  {
+    "name": "fountain",
+    "id": 51,
+    "symbol": "{",
+    "color": "#00FFFF",
+    "flags": ["solid"],
+    "desc": "Красивый мраморный фонтан с чистой водой."
+  },
+  {
+    "name": "trap_spikes",
+    "id": 52,
+    "symbol": "^",
+    "color": "#CCCCCC",
+    "flags": ["walkable"],
+    "desc": "Смертоносные шипы, торчащие из пола."
+  },
+  {
+    "name": "altar_chaotic",
+    "id": 53,
+    "symbol": "_",
+    "color": "#555555",
+    "flags": ["solid"],
+    "desc": "Грубый каменный алтарь, залитый чем-то темным и липким."
+  },
+  {
+    "name": "gold_pile",
+    "id": 100,
+    "symbol": "$",
+    "color": "#FFD700",
+    "flags": ["walkable"],
+    "desc": "Кучка золотых монет."
+  },
+  {
+    "name": "food_ration",
+    "id": 101,
+    "symbol": "%",
+    "color": "#DAA520",
+    "flags": ["walkable"],
+    "desc": "Армейский паек. Не очень вкусно, зато питательно."
+  },
+  {
+    "name": "potion_red",
+    "id": 102,
+    "symbol": "!",
+    "color": "#FF0000",
+    "flags": ["walkable"],
+    "desc": "Склянка с мутной красной жидкостью."
+  },
+  {
+    "name": "scroll_magic",
+    "id": 103,
+    "symbol": "?",
+    "color": "#FFFFE0",
+    "flags": ["walkable"],
+    "desc": "Старый пергамент, исписанный странными рунами."
+  },
+  {
+    "name": "weapon_sword",
+    "id": 104,
+    "symbol": "/",
+    "color": "#C0C0C0",
+    "flags": ["walkable"],
+    "desc": "Острый длинный меч."
+  },
+  {
+    "name": "armor_plate",
+    "id": 105,
+    "symbol": "[",
+    "color": "#708090",
+    "flags": ["walkable"],
+    "desc": "Тяжелые латные доспехи."
+  },
+  {
+    "name": "player_human",
+    "id": 200,
+    "symbol": "@",
+    "color": "#FFFFFF",
+    "flags": ["solid"],
+    "desc": "Искатель приключений."
+  },
+  {
+    "name": "rat_sewer",
+    "id": 201,
+    "symbol": "r",
+    "color": "#8B4513",
+    "flags": ["solid"],
+    "desc": "Огромная канализационная крыса с красными глазами."
+  },
+  {
+    "name": "goblin_grunt",
+    "id": 202,
+    "symbol": "g",
+    "color": "#32CD32",
+    "flags": ["solid"],
+    "desc": "Маленькое злобное существо с копьем."
+  },
+  {
+    "name": "orc_warrior",
+    "id": 203,
+    "symbol": "o",
+    "color": "#006400",
+    "flags": ["solid"],
+    "desc": "Крупный орк с боевым топором."
+  },
+  {
+    "name": "dragon_red",
+    "id": 204,
+    "symbol": "D",
+    "color": "#FF0000",
+    "flags": ["solid"],
+    "desc": "Древний красный дракон. Из его пасти идет дым."
+  },
+  {
+    "name": "ghost",
+    "id": 205,
+    "symbol": "G",
+    "color": "#E0FFFF",
+    "flags": ["walkable"],
+    "desc": "Призрак, едва различимый в темноте."
   }
 ]
