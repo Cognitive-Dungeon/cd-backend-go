@@ -1,0 +1,59 @@
+{
+  "name": "Stairs",
+  "tilewidth": 32,
+  "tileheight": 32,
+  "tilecount": 2,
+  "columns": 2,
+  "image": "stairs.png",
+  "imagewidth": 64,
+  "imageheight": 32,
+  "margin": 0,
+  "spacing": 0,
+  "tiles": [
+    {
+      "id": 0,
+      "type": "stairs",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "stairs_down"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 30
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Темный спуск, ведущий вглубь подземелья."
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "type": "stairs",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "stairs_up"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 31
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Лестница, ведущая наверх."
+        }
+      ]
+    }
+  ],
+  "type": "tileset",
+  "version": "1.10",
+  "tiledversion": "1.10.2"
+}

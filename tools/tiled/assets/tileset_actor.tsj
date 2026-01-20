@@ -1,0 +1,185 @@
+{
+  "name": "Actor",
+  "tilewidth": 32,
+  "tileheight": 32,
+  "tilecount": 8,
+  "columns": 8,
+  "image": "actor.png",
+  "imagewidth": 256,
+  "imageheight": 32,
+  "margin": 0,
+  "spacing": 0,
+  "tiles": [
+    {
+      "id": 0,
+      "type": "actor",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "player_human"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 200
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Искатель приключений, готовый бросить вызов судьбе."
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "type": "actor",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "rat_sewer"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 201
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Огромная канализационная крыса с красными глазами."
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "actor",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "goblin_grunt"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 202
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Маленькое злобное существо с примитивным оружием."
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "actor",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "orc_warrior"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 203
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Крупный орк, закаленный в битвах."
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "actor",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "skeleton_warrior"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 204
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Скелет, поднятый темной магией."
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "actor",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "lich"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 205
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Древний лич, источающий некромантическую силу."
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "actor",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "dragon_red"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 206
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Древний красный дракон. От него исходит жар."
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "actor",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "ghost"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 207
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Бесплотный призрак, едва различимый в темноте."
+        }
+      ]
+    }
+  ],
+  "type": "tileset",
+  "version": "1.10",
+  "tiledversion": "1.10.2"
+}

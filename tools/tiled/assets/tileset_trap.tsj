@@ -1,0 +1,59 @@
+{
+  "name": "Trap",
+  "tilewidth": 32,
+  "tileheight": 32,
+  "tilecount": 2,
+  "columns": 2,
+  "image": "trap.png",
+  "imagewidth": 64,
+  "imageheight": 32,
+  "margin": 0,
+  "spacing": 0,
+  "tiles": [
+    {
+      "id": 0,
+      "type": "trap",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "trap_spikes"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 100
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Острые металлические шипы, скрытые в полу."
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "type": "trap",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "trap_pit"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 101
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Глубокая яма, замаскированная под обычный пол."
+        }
+      ]
+    }
+  ],
+  "type": "tileset",
+  "version": "1.10",
+  "tiledversion": "1.10.2"
+}

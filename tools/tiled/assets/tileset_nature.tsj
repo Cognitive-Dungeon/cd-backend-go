@@ -1,0 +1,143 @@
+{
+  "name": "Nature",
+  "tilewidth": 32,
+  "tileheight": 32,
+  "tilecount": 6,
+  "columns": 6,
+  "image": "nature.png",
+  "imagewidth": 192,
+  "imageheight": 32,
+  "margin": 0,
+  "spacing": 0,
+  "tiles": [
+    {
+      "id": 0,
+      "type": "nature",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "grass"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 40
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Короткая зеленая трава."
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "type": "nature",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "tall_grass"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 41
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Высокая трава, в которой легко спрятаться."
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "nature",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "tree_pine"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 42
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Высокая вечнозеленая сосна."
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "nature",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "tree_dead"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 43
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Мертвое, высохшее дерево."
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "nature",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "bush"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 44
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Густой кустарник."
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "nature",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "mountain_peak"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 45
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Крутой скалистый пик, недоступный для подъема."
+        }
+      ]
+    }
+  ],
+  "type": "tileset",
+  "version": "1.10",
+  "tiledversion": "1.10.2"
+}

@@ -1,0 +1,122 @@
+{
+  "name": "Door",
+  "tilewidth": 32,
+  "tileheight": 32,
+  "tilecount": 5,
+  "columns": 5,
+  "image": "door.png",
+  "imagewidth": 160,
+  "imageheight": 32,
+  "margin": 0,
+  "spacing": 0,
+  "tiles": [
+    {
+      "id": 0,
+      "type": "door",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "door_closed"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 20
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Тяжелая дубовая дверь, окованная железом. Она закрыта."
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "type": "door",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "door_open"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 21
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Открытая дверь с поскрипывающими петлями."
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "door",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "door_locked"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 22
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Запертая дверь. Замок выглядит прочным."
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "door",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "door_broken"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 23
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Сломанная дверь. Щепки валяются вокруг."
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "door",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "window_glass"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 24
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Прочное стекло в раме. Через него видно, но не пройти."
+        }
+      ]
+    }
+  ],
+  "type": "tileset",
+  "version": "1.10",
+  "tiledversion": "1.10.2"
+}

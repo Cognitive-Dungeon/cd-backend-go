@@ -1,0 +1,143 @@
+{
+  "name": "Item",
+  "tilewidth": 32,
+  "tileheight": 32,
+  "tilecount": 6,
+  "columns": 6,
+  "image": "item.png",
+  "imagewidth": 192,
+  "imageheight": 32,
+  "margin": 0,
+  "spacing": 0,
+  "tiles": [
+    {
+      "id": 0,
+      "type": "item",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "gold_pile"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 150
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Кучка блестящих золотых монет."
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "type": "item",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "food_ration"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 151
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Армейский паек. Питательно, но невкусно."
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "item",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "potion_red"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 152
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Склянка с мутной красной жидкостью."
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "item",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "scroll_magic"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 153
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Старый пергамент, исписанный странными рунами."
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "item",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "weapon_sword"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 154
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Острый длинный меч."
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "item",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "armor_plate"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 155
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Тяжелые латные доспехи."
+        }
+      ]
+    }
+  ],
+  "type": "tileset",
+  "version": "1.10",
+  "tiledversion": "1.10.2"
+}

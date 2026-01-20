@@ -21,53 +21,61 @@ import (
 	"golang.org/x/image/math/fixed"
 )
 
-// --- CONFIG ---
+// ============================================================
+// CONFIG
+// ============================================================
 
 const (
 	TileSize = 32
 	FontSize = 24.0
 	DPI      = 72
+	MaxCols  = 8
 )
 
-// --- INPUT STRUCTURE (JSON) ---
-// Структура, которую мы читаем из assets/tiles_def.json
+// ============================================================
+// INPUT STRUCTURE
+// ============================================================
+
 type InputTileDef struct {
-	Name    string   `json:"name"`
-	ID      uint16   `json:"id"` // Мапится в MaterialID
-	Symbol  string   `json:"symbol"`
-	Color   string   `json:"color"`
-	BgColor string   `json:"bg_color,omitempty"`
-	Flags   []string `json:"flags"` // "solid", "opaque", "liquid"
-	Desc    string   `json:"desc"`
-	Variant uint8    `json:"variant,omitempty"`
+	Name     string   `json:"name"`
+	Category string   `json:"category"`
+	ID       uint16   `json:"id"`
+	Symbol   string   `json:"symbol"`
+	Color    string   `json:"color"`
+	BgColor  string   `json:"bg_color,omitempty"`
+	Flags    []string `json:"flags"`
+	Desc     string   `json:"desc"`
+	Variant  uint8    `json:"variant,omitempty"`
 }
 
-// --- SERVER OUTPUT STRUCTURE ---
-// Данные, которые загружает сервер при старте
+// ============================================================
+// SERVER OUTPUT
+// ============================================================
+
 type ServerTileMetadata struct {
-	GID        int                 `json:"gid"` // Global ID (Tiled ID + 1)
+	GID        int                 `json:"gid"`
 	MaterialID worldmap.MaterialID `json:"material_id"`
 	Flags      worldmap.TileFlag   `json:"flags"`
 	Variant    uint8               `json:"variant"`
 	Name       string              `json:"name"`
 	LLMDesc    string              `json:"llm_desc"`
-	// Fallback для ASCII клиентов
-	Char  string `json:"char"`
-	Color string `json:"color"`
+	Char       string              `json:"char"`
+	Color      string              `json:"color"`
 }
 
-// --- TILED TSJ OUTPUT STRUCTURES ---
-// Структуры для создания tileset.tsj (формат Tiled JSON)
+// ============================================================
+// TILED STRUCTURES
+// ============================================================
 
 type TiledProperty struct {
 	Name  string      `json:"name"`
-	Type  string      `json:"type"` // "bool", "string", "int", "color"
+	Type  string      `json:"type"`
 	Value interface{} `json:"value"`
 }
 
 type TiledTileInfo struct {
-	ID         int             `json:"id"`   // Локальный ID в тайлсете (начинается с 0)
-	Type       string          `json:"type"` // Класс/Тип тайла
+	ID         int             `json:"id"`
+	Type       string          `json:"type"`
 	Properties []TiledProperty `json:"properties,omitempty"`
 }
 
@@ -83,207 +91,292 @@ type TiledTileset struct {
 	Margin       int             `json:"margin"`
 	Spacing      int             `json:"spacing"`
 	Tiles        []TiledTileInfo `json:"tiles,omitempty"`
-	Type         string          `json:"type"`         // "tileset"
-	Version      string          `json:"version"`      // "1.10"
-	TiledVersion string          `json:"tiledversion"` // "1.10.2"
+	Type         string          `json:"type"`
+	Version      string          `json:"version"`
+	TiledVersion string          `json:"tiledversion"`
 }
 
-func main() {
-	// 1. Настройка флагов командной строки
-	inputFile := flag.String("in", "assets/tiles_def.json", "Input definition JSON path")
-	fontPath := flag.String("font", "tools/tileset_gen/unifont-17.0.03.ttf", "TrueType font path")
+// ============================================================
+// CONFIG / FLAGS
+// ============================================================
 
-	// Выходные пути
-	serverOutDir := flag.String("server-out-dir", "assets", "Server assets output directory")
-	tiledOutDir := flag.String("tiled-out-dir", "tools/tiled/assets", "Tiled assets output directory")
-	outTiledImgName := "fallback_tileset.png"
-	outTiledTsjName := "fallback_tileset.tsj"
-	outServerName := "materials.json"
+type Config struct {
+	InputFile    string
+	FontPath     string
+	ServerOutDir string
+	TiledOutDir  string
+}
 
+func parseFlags() Config {
+	in := flag.String("in", "assets/tiles_def.jsonc", "Input definition JSON / JSONC path")
+	font := flag.String("font", "tools/tileset_gen/unifont-17.0.03.ttf", "TrueType font path")
+	serverDir := flag.String("server-out-dir", "assets", "Server assets output directory")
+	tiledDir := flag.String("tiled-out-dir", "tools/tiled/assets", "Tiled assets output directory")
 	flag.Parse()
 
-	// 2. Чтение входного JSON
-	rawBytes, err := os.ReadFile(*inputFile)
-	if err != nil {
-		log.Fatalf("Failed to read input JSON (%s): %v", *inputFile, err)
+	return Config{
+		InputFile:    *in,
+		FontPath:     *font,
+		ServerOutDir: *serverDir,
+		TiledOutDir:  *tiledDir,
 	}
+}
 
-	var inputDefs []InputTileDef
-	if err := json.Unmarshal(rawBytes, &inputDefs); err != nil {
-		log.Fatalf("Failed to parse input JSON: %v", err)
-	}
-	fmt.Printf("Loaded definitions: %d items\n", len(inputDefs))
+// ============================================================
+// MAIN
+// ============================================================
 
-	// 3. Загрузка шрифта
-	fontBytes, err := os.ReadFile(*fontPath)
-	if err != nil {
-		log.Fatalf("Failed to read font (%s): %v", *fontPath, err)
+func main() {
+	cfg := parseFlags()
+
+	defs := loadInputDefs(cfg.InputFile)
+	face := loadFont(cfg.FontPath)
+
+	// --- SERVER DATA ---
+	serverMeta := generateServerMetadata(defs)
+	saveJSON(cfg.ServerOutDir, "materials.json", serverMeta)
+
+	// --- TILED DATA ---
+	grouped := groupByCategory(defs)
+
+	for category, tiles := range grouped {
+		img := renderCategoryPNG(tiles, face)
+		imgName := fmt.Sprintf("%s.png", category)
+		tsjName := fmt.Sprintf("tileset_%s.tsj", category)
+
+		savePNG(cfg.TiledOutDir, imgName, img)
+
+		b := img.Bounds()
+		ts := generateTileset(category, tiles, imgName, b.Dx(), b.Dy())
+		saveJSON(cfg.TiledOutDir, tsjName, ts)
+
+		fmt.Printf("[OK] %s (%d tiles)\n", category, len(tiles))
 	}
-	f, err := truetype.Parse(fontBytes)
+}
+
+// ============================================================
+// INPUT
+// ============================================================
+
+func loadInputDefs(path string) []InputTileDef {
+	raw, err := os.ReadFile(path)
 	if err != nil {
 		log.Fatal(err)
 	}
+	raw = ToJSON(raw)
 
-	// 4. Подготовка изображения
-	// Рассчитываем размер сетки
-	count := len(inputDefs)
-	cols := 8 // Фиксируем ширину в 8 тайлов
-	rows := int(math.Ceil(float64(count) / float64(cols)))
+	var defs []InputTileDef
+	if err := json.Unmarshal(raw, &defs); err != nil {
+		log.Fatal(err)
+	}
+	return defs
+}
 
-	width := cols * TileSize
-	height := rows * TileSize
+// ============================================================
+// FONT
+// ============================================================
 
-	img := image.NewRGBA(image.Rect(0, 0, width, height))
-
-	// Настройка рисовальщика шрифта
-	face := truetype.NewFace(f, &truetype.Options{
-		Size:    FontSize,
-		DPI:     DPI,
-		Hinting: font.HintingFull,
+func loadFont(path string) font.Face {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		log.Fatal(err)
+	}
+	f, err := truetype.Parse(data)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return truetype.NewFace(f, &truetype.Options{
+		Size: FontSize,
+		DPI:  DPI,
 	})
+}
 
-	// Списки для результатов
-	var serverMeta []ServerTileMetadata
-	var tiledTiles []TiledTileInfo
+// ============================================================
+// GROUPING
+// ============================================================
 
-	// GID (Global ID) в Tiled maps обычно начинается с 1 (0 = пустота).
-	// Но внутри файла .tsj (tileset definition) ID начинаются с 0.
+func groupByCategory(defs []InputTileDef) map[string][]InputTileDef {
+	out := make(map[string][]InputTileDef)
+	for _, def := range defs {
+		out[def.Category] = append(out[def.Category], def)
+	}
+	return out
+}
+
+// ============================================================
+// PNG RENDERING
+// ============================================================
+
+func renderCategoryPNG(defs []InputTileDef, face font.Face) *image.RGBA {
+	cols := min(len(defs), MaxCols)
+	rows := int(math.Ceil(float64(len(defs)) / float64(cols)))
+
+	img := image.NewRGBA(image.Rect(
+		0, 0,
+		cols*TileSize,
+		rows*TileSize,
+	))
+
+	for i, def := range defs {
+		x := (i % cols) * TileSize
+		y := (i / cols) * TileSize
+		rect := image.Rect(x, y, x+TileSize, y+TileSize)
+
+		if def.BgColor != "" {
+			draw.Draw(img, rect, &image.Uniform{parseHex(def.BgColor)}, image.Point{}, draw.Src)
+		}
+
+		drawSymbol(img, rect, def, face)
+	}
+
+	return img
+}
+
+func drawSymbol(
+	img *image.RGBA,
+	rect image.Rectangle,
+	def InputTileDef,
+	face font.Face,
+) {
+	runes := []rune(def.Symbol)
+	if len(runes) == 0 {
+		return
+	}
+	r := runes[0]
+
+	// Цвет
+	fg := parseHex(def.Color)
+
+	// Измеряем глиф
+	bounds, _, _ := face.GlyphBounds(r)
+
+	glyphW := (bounds.Max.X - bounds.Min.X).Ceil()
+	glyphH := (bounds.Max.Y - bounds.Min.Y).Ceil()
+
+	// Центр тайла
+	tileCX := rect.Min.X + TileSize/2
+	tileCY := rect.Min.Y + TileSize/2
+
+	// Смещение: центрируем глиф
+	x := tileCX - glyphW/2 - bounds.Min.X.Ceil()
+	y := tileCY + glyphH/2 - bounds.Max.Y.Ceil()
+
+	d := &font.Drawer{
+		Dst:  img,
+		Src:  &image.Uniform{fg},
+		Face: face,
+		Dot:  fixed.P(x, y),
+	}
+	d.DrawString(string(r))
+}
+
+// ============================================================
+// TILED TILESET
+// ============================================================
+
+func generateTileset(
+	category string,
+	defs []InputTileDef,
+	imageName string,
+	imageW int,
+	imageH int,
+) TiledTileset {
+
+	tiles := make([]TiledTileInfo, 0, len(defs))
+	for i, def := range defs {
+		tiles = append(tiles, TiledTileInfo{
+			ID:   i,
+			Type: category,
+			Properties: []TiledProperty{
+				{Name: "name", Type: "string", Value: def.Name},
+				{Name: "material_id", Type: "int", Value: def.ID},
+				{Name: "desc", Type: "string", Value: def.Desc},
+			},
+		})
+	}
+
+	return TiledTileset{
+		Name:         humanCategoryName(category),
+		TileWidth:    TileSize,
+		TileHeight:   TileSize,
+		TileCount:    len(defs),
+		Columns:      min(len(defs), MaxCols),
+		Image:        imageName,
+		ImageWidth:   imageW,
+		ImageHeight:  imageH,
+		Margin:       0,
+		Spacing:      0,
+		Tiles:        tiles,
+		Type:         "tileset",
+		Version:      "1.10",
+		TiledVersion: "1.10.2",
+	}
+}
+
+// ============================================================
+// SERVER DATA
+// ============================================================
+
+func generateServerMetadata(defs []InputTileDef) []ServerTileMetadata {
+	var out []ServerTileMetadata
 	gid := 1
 
-	// 5. Основной цикл генерации
-	for i, def := range inputDefs {
-		// Координаты
-		col := i % cols
-		row := i / cols
-		x, y := col*TileSize, row*TileSize
-
-		// A. РИСОВАНИЕ
-		// Фон
-		if def.BgColor != "" {
-			bgC := parseHex(def.BgColor)
-			draw.Draw(img, image.Rect(x, y, x+TileSize, y+TileSize), &image.Uniform{C: bgC}, image.Point{}, draw.Src)
-		}
-
-		// Символ
-		fgC := parseHex(def.Color)
-
-		// Центрирование текста (грубое, но для моноширинных шрифтов работает)
-		dotX := fixed.I(x) + fixed.I(TileSize)/2 - fixed.I(int(FontSize/3))
-		yOffset := (TileSize - int(FontSize)) * 2 / 3
-		dotY := fixed.I(y) + fixed.I(TileSize) - fixed.I(yOffset)
-
-		charToDraw := "?"
-		if len([]rune(def.Symbol)) > 0 {
-			charToDraw = string([]rune(def.Symbol)[0])
-		}
-
-		d := &font.Drawer{
-			Dst:  img,
-			Src:  &image.Uniform{C: fgC},
-			Face: face,
-			Dot:  fixed.Point26_6{X: dotX, Y: dotY},
-		}
-		d.DrawString(charToDraw)
-
-		// B. ЛОГИКА (Флаги)
-		finalFlags := resolveFlags(def.Flags)
-
-		// C. ДАННЫЕ ДЛЯ СЕРВЕРА
-		serverMeta = append(serverMeta, ServerTileMetadata{
-			GID:        gid, // ID на карте
+	for _, def := range defs {
+		out = append(out, ServerTileMetadata{
+			GID:        gid,
 			MaterialID: worldmap.MaterialID(def.ID),
-			Flags:      finalFlags,
+			Flags:      resolveFlags(def.Flags),
 			Variant:    def.Variant,
 			Name:       def.Name,
 			LLMDesc:    def.Desc,
 			Char:       def.Symbol,
 			Color:      def.Color,
 		})
-
-		// D. ДАННЫЕ ДЛЯ TILED (.tsj)
-		localID := i // ID внутри тайлсета (0..N)
-
-		tiledTile := TiledTileInfo{
-			ID:   localID,
-			Type: def.Name,
-			Properties: []TiledProperty{
-				{Name: "material_id", Type: "int", Value: def.ID},
-				{Name: "desc", Type: "string", Value: def.Desc},
-			},
-		}
-
-		// Добавляем булевы флаги для удобства дизайнера (is_solid: true)
-		for _, fl := range def.Flags {
-			propName := "is_" + strings.ToLower(strings.TrimSpace(fl))
-			tiledTile.Properties = append(tiledTile.Properties, TiledProperty{
-				Name:  propName,
-				Type:  "bool",
-				Value: true,
-			})
-		}
-
-		tiledTiles = append(tiledTiles, tiledTile)
 		gid++
 	}
-
-	// 6. СОХРАНЕНИЕ
-
-	// PNG
-	imgOutPath := filepath.Join(*tiledOutDir, outTiledImgName)
-	fImg, err := os.Create(imgOutPath)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := png.Encode(fImg, img); err != nil {
-		log.Fatal(err)
-	}
-	fImg.Close()
-	fmt.Printf("[OK] Generated Image: %s (%dx%d)\n", imgOutPath, width, height)
-
-	// Server JSON
-	serverOutPath := filepath.Join(*serverOutDir, outServerName)
-	fServer, err := os.Create(serverOutPath)
-	if err != nil {
-		log.Fatal(err)
-	}
-	encS := json.NewEncoder(fServer)
-	encS.SetIndent("", "  ")
-	encS.Encode(serverMeta)
-	fServer.Close()
-	fmt.Printf("[OK] Generated Server Data: %s\n", serverOutPath)
-
-	// Tiled TSJ
-	tsjOutPath := filepath.Join(*tiledOutDir, outTiledTsjName)
-
-	tiledData := TiledTileset{
-		Name:         "CD_AutoGeneratedTileset",
-		TileWidth:    TileSize,
-		TileHeight:   TileSize,
-		TileCount:    count,
-		Columns:      cols,
-		Image:        outTiledImgName, // Tiled ищет картинку относительно .tsj файла
-		ImageWidth:   width,
-		ImageHeight:  height,
-		Margin:       0,
-		Spacing:      0,
-		Tiles:        tiledTiles,
-		Type:         "tileset",
-		Version:      "1.10",
-		TiledVersion: "1.10.2",
-	}
-
-	fTsj, err := os.Create(tsjOutPath)
-	if err != nil {
-		log.Fatal(err)
-	}
-	encT := json.NewEncoder(fTsj)
-	encT.SetIndent("", "  ")
-	encT.Encode(tiledData)
-	fTsj.Close()
-	fmt.Printf("[OK] Generated Tiled Tileset: %s\n", tsjOutPath)
+	return out
 }
 
-// --- HELPERS ---
+// ============================================================
+// HELPERS
+// ============================================================
+
+func savePNG(dir, name string, img image.Image) {
+	path := filepath.Join(dir, name)
+	f, err := os.Create(path)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+	png.Encode(f, img)
+}
+
+func saveJSON(dir, name string, v interface{}) {
+	path := filepath.Join(dir, name)
+	f, err := os.Create(path)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+	enc := json.NewEncoder(f)
+	enc.SetIndent("", "  ")
+	enc.Encode(v)
+}
+
+func humanCategoryName(cat string) string {
+	return strings.Title(cat)
+}
+
+// parseHex парсит #RRGGBB или RRGGBB в color.RGBA
+func parseHex(s string) color.RGBA {
+	s = strings.TrimPrefix(s, "#")
+	if len(s) != 6 {
+		return color.RGBA{0, 0, 0, 0} // Прозрачный при ошибке
+	}
+	var r, g, b uint8
+	fmt.Sscanf(s, "%02x%02x%02x", &r, &g, &b)
+	return color.RGBA{r, g, b, 255}
+}
 
 // resolveFlags превращает строки "solid", "opaque" в битовую маску TileFlag
 func resolveFlags(flagNames []string) worldmap.TileFlag {
@@ -308,13 +401,9 @@ func resolveFlags(flagNames []string) worldmap.TileFlag {
 	return mask
 }
 
-// parseHex парсит #RRGGBB или RRGGBB в color.RGBA
-func parseHex(s string) color.RGBA {
-	s = strings.TrimPrefix(s, "#")
-	if len(s) != 6 {
-		return color.RGBA{0, 0, 0, 0} // Прозрачный при ошибке
+func min(a, b int) int {
+	if a < b {
+		return a
 	}
-	var r, g, b uint8
-	fmt.Sscanf(s, "%02x%02x%02x", &r, &g, &b)
-	return color.RGBA{r, g, b, 255}
+	return b
 }

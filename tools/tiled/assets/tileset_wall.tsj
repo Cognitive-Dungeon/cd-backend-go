@@ -1,0 +1,101 @@
+{
+  "name": "Wall",
+  "tilewidth": 32,
+  "tileheight": 32,
+  "tilecount": 4,
+  "columns": 4,
+  "image": "wall.png",
+  "imagewidth": 128,
+  "imageheight": 32,
+  "margin": 0,
+  "spacing": 0,
+  "tiles": [
+    {
+      "id": 0,
+      "type": "wall",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "wall_stone"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 10
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Массивная каменная кладка. Непробиваемая и холодная."
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "type": "wall",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "wall_brick"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 11
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Стена из красного кирпича, местами покрытая мхом."
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "wall",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "wall_ruined"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Разрушенная стена с осыпавшимися камнями."
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "wall",
+      "properties": [
+        {
+          "name": "name",
+          "type": "string",
+          "value": "wall_wood"
+        },
+        {
+          "name": "material_id",
+          "type": "int",
+          "value": 13
+        },
+        {
+          "name": "desc",
+          "type": "string",
+          "value": "Деревянная перегородка, сколоченная наспех."
+        }
+      ]
+    }
+  ],
+  "type": "tileset",
+  "version": "1.10",
+  "tiledversion": "1.10.2"
+}
