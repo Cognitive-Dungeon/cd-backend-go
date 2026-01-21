@@ -132,17 +132,28 @@ func main() {
 	defs := loadInputDefs(cfg.InputFile)
 	face := loadFont(cfg.FontPath)
 
-	// --- SERVER DATA ---
-	serverMeta := generateServerMetadata(defs)
-	saveJSON(cfg.ServerOutDir, "materials.json", serverMeta)
-
-	// --- TILED DATA ---
+	// 1. Получаем строгий порядок категорий из входного файла
+	orderedCategories := extractOrderedCategories(defs)
 	grouped := groupByCategory(defs)
 
-	for category, tiles := range grouped {
+	var allServerMeta []ServerTileMetadata
+
+	// Глобальный счетчик GID. В Tiled нумерация всегда начинается с 1.
+	currentGlobalGID := 1
+
+	fmt.Println("==================================================")
+	fmt.Println("ПОРЯДОК ИМПОРТА В TILED (ВАЖНО!)")
+	fmt.Println("Добавляйте тайлсеты в карту строго в этом порядке:")
+	fmt.Println("==================================================")
+
+	// 2. Итерируемся строго по порядку появления категорий
+	for _, category := range orderedCategories {
+		tiles := grouped[category]
+
+		// --- A. Генерация тайлсета для Tiled ---
 		img := renderCategoryPNG(tiles, face)
-		imgName := fmt.Sprintf("%s.png", category)
-		tsjName := fmt.Sprintf("tileset_%s.tsj", category)
+		imgName := fmt.Sprintf("%d_%s.png", currentGlobalGID, category)
+		tsjName := fmt.Sprintf("%d_tileset_%s.tsj", currentGlobalGID, category)
 
 		savePNG(cfg.TiledOutDir, imgName, img)
 
@@ -150,8 +161,31 @@ func main() {
 		ts := generateTileset(category, tiles, imgName, b.Dx(), b.Dy())
 		saveJSON(cfg.TiledOutDir, tsjName, ts)
 
-		fmt.Printf("[OK] %s (%d tiles)\n", category, len(tiles))
+		// Вывод инструкции для пользователя
+		fmt.Printf("FirstGID: %-4d -> %s \t(%d тайлов)\n",
+			currentGlobalGID, tsjName, len(tiles))
+
+		// --- Б. Генерация метаданных для Сервера (materials.json) ---
+		for _, def := range tiles {
+			meta := ServerTileMetadata{
+				GID:        currentGlobalGID,
+				MaterialID: worldmap.MaterialID(def.ID),
+				Flags:      resolveFlags(def.Flags),
+				Variant:    def.Variant,
+				Name:       def.Name,
+				LLMDesc:    def.Desc,
+				Char:       def.Symbol,
+				Color:      def.Color,
+			}
+			allServerMeta = append(allServerMeta, meta)
+			currentGlobalGID++
+		}
 	}
+	fmt.Println("==================================================")
+
+	// 3. Сохраняем materials.json
+	saveJSON(cfg.ServerOutDir, "materials.json", allServerMeta)
+	fmt.Printf("[OK] materials.json сгенерирован (%d записей)\n", len(allServerMeta))
 }
 
 // ============================================================
@@ -201,6 +235,20 @@ func groupByCategory(defs []InputTileDef) map[string][]InputTileDef {
 		out[def.Category] = append(out[def.Category], def)
 	}
 	return out
+}
+
+// extractOrderedCategories возвращает список категорий в том порядке,
+// в котором они впервые встречаются в json файле.
+func extractOrderedCategories(defs []InputTileDef) []string {
+	seen := make(map[string]bool)
+	var order []string
+	for _, def := range defs {
+		if !seen[def.Category] {
+			seen[def.Category] = true
+			order = append(order, def.Category)
+		}
+	}
+	return order
 }
 
 // ============================================================

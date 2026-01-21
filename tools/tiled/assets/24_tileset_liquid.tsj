@@ -4,7 +4,7 @@
   "tileheight": 32,
   "tilecount": 3,
   "columns": 3,
-  "image": "liquid.png",
+  "image": "24_liquid.png",
   "imagewidth": 96,
   "imageheight": 32,
   "margin": 0,

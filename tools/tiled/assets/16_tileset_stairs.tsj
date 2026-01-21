@@ -4,7 +4,7 @@
   "tileheight": 32,
   "tilecount": 2,
   "columns": 2,
-  "image": "stairs.png",
+  "image": "16_stairs.png",
   "imagewidth": 64,
   "imageheight": 32,
   "margin": 0,

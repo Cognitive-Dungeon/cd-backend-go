@@ -4,7 +4,7 @@
   "tileheight": 32,
   "tilecount": 4,
   "columns": 4,
-  "image": "wall.png",
+  "image": "7_wall.png",
   "imagewidth": 128,
   "imageheight": 32,
   "margin": 0,

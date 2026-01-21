@@ -1,138 +1,117 @@
 {
-  "name": "Nature",
+  "name": "Door",
   "tilewidth": 32,
   "tileheight": 32,
-  "tilecount": 6,
-  "columns": 6,
-  "image": "nature.png",
-  "imagewidth": 192,
+  "tilecount": 5,
+  "columns": 5,
+  "image": "11_door.png",
+  "imagewidth": 160,
   "imageheight": 32,
   "margin": 0,
   "spacing": 0,
   "tiles": [
     {
       "id": 0,
-      "type": "nature",
+      "type": "door",
       "properties": [
         {
           "name": "name",
           "type": "string",
-          "value": "grass"
+          "value": "door_closed"
         },
         {
           "name": "material_id",
           "type": "int",
-          "value": 40
+          "value": 20
         },
         {
           "name": "desc",
           "type": "string",
-          "value": "Короткая зеленая трава."
+          "value": "Тяжелая дубовая дверь, окованная железом. Она закрыта."
         }
       ]
     },
     {
       "id": 1,
-      "type": "nature",
+      "type": "door",
       "properties": [
         {
           "name": "name",
           "type": "string",
-          "value": "tall_grass"
+          "value": "door_open"
         },
         {
           "name": "material_id",
           "type": "int",
-          "value": 41
+          "value": 21
         },
         {
           "name": "desc",
           "type": "string",
-          "value": "Высокая трава, в которой легко спрятаться."
+          "value": "Открытая дверь с поскрипывающими петлями."
         }
       ]
     },
     {
       "id": 2,
-      "type": "nature",
+      "type": "door",
       "properties": [
         {
           "name": "name",
           "type": "string",
-          "value": "tree_pine"
+          "value": "door_locked"
         },
         {
           "name": "material_id",
           "type": "int",
-          "value": 42
+          "value": 22
         },
         {
           "name": "desc",
           "type": "string",
-          "value": "Высокая вечнозеленая сосна."
+          "value": "Запертая дверь. Замок выглядит прочным."
         }
       ]
     },
     {
       "id": 3,
-      "type": "nature",
+      "type": "door",
       "properties": [
         {
           "name": "name",
           "type": "string",
-          "value": "tree_dead"
+          "value": "door_broken"
         },
         {
           "name": "material_id",
           "type": "int",
-          "value": 43
+          "value": 23
         },
         {
           "name": "desc",
           "type": "string",
-          "value": "Мертвое, высохшее дерево."
+          "value": "Сломанная дверь. Щепки валяются вокруг."
         }
       ]
     },
     {
       "id": 4,
-      "type": "nature",
+      "type": "door",
       "properties": [
         {
           "name": "name",
           "type": "string",
-          "value": "bush"
+          "value": "window_glass"
         },
         {
           "name": "material_id",
           "type": "int",
-          "value": 44
+          "value": 24
         },
         {
           "name": "desc",
           "type": "string",
-          "value": "Густой кустарник."
-        }
-      ]
-    },
-    {
-      "id": 5,
-      "type": "nature",
-      "properties": [
-        {
-          "name": "name",
-          "type": "string",
-          "value": "mountain_peak"
-        },
-        {
-          "name": "material_id",
-          "type": "int",
-          "value": 45
-        },
-        {
-          "name": "desc",
-          "type": "string",
-          "value": "Крутой скалистый пик, недоступный для подъема."
+          "value": "Прочное стекло в раме. Через него видно, но не пройти."
         }
       ]
     }

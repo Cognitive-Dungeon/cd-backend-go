@@ -1,10 +1,10 @@
 {
-  "name": "Furniture",
+  "name": "Nature",
   "tilewidth": 32,
   "tileheight": 32,
   "tilecount": 6,
   "columns": 6,
-  "image": "furniture.png",
+  "image": "18_nature.png",
   "imagewidth": 192,
   "imageheight": 32,
   "margin": 0,
@@ -12,127 +12,127 @@
   "tiles": [
     {
       "id": 0,
-      "type": "furniture",
+      "type": "nature",
       "properties": [
         {
           "name": "name",
           "type": "string",
-          "value": "chest_closed"
+          "value": "grass"
         },
         {
           "name": "material_id",
           "type": "int",
-          "value": 80
+          "value": 40
         },
         {
           "name": "desc",
           "type": "string",
-          "value": "Деревянный сундук. Возможно, внутри есть ценности."
+          "value": "Короткая зеленая трава."
         }
       ]
     },
     {
       "id": 1,
-      "type": "furniture",
+      "type": "nature",
       "properties": [
         {
           "name": "name",
           "type": "string",
-          "value": "table_wood"
+          "value": "tall_grass"
         },
         {
           "name": "material_id",
           "type": "int",
-          "value": 81
+          "value": 41
         },
         {
           "name": "desc",
           "type": "string",
-          "value": "Грубый деревянный стол."
+          "value": "Высокая трава, в которой легко спрятаться."
         }
       ]
     },
     {
       "id": 2,
-      "type": "furniture",
+      "type": "nature",
       "properties": [
         {
           "name": "name",
           "type": "string",
-          "value": "bed"
+          "value": "tree_pine"
         },
         {
           "name": "material_id",
           "type": "int",
-          "value": 82
+          "value": 42
         },
         {
           "name": "desc",
           "type": "string",
-          "value": "Старая кровать с продавленным матрасом."
+          "value": "Высокая вечнозеленая сосна."
         }
       ]
     },
     {
       "id": 3,
-      "type": "furniture",
+      "type": "nature",
       "properties": [
         {
           "name": "name",
           "type": "string",
-          "value": "bookshelf"
+          "value": "tree_dead"
         },
         {
           "name": "material_id",
           "type": "int",
-          "value": 83
+          "value": 43
         },
         {
           "name": "desc",
           "type": "string",
-          "value": "Полка с пыльными книгами."
+          "value": "Мертвое, высохшее дерево."
         }
       ]
     },
     {
       "id": 4,
-      "type": "furniture",
+      "type": "nature",
       "properties": [
         {
           "name": "name",
           "type": "string",
-          "value": "fountain"
+          "value": "bush"
         },
         {
           "name": "material_id",
           "type": "int",
-          "value": 84
+          "value": 44
         },
         {
           "name": "desc",
           "type": "string",
-          "value": "Мраморный фонтан с чистой водой."
+          "value": "Густой кустарник."
         }
       ]
     },
     {
       "id": 5,
-      "type": "furniture",
+      "type": "nature",
       "properties": [
         {
           "name": "name",
           "type": "string",
-          "value": "altar_chaotic"
+          "value": "mountain_peak"
         },
         {
           "name": "material_id",
           "type": "int",
-          "value": 85
+          "value": 45
         },
         {
           "name": "desc",
           "type": "string",
-          "value": "Грубый каменный алтарь, покрытый темными пятнами."
+          "value": "Крутой скалистый пик, недоступный для подъема."
         }
       ]
     }

@@ -4,7 +4,7 @@
   "tileheight": 32,
   "tilecount": 1,
   "columns": 1,
-  "image": "void.png",
+  "image": "1_void.png",
   "imagewidth": 32,
   "imageheight": 32,
   "margin": 0,

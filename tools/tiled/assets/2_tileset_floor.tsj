@@ -1,138 +1,117 @@
 {
-  "name": "Item",
+  "name": "Floor",
   "tilewidth": 32,
   "tileheight": 32,
-  "tilecount": 6,
-  "columns": 6,
-  "image": "item.png",
-  "imagewidth": 192,
+  "tilecount": 5,
+  "columns": 5,
+  "image": "2_floor.png",
+  "imagewidth": 160,
   "imageheight": 32,
   "margin": 0,
   "spacing": 0,
   "tiles": [
     {
       "id": 0,
-      "type": "item",
+      "type": "floor",
       "properties": [
         {
           "name": "name",
           "type": "string",
-          "value": "gold_pile"
+          "value": "floor_dirt"
         },
         {
           "name": "material_id",
           "type": "int",
-          "value": 150
+          "value": 1
         },
         {
           "name": "desc",
           "type": "string",
-          "value": "Кучка блестящих золотых монет."
+          "value": "Утоптанная земля, покрытая пылью веков."
         }
       ]
     },
     {
       "id": 1,
-      "type": "item",
+      "type": "floor",
       "properties": [
         {
           "name": "name",
           "type": "string",
-          "value": "food_ration"
+          "value": "floor_stone"
         },
         {
           "name": "material_id",
           "type": "int",
-          "value": 151
+          "value": 2
         },
         {
           "name": "desc",
           "type": "string",
-          "value": "Армейский паек. Питательно, но невкусно."
+          "value": "Холодный каменный пол из грубых плит."
         }
       ]
     },
     {
       "id": 2,
-      "type": "item",
+      "type": "floor",
       "properties": [
         {
           "name": "name",
           "type": "string",
-          "value": "potion_red"
+          "value": "floor_wood"
         },
         {
           "name": "material_id",
           "type": "int",
-          "value": 152
+          "value": 3
         },
         {
           "name": "desc",
           "type": "string",
-          "value": "Склянка с мутной красной жидкостью."
+          "value": "Старый дощатый настил, скрипящий под ногами."
         }
       ]
     },
     {
       "id": 3,
-      "type": "item",
+      "type": "floor",
       "properties": [
         {
           "name": "name",
           "type": "string",
-          "value": "scroll_magic"
+          "value": "floor_mossy"
         },
         {
           "name": "material_id",
           "type": "int",
-          "value": 153
+          "value": 4
         },
         {
           "name": "desc",
           "type": "string",
-          "value": "Старый пергамент, исписанный странными рунами."
+          "value": "Каменный пол, покрытый влажным зеленым мхом."
         }
       ]
     },
     {
       "id": 4,
-      "type": "item",
+      "type": "floor",
       "properties": [
         {
           "name": "name",
           "type": "string",
-          "value": "weapon_sword"
+          "value": "floor_cracked"
         },
         {
           "name": "material_id",
           "type": "int",
-          "value": 154
+          "value": 5
         },
         {
           "name": "desc",
           "type": "string",
-          "value": "Острый длинный меч."
-        }
-      ]
-    },
-    {
-      "id": 5,
-      "type": "item",
-      "properties": [
-        {
-          "name": "name",
-          "type": "string",
-          "value": "armor_plate"
-        },
-        {
-          "name": "material_id",
-          "type": "int",
-          "value": 155
-        },
-        {
-          "name": "desc",
-          "type": "string",
-          "value": "Тяжелые латные доспехи."
+          "value": "Потрескавшийся каменный пол, выглядящий ненадежно."
         }
       ]
     }
