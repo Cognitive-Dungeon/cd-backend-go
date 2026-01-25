@@ -109,27 +109,28 @@ func (w *World) Reset() {
 // PutChunk позволяет загрузить готовый чанк целиком.
 // Это основной метод для генераторов и загрузчиков карт.
 // Он заменяет существующий чанк, если таковой был.
-func (w *World) PutChunk(pos geo.Location, c *Chunk) {
-	// Нормализуем ключ (на случай, если передали координаты тайла, а не чанка)
-	chunkKey := GetChunkKey(pos)
-
+func (w *World) PutChunk(chunkPos geo.Location, c *Chunk) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	w.chunks[chunkPos] = c
+}
 
-	w.chunks[chunkKey] = c
+func (w *World) PutChunkOnTilePos(tilePos geo.Location, c *Chunk) {
+	w.PutChunk(GetChunkKey(tilePos), c)
 }
 
 // GetChunk возвращает указатель на чанк (или nil).
 // ВНИМАНИЕ: Возвращает прямой указатель. Изменять чанк напрямую
 // небезопасно без внешней синхронизации, если игра уже запущена.
 // Используйте для чтения или сериализации.
-func (w *World) GetChunk(pos geo.Location) *Chunk {
-	chunkKey := GetChunkKey(pos)
-
+func (w *World) GetChunk(chunkPos geo.Location) *Chunk {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
+	return w.chunks[chunkPos]
+}
 
-	return w.chunks[chunkKey]
+func (w *World) GetChunkTilePos(tilePos geo.Location) *Chunk {
+	return w.GetChunk(GetChunkKey(tilePos))
 }
 
 // RangeChunks итерируется по всем загруженным чанкам.

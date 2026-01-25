@@ -1,6 +1,8 @@
 package worldmap
 
-import "cognitive-server/pkg/geo"
+import (
+	"cognitive-server/pkg/geo"
+)
 
 // MapStorage — абстракция источника данных карты.
 type MapStorage interface {
@@ -21,35 +23,32 @@ func NewLoader(w *World, s MapStorage) *Loader {
 	return &Loader{world: w, storage: s}
 }
 
-// LoadRegion загружает квадратную область чанков (например, вокруг игрока).
-func (l *Loader) LoadRegion(center geo.Location, radiusChunks int) error {
-	// Превращаем центр в координаты чанка
-	cx, cy, cz := GetChunkKey(center).XYZ()
+// LoadRegionChunkCenter загружает квадратную область чанков (например, вокруг игрока).
+func (l *Loader) LoadRegionChunkCenter(centerChunk geo.Location, radius int) (loaded int, err error) {
+	cx, cy, cz := centerChunk.XYZ()
 
-	// Простая итерация по квадрату
-	for dy := -radiusChunks; dy <= radiusChunks; dy++ {
-		for dx := -radiusChunks; dx <= radiusChunks; dx++ {
-			// Формируем ключ чанка
-			targetKey := geo.Pos(cx+dx, cy+dy, cz)
+	for dy := -radius; dy <= radius; dy++ {
+		for dx := -radius; dx <= radius; dx++ {
+			key := geo.Pos(cx+dx, cy+dy, cz)
 
-			// Пропускаем, если уже есть (опционально)
-			if l.world.GetChunk(targetKey) != nil {
+			// Уже загружен
+			if l.world.GetChunk(key) != nil {
 				continue
 			}
 
-			// Грузим из хранилища
-			chunk, err := l.storage.LoadChunk(targetKey)
-			if err != nil {
-				// TODO: Обработать ошибки загрузки чатков
-				// Тут стратегия обработки ошибок:
-				// Можно вернуть ошибку, можно создать пустой чанк, можно логировать.
-				// Пока просто пропустим (будет "DefaultTile").
-				continue
+			chunk, e := l.storage.LoadChunk(key)
+			if e != nil {
+				continue // норм: outside map
 			}
 
-			// Вставляем в мир (Batch Operation)
-			l.world.PutChunk(targetKey, chunk)
+			l.world.PutChunk(key, chunk)
+			loaded++
 		}
 	}
-	return nil
+
+	return loaded, nil
+}
+
+func (l *Loader) LoadRegionTileCenter(tileCenter geo.Location, radius int) (int, error) {
+	return l.LoadRegionChunkCenter(GetChunkKey(tileCenter), radius)
 }
