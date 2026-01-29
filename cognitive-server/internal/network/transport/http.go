@@ -41,7 +41,7 @@ func handleHealth(w http.ResponseWriter, _ *http.Request) {
 
 func handleVersion(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(version.Info())
+	json.NewEncoder(w).Encode(version.Get())
 }
 
 func enableCORS(next http.HandlerFunc) http.HandlerFunc {

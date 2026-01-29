@@ -1,6 +1,8 @@
 go 1.25.5
 
 use (
-	./cognitive-server
-	./cognitive-tools/tileset_gen
+	. 								// << Mage build wrapper
+	./cognitive-builder             // << Build system
+	./cognitive-server				// << Server
+	./cognitive-tools/tileset_gen   // << Tool
 )

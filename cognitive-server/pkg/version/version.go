@@ -2,95 +2,66 @@ package version
 
 import (
 	"fmt"
-	"time"
+	"runtime"
 )
 
+// Переменные, которые заполняет linker (Mage)
+// Значения по умолчанию - на случай запуска через `go run main.go` без флагов
 var (
-	BuildDate   string // YYYY-MM-DD (UTC)
-	BuildCommit string
-	BuildBranch string
-	BuildCI     string
+	Tag       = "v0.0.0" // Семантическая версия
+	BuildNum  = "0"      // Дней с эпохи (строка, т.к. -X принимает строки, но Mage пошлет число)
+	Commit    = "unknown"
+	Branch    = "unknown"
+	DirtyStr  = "false" // "true" или "false"
+	BuildTime = "unknown"
 )
 
-var buildEpoch = time.Date(
-	2025, time.December, 4,
-	0, 0, 0, 0,
-	time.UTC,
-)
-
-// VersionInfo describes the build metadata in structured form.
-type VersionInfo struct {
-	BuildID    int
-	BuildDate  string
-	Commit     string
-	Branch     string
-	CI         string
-	Calculated bool
-	Error      string
+// Info структура для API
+type Info struct {
+	Version   string `json:"version"`   // v0.1.0
+	Build     string `json:"build_num"` // 3890
+	Commit    string `json:"commit"`
+	Branch    string `json:"branch"`
+	IsDirty   bool   `json:"is_dirty"`
+	BuildTime string `json:"build_time"`
+	GoVersion string `json:"go_version"`
 }
 
-func CalculateBuildID() (int, error) {
-	if BuildDate == "" {
-		return 0, fmt.Errorf("BuildDate is empty")
+// Get возвращает структуру
+func Get() Info {
+	return Info{
+		Version:   Tag,
+		Build:     BuildNum,
+		Commit:    Commit,
+		Branch:    Branch,
+		IsDirty:   DirtyStr == "true",
+		BuildTime: BuildTime,
+		GoVersion: runtime.Version(),
 	}
-
-	t, err := time.ParseInLocation("2006-01-02", BuildDate, time.UTC)
-	if err != nil {
-		return 0, fmt.Errorf("invalid BuildDate %q: %w", BuildDate, err)
-	}
-
-	if t.Before(buildEpoch) {
-		return 0, fmt.Errorf("BuildDate %s is before epoch", BuildDate)
-	}
-
-	// Using hours avoids DST issues; epoch and build date are both UTC.
-	days := int(t.Sub(buildEpoch).Hours() / 24)
-	return days, nil
 }
 
-// Info returns structured version information.
-// Safe to call at any time.
-func Info() VersionInfo {
-	id, err := CalculateBuildID()
-
-	info := VersionInfo{
-		BuildDate: BuildDate,
-		Commit:    BuildCommit,
-		Branch:    BuildBranch,
-		CI:        BuildCI,
-	}
-
-	if err != nil {
-		info.Error = err.Error()
-		return info
-	}
-
-	info.BuildID = id
-	info.Calculated = true
-	return info
-}
-
-// String returns a human-readable build string.
 func String() string {
-	info := Info()
-
-	if !info.Calculated {
-		return fmt.Sprintf("Build unknown (%s)", info.Error)
+	dirtyMark := ""
+	if DirtyStr == "true" {
+		dirtyMark = " (dirty)"
 	}
 
+	// Формат: "Cognitive Server v0.1.0 Build 58 [a1b2c] (dirty)"
 	return fmt.Sprintf(
-		"Build %d (%s) commit[%s] branch[%s] ci[%s]",
-		info.BuildID,
-		info.BuildDate,
-		coalesce(info.Commit, "unknown"),
-		coalesce(info.Branch, "unknown"),
-		coalesce(info.CI, "local"),
+		"%s Build %s [%s]%s",
+		Tag,       // v1.0.2
+		BuildNum,  // 58
+		Commit,    // a1b2c
+		dirtyMark, // (dirty) или пусто
 	)
 }
 
-func coalesce(v, fallback string) string {
-	if v == "" {
-		return fallback
-	}
-	return v
+// FullString для подробного лога при старте
+func FullString() string {
+	return fmt.Sprintf(
+		"Cognitive Server %s\n Branch: %s\n Built: %s",
+		String(),
+		Branch,
+		BuildTime,
+	)
 }

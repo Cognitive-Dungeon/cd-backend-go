@@ -42,7 +42,5 @@ cognitive-tools/*.hexpat text diff=rust
 # ==========================================
 cognitive-tools/tiled/assets/** linguist-generated
 
-assets/materials.json text linguist-generated
-
 go.sum text linguist-generated
 go.work.sum text linguist-generated

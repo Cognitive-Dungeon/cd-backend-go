@@ -108,7 +108,7 @@ type Config struct {
 }
 
 func parseFlags() Config {
-	in := flag.String("in", "assets/tiles_def.jsonc", "Input definition JSON / JSONC path")
+	in := flag.String("in", "raw_assets/tiles_def.jsonc", "Input definition JSON / JSONC path")
 	font := flag.String("font", "cognitive-tools/tileset_gen/unifont-17.0.03.ttf", "TrueType font path")
 	serverDir := flag.String("server-out-dir", "assets", "Server assets output directory")
 	tiledDir := flag.String("tiled-out-dir", "cognitive-tools/tiled/assets", "Tiled assets output directory")

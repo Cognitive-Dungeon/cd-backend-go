@@ -50,8 +50,8 @@ func New(cfg *config.SimulationConfig) *Engine {
 	// 1. Загрузка данных
 	spellReg := data.NewSpellRegistry()
 	// Внимание: путь к assets должен быть корректным относительно точки запуска
-	// При запуске из корня проекта: assets/spells.json
-	if err := spellReg.LoadFromFile("assets/spells.json"); err != nil {
+	// При запуске из корня проекта: raw_assets/spells.json
+	if err := spellReg.LoadFromFile("raw_assets/spells.json"); err != nil {
 		logger.Log.Fatalf("Failed to load spells: %v", err)
 	}
 	logger.Log.Info("✨ Spell Registry loaded")

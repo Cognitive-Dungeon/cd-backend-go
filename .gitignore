@@ -7,6 +7,8 @@
 *.dylib
 bin/
 dist/
+build/
+assets/
 
 # IDEs
 # Игнорируем настройки GoLand и VSCode
