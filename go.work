@@ -1,6 +1,6 @@
 go 1.25.5
 
 use (
-	.
-	tools/tileset_gen
+	./cognitive-server
+	./cognitive-tools/tileset_gen
 )

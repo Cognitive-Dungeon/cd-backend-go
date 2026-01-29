@@ -22,7 +22,7 @@ import (
 
 var (
 	pathMaterials = flag.String("materials", "assets/materials.json", "materials.json")
-	pathMap       = flag.String("map", "tools/tiled/demo_map.tmj", "map file")
+	pathMap       = flag.String("map", "cognitive-tools/tiled/demo_map.tmj", "map file")
 )
 
 // ---------------- Visuals ----------------

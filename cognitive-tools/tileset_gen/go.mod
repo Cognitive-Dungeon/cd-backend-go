@@ -1,4 +1,4 @@
-module cognitive-server/tools/tileset_gen
+module cognitive-tools/tileset_gen
 
 go 1.25
 

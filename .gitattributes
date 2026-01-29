@@ -17,7 +17,7 @@ Makefile text eol=lf
 # ==========================================
 # 2. GIT LFS
 # ==========================================
-tools/tileset_gen/unifont-17.0.03.ttf filter=lfs diff=lfs merge=lfs -text linguist-vendored
+cognitive-tools/tileset_gen/unifont-17.0.03.ttf filter=lfs diff=lfs merge=lfs -text linguist-vendored
 
 # ==========================================
 # 3. ИЗОБРАЖЕНИЯ И БИНАРНИКИ
@@ -29,18 +29,18 @@ tools/tileset_gen/unifont-17.0.03.ttf filter=lfs diff=lfs merge=lfs -text lingui
 # ==========================================
 # 4. ЛИЦЕНЗИИ (Vendored)
 # ==========================================
-tools/tileset_gen/LICENSE.txt text linguist-vendored
-tools/tileset_gen/OFL-1.1.txt text linguist-vendored
+cognitive-tools/tileset_gen/LICENSE.txt text linguist-vendored
+cognitive-tools/tileset_gen/OFL-1.1.txt text linguist-vendored
 
 # ==========================================
 # 5. СПЕЦИФИЧНЫЕ ИНСТРУМЕНТЫ
 # ==========================================
-tools/*.hexpat text diff=rust
+cognitive-tools/*.hexpat text diff=rust
 
 # ==========================================
 # 6. СГЕНЕРИРОВАННЫЕ ФАЙЛЫ (Generated)
 # ==========================================
-tools/tiled/assets/** linguist-generated
+cognitive-tools/tiled/assets/** linguist-generated
 
 assets/materials.json text linguist-generated
 

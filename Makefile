@@ -1,7 +1,7 @@
 # --- Project ---
 APP_NAME    := cognitive-server
 MODULE_PATH := cognitive-server
-CMD_PATH    := ./cmd/server/main.go
+CMD_PATH    := ./cognitive-server/cmd/server/main.go
 BUILD_DIR   := ./bin
 
 # --- Go env ---

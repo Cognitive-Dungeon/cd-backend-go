@@ -71,9 +71,9 @@ func mustGetTile(t *testing.T, store *Store, globalPos geo.Location) worldmap.Ti
 
 func TestNewStore_WithRealFiles(t *testing.T) {
 	// 1. Настройка путей
-	projectRoot := "../../../../"
+	projectRoot := "../../../../../"
 	materialsPath := filepath.Join(projectRoot, "assets", "materials.json")
-	mapPath := filepath.Join(projectRoot, "tools", "tiled", "demo_map.tmj")
+	mapPath := filepath.Join(projectRoot, "cognitive-tools", "tiled", "demo_map.tmj")
 
 	if _, err := os.Stat(mapPath); os.IsNotExist(err) {
 		t.Skipf("Skipping integration test: file not found %s", mapPath)
@@ -143,9 +143,9 @@ func TestNewStore_WithRealFiles(t *testing.T) {
 
 func TestGenerateDebugImages(t *testing.T) {
 	// Пути (как в прошлом тесте)
-	projectRoot := "../../../../"
+	projectRoot := "../../../../../"
 	materialsPath := filepath.Join(projectRoot, "assets", "materials.json")
-	mapPath := filepath.Join(projectRoot, "tools", "tiled", "demo_map.tmj")
+	mapPath := filepath.Join(projectRoot, "cognitive-tools", "tiled", "demo_map.tmj")
 	outputDir := filepath.Join(projectRoot, "debug_visuals") // Папка для картинок
 
 	if _, err := os.Stat(mapPath); os.IsNotExist(err) {
