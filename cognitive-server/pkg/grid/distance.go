@@ -31,7 +31,7 @@ func (a TilePos) DistanceSquared(b TilePos) int64 {
 //
 // НЕ рекомендуется для использования в горячих участках симуляции.
 func (a TilePos) EuclideanDistance(b TilePos) float32 {
-	d := (a.Sub(b))
+	d := a.Sub(b)
 	dx := float32(d.X)
 	dy := float32(d.Y)
 	return float32(math.Sqrt(float64(dx*dx + dy*dy)))
