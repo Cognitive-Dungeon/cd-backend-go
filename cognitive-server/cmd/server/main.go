@@ -12,7 +12,6 @@ func main() {
 		logger.Log.WithError(err).
 			Fatal("application initialization failed")
 	}
-	testovoe
 
 	if err := application.Run(); err != nil {
 		logger.Log.WithError(err).

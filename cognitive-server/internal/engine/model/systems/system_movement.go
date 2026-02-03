@@ -8,6 +8,7 @@ import (
 	"cognitive-server/internal/engine/model/components"
 	"cognitive-server/pkg/ecs"
 	"cognitive-server/pkg/eventbus"
+	"cognitive-server/pkg/geo"
 	"cognitive-server/pkg/grid"
 )
 
@@ -28,6 +29,8 @@ func InputMoveSystem(ctx ecs2.InputContext) {
 			dx = -1
 		case enums.DirRight:
 			dx = 1
+		default:
+			break
 		}
 
 		if dx != 0 || dy != 0 {
@@ -51,9 +54,12 @@ func LogicMoveSystem(ctx ecs2.LogicContext) {
 		targetX := pos.X + data.TileCoord(intent.Dx)
 		targetY := pos.Y + data.TileCoord(intent.Dy)
 		targetPos := grid.TilePos{X: targetX, Y: targetY}
+		// TODO: Выкинуть старый пакет grid
+		// Конвертируем grid.TilePos (int32) -> geo.Location (uint64)
+		geoPos := geo.Pos(int(targetX), int(targetY), 0)
 
 		// Проверка коллизий
-		if ctx.Grid.IsWalkable(targetPos) {
+		if !ctx.WorldMap.IsSolidFast(geoPos) {
 			oldPos := pos.TilePos
 
 			// Мутация состояния (in-place update)

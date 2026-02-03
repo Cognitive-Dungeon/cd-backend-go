@@ -8,8 +8,13 @@ import (
 	"cognitive-server/internal/engine/model/systems"
 	"cognitive-server/pkg/ecs"
 	"cognitive-server/pkg/eventbus"
+	"cognitive-server/pkg/geo"
 	"cognitive-server/pkg/logger"
+	"cognitive-server/pkg/worldmap"
+	"cognitive-server/pkg/worldmap/storage/tiled"
 	"context"
+	"encoding/json"
+	"os"
 	"time"
 )
 
@@ -37,14 +42,17 @@ type Engine struct {
 func New(cfg *config.SimulationConfig) *Engine {
 	bus := eventbus.New(64)    // TODO: Конкретизировать размер шины
 	inst := ecs2.NewInstance() // <--- Создаем мир
-	inst.Grid = data.NewGrid(20, 20)
 
-	// Стены (тест)
-	for i := data.TileCoord(0); i < 20; i++ {
-		inst.Grid.SetTile(data.TilePos{X: i, Y: 0}, enums.TileWall)
-		inst.Grid.SetTile(data.TilePos{X: i, Y: 19}, enums.TileWall)
-		inst.Grid.SetTile(data.TilePos{X: 0, Y: i}, enums.TileWall)
-		inst.Grid.SetTile(data.TilePos{X: 19, Y: i}, enums.TileWall)
+	// --- ЗАГРУЗКА КАРТЫ ---
+	// В продакшене пути должны приходить из конфига
+	mapPath := "cognitive-tools/tiled/demo_map.tmj"
+	matPath := "assets/materials.json"
+
+	if err := loadMapIntoWorld(inst.WorldMap, mapPath, matPath); err != nil {
+		logger.Log.Errorf("Failed to load map: %v. Using empty world.", err)
+		// Не паникуем, сервер запустится с пустотой (или можно panic)
+	} else {
+		logger.Log.Info("🌍 World Map loaded successfully")
 	}
 
 	// 1. Загрузка данных
@@ -104,6 +112,49 @@ func (e *Engine) PushCommand(cmd func()) {
 	}
 }
 
+// Хелпер для загрузки палитры и карты (упрощенная версия из inspector)
+func loadMapIntoWorld(w *worldmap.World, mapPath, matPath string) error {
+	// 1. Load Materials to build Palette
+	matData, err := os.ReadFile(matPath)
+	if err != nil {
+		return err
+	}
+
+	// Минимальная структура для чтения JSON
+	type matJson struct {
+		GID        int                 `json:"gid"`
+		MaterialID worldmap.MaterialID `json:"material_id"`
+		Flags      worldmap.TileFlag   `json:"flags"`
+		Variant    uint8               `json:"variant"`
+	}
+	var mats []matJson
+	if err := json.Unmarshal(matData, &mats); err != nil {
+		return err
+	}
+
+	palette := tiled.Palette{}
+	for _, m := range mats {
+		palette[m.GID] = tiled.TileDef{MaterialID: m.MaterialID, Flags: m.Flags, Variant: m.Variant}
+	}
+
+	// 2. Load Tiled Map
+	store, err := tiled.NewStore(mapPath, palette, geo.Pos(0, 0, 0))
+	if err != nil {
+		return err
+	}
+
+	// 3. Inject into World
+	loader := worldmap.NewLoader(w, store)
+	// Грузим центр (4x4 чанка для примера)
+	loaded, err := loader.LoadRegionChunkCenter(geo.Pos(0, 0, 0), 2)
+	if err != nil {
+		return err
+	}
+	logger.Log.Infof("Loaded %d chunks from %s", loaded, mapPath)
+
+	return nil
+}
+
 // Tick — один кадр симуляции.
 // Выполняется строго в одной горутине.
 func (e *Engine) Tick() {
@@ -130,7 +181,7 @@ loop:
 	w.ClearScope(ecs.ScopeInput) // Удаляем сырые команды
 
 	// 2. LOGIC PHASE
-	logicCtx := ecs2.NewLogicContext(w, e.Instance.Grid, e.Bus, e.SpellRegistry)
+	logicCtx := ecs2.NewLogicContext(w, e.Instance.WorldMap, e.Bus, e.SpellRegistry)
 	// Система Movement: IntentMove -> Position change
 	systems.LogicMoveSystem(logicCtx)
 	systems.LogicSpellLogic(logicCtx)

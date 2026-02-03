@@ -3,13 +3,12 @@ package view
 import (
 	"cognitive-server/internal/api"
 	"cognitive-server/internal/core/types"
-	"cognitive-server/internal/core/types/enums"
 	"cognitive-server/internal/engine"
-	"cognitive-server/internal/engine/data"
 	ecs2 "cognitive-server/internal/engine/model"
 	"cognitive-server/internal/engine/model/components"
 	"cognitive-server/pkg/ecs"
-	"cognitive-server/pkg/grid"
+	"cognitive-server/pkg/geo"
+	"cognitive-server/pkg/worldmap"
 	"strconv"
 )
 
@@ -26,22 +25,31 @@ func New(eng *engine.Engine) *SnapshotBuilder {
 func (b *SnapshotBuilder) BuildSnapshot(playerGuid ecs2.ObjectGuid) *api.ServerResponse {
 	inst := b.Engine.Instance
 	w := inst.World
+	wm := inst.WorldMap
+
+	// Область видимости для снапшота
+	// TODO: Убрать после реализации FOV
+	// TEMP
+	viewW, viewH := 40, 40
 
 	resp := &api.ServerResponse{
 		Type: "UPDATE",
 		Tick: 0,
-		Grid: &api.GridMeta{Width: int(inst.Grid.Width), Height: int(inst.Grid.Height)},
+		Grid: &api.GridMeta{Width: viewW, Height: viewH},
 	}
 
 	// 1. Карта (без изменений)
-	for y := int32(0); y < int32(inst.Grid.Height); y++ {
-		for x := int32(0); x < int32(inst.Grid.Width); x++ {
-			tileType := enums.TileFloor
-			if !inst.Grid.IsWalkable(data.TilePos{X: grid.TileCoord(x), Y: grid.TileCoord(y)}) {
-				tileType = enums.TileWall
-			}
-			view := api.TileView{X: int(x), Y: int(y), IsVisible: true}
-			if tileType == enums.TileWall {
+	for y := 0; y < viewH; y++ {
+		for x := 0; x < viewW; x++ {
+			pos := geo.Pos(x, y, 0)
+
+			isSolid := wm.IsSolidFast(pos)
+			isOpaque := wm.GetTile(pos).Flags.Has(worldmap.FlagOpaque) // TODO: Сделать реализацию IsOpaqueFast
+
+			view := api.TileView{X: x, Y: y, IsVisible: true}
+
+			// Простая визуализация для демо (без доступа к Material Name пока что)
+			if isSolid {
 				view.Symbol = "#"
 				view.Color = "#555"
 				view.IsWall = true
@@ -49,6 +57,12 @@ func (b *SnapshotBuilder) BuildSnapshot(playerGuid ecs2.ObjectGuid) *api.ServerR
 				view.Symbol = "."
 				view.Color = "#222"
 			}
+
+			// Если Opaque (туман войны/свет), можно добавить флаг
+			if isOpaque {
+				view.IsVisible = true // Пока все видно
+			}
+
 			resp.Map = append(resp.Map, view)
 		}
 	}

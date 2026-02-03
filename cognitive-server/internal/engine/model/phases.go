@@ -4,6 +4,7 @@ import (
 	"cognitive-server/internal/engine/data"
 	"cognitive-server/pkg/ecs"
 	"cognitive-server/pkg/eventbus"
+	"cognitive-server/pkg/worldmap"
 )
 
 // --- INPUT PHASE CONTRACT ---
@@ -39,16 +40,16 @@ type InputSystemFunc func(ctx InputContext)
 // Его задача — предоставить доступ к изменению мира и реакциям.
 type LogicContext struct {
 	World         *ecs.World
-	Grid          *data.Grid          // Нужен для проверки стен
+	WorldMap      *worldmap.World     // Нужен для проверки стен
 	Bus           *eventbus.EventBus  // Нужен для событий (урон, лог)
 	SpellRegistry *data.SpellRegistry // Нужен для свойств спеллов
 }
 
 // NewLogicContext собирает зависимости для логического шага.
-func NewLogicContext(w *ecs.World, grid *data.Grid, bus *eventbus.EventBus, reg *data.SpellRegistry) LogicContext {
+func NewLogicContext(w *ecs.World, wm *worldmap.World, bus *eventbus.EventBus, reg *data.SpellRegistry) LogicContext {
 	return LogicContext{
 		World:         w,
-		Grid:          grid,
+		WorldMap:      wm,
 		Bus:           bus,
 		SpellRegistry: reg,
 	}

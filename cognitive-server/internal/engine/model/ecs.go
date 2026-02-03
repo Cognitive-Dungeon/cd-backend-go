@@ -3,10 +3,10 @@ package model
 import (
 	"cognitive-server/internal/core/types"
 	"cognitive-server/internal/core/types/enums"
-	"cognitive-server/internal/engine/data"
 	"cognitive-server/internal/engine/model/components"
 	"cognitive-server/pkg/ecs"
 	"cognitive-server/pkg/grid"
+	"cognitive-server/pkg/worldmap"
 )
 
 type (
@@ -29,7 +29,7 @@ const (
 // Хранит состояние конкретного подземелья или континента.
 type Instance struct {
 	World     *ecs.World
-	Grid      *data.Grid
+	WorldMap  *worldmap.World
 	nextIndex uint32
 }
 
@@ -38,6 +38,7 @@ func NewInstance() *Instance {
 	w := ecs.NewWorld()
 	inst := &Instance{
 		World:     w,
+		WorldMap:  worldmap.NewWorld(),
 		nextIndex: 1,
 	}
 	inst.registerComponents()
