@@ -250,6 +250,62 @@ func (w *World) RangeChunks(f func(pos geo.Location, c *Chunk) bool) {
 	}
 }
 
+// Bounds возвращает границы загруженного мира в координатах чанков.
+// (Min включительно, Max исключительно).
+func (w *World) Bounds() (min, max geo.Location) {
+	w.regionsMu.RLock()
+	defer w.regionsMu.RUnlock()
+
+	if len(w.Regions) == 0 {
+		return geo.Pos(0, 0, 0), geo.Pos(0, 0, 0)
+	}
+
+	var minX, minY, minZ int
+	var maxX, maxY, maxZ int
+	first := true
+
+	for rKey := range w.Regions {
+		rx, ry, rz := rKey.XYZ()
+
+		// Регион (rx, ry) покрывает чанки от [rx*32] до [(rx+1)*32]
+		rMinX := rx << RegionShift
+		rMinY := ry << RegionShift
+		rMaxX := (rx + 1) << RegionShift
+		rMaxY := (ry + 1) << RegionShift
+
+		if first {
+			minX, maxX = rMinX, rMaxX
+			minY, maxY = rMinY, rMaxY
+			minZ, maxZ = rz, rz
+			first = false
+			continue
+		}
+
+		if rMinX < minX {
+			minX = rMinX
+		}
+		if rMaxX > maxX {
+			maxX = rMaxX
+		}
+
+		if rMinY < minY {
+			minY = rMinY
+		}
+		if rMaxY > maxY {
+			maxY = rMaxY
+		}
+
+		if rz < minZ {
+			minZ = rz
+		}
+		if rz > maxZ {
+			maxZ = rz
+		}
+	}
+
+	return geo.Pos(minX, minY, minZ), geo.Pos(maxX, maxY, maxZ)
+}
+
 //
 // -------------------- Internal helpers --------------------
 //
