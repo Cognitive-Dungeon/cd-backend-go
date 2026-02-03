@@ -7,7 +7,9 @@ import (
 )
 
 // Store реализует worldmap.MapStorage для .tmj файлов.
+// Он загружает карту в память и хранит статические чанки, готовые для вставки в World.
 type Store struct {
+	// Мы храним карту чанков локально внутри Store, пока они не попадут в World.
 	chunks map[geo.Location]*worldmap.Chunk
 }
 
@@ -28,9 +30,18 @@ func NewStore(path string, palette Palette, offset geo.Location) (*Store, error)
 		return nil, err
 	}
 
+	// 3. ФИНАЛИЗАЦИЯ (ВАЖНО!)
+	// После того как все слои обработаны и все тайлы записаны,
+	// мы должны пересчитать битовые маски (Solid/Opaque) для каждого чанка.
+	// Без этого IsSolidFast будет всегда возвращать false.
+	for _, chunk := range s.chunks {
+		chunk.RebuildMasks()
+	}
+
 	return s, nil
 }
 
+// LoadChunk возвращает готовый статический чанк.
 func (s *Store) LoadChunk(pos geo.Location) (*worldmap.Chunk, error) {
 	if c, ok := s.chunks[pos]; ok {
 		return c, nil
@@ -38,10 +49,10 @@ func (s *Store) LoadChunk(pos geo.Location) (*worldmap.Chunk, error) {
 	return nil, fmt.Errorf("chunk not found: %s", pos)
 }
 
+// SaveChunk не поддерживается для Tiled (read-only source).
 func (s *Store) SaveChunk(pos geo.Location, c *worldmap.Chunk) error {
 	return fmt.Errorf("tiled storage is read-only")
 }
-
 func (s *Store) processMap(m *Map, p Palette, offset geo.Location) error {
 	ox, oy, oz := offset.XYZ()
 
@@ -84,9 +95,10 @@ func (s *Store) processMap(m *Map, p Palette, offset geo.Location) error {
 // startX, startY — мировые координаты начала этого блока.
 func (s *Store) processTileData(gids []uint32, width int, startX, startY, z int, p Palette) error {
 	for i, gid := range gids {
+		// 1. Конвертируем GID Tiled -> Server Tile
 		tile, ok := mapGid(gid, p)
 		if !ok {
-			continue // Пропускаем пустоту
+			continue // Пропускаем пустоту (в worldmap чанк по умолчанию пуст)
 		}
 
 		// Координаты внутри блока данных
@@ -99,12 +111,16 @@ func (s *Store) processTileData(gids []uint32, width int, startX, startY, z int,
 		chunkKey := worldmap.GetChunkKey(worldPos)
 		localX, localY := worldmap.GetLocalCoords(worldPos)
 
+		// 2. Ищем или создаем чанк в кэше Store
 		chunk, exists := s.chunks[chunkKey]
 		if !exists {
 			chunk = worldmap.NewChunk()
 			s.chunks[chunkKey] = chunk
 		}
 
+		// 3. Записываем тайл.
+		// В worldmap chunk.SetTile сам добавит тайл в палитру и вернет true/false.
+		// Мы пока не пересчитываем маски, делаем это в конце.
 		chunk.SetTile(localX, localY, tile)
 	}
 	return nil
