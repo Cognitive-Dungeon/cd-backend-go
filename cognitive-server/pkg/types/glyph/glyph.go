@@ -1,8 +1,4 @@
-package types
-
-import (
-	"fmt"
-)
+package glyph
 
 // Glyph представляет упакованное представление цветного символа.
 // Использует 32 бита (uint32) для хранения в формате:
@@ -67,21 +63,64 @@ func (g Glyph) Char() byte {
 // Реализует интерфейс fmt.Stringer.
 // Формат: "Glyph{char='A', color=#FFA500}"
 func (g Glyph) String() string {
-	// Получаем символ и преобразуем в строку
+	const hex = "0123456789ABCDEF"
+
 	char := g.Char()
-	charStr := string([]byte{char})
+	color := g.Color()
 
-	// Для непечатаемых символов показываем hex
-	if char < 32 || char > 126 {
-		charStr = fmt.Sprintf("\\x%02X", char)
+	var buf [64]byte
+	n := 0
+
+	// "Glyph{char='"
+	copy(buf[n:], "Glyph{char='")
+	n += len("Glyph{char='")
+
+	// char
+	if char >= 32 && char <= 126 {
+		buf[n] = char
+		n++
+	} else {
+		buf[n] = '\\'
+		buf[n+1] = 'x'
+		buf[n+2] = hex[char>>4]
+		buf[n+3] = hex[char&0xF]
+		n += 4
 	}
-	// Форматируем цвет в HEX
-	colorHex := fmt.Sprintf("#%06X", g.Color())
 
-	return fmt.Sprintf("Glyph{char='%s', color=%s}", charStr, colorHex)
+	// "', color=#"
+	copy(buf[n:], "', color=#")
+	n += len("', color=#")
+
+	// color hex (RRGGBB)
+	buf[n+0] = hex[(color>>20)&0xF]
+	buf[n+1] = hex[(color>>16)&0xF]
+	buf[n+2] = hex[(color>>12)&0xF]
+	buf[n+3] = hex[(color>>8)&0xF]
+	buf[n+4] = hex[(color>>4)&0xF]
+	buf[n+5] = hex[color&0xF]
+	n += 6
+
+	// "}"
+	buf[n] = '}'
+	n++
+
+	return string(buf[:n])
 }
 
 // HexColor возвращает строковое HEX-представление цвета (например, "#00FF00").
 func (g Glyph) HexColor() string {
-	return fmt.Sprintf("#%06X", g.Color())
+	const hex = "0123456789ABCDEF"
+
+	c := g.Color()
+
+	var buf [7]byte
+	buf[0] = '#'
+	buf[1] = hex[(c>>20)&0xF]
+	buf[2] = hex[(c>>16)&0xF]
+	buf[3] = hex[(c>>12)&0xF]
+	buf[4] = hex[(c>>8)&0xF]
+	buf[5] = hex[(c>>4)&0xF]
+	buf[6] = hex[c&0xF]
+
+	return string(buf[:])
 }

@@ -6,13 +6,14 @@ import (
 	"cognitive-server/internal/engine/model/components"
 	"cognitive-server/pkg/ecs"
 	"cognitive-server/pkg/grid"
+	"cognitive-server/pkg/types/glyph"
 	"cognitive-server/pkg/worldmap"
 )
 
 type (
 	ObjectGuid = types.ObjectGuid
 	ObjectType = enums.ObjectType
-	Glyph      = types.Glyph
+	Glyph      = glyph.Glyph
 )
 
 const (
@@ -122,7 +123,7 @@ func (b *EntityBuilder) WithName(name string) *EntityBuilder {
 
 func (b *EntityBuilder) WithRender(char byte, color uint32) *EntityBuilder {
 	comp := components.RenderComponent{
-		Glyph: types.MakeGlyph(color, char),
+		Glyph: glyph.MakeGlyph(color, char),
 	}
 	ecs.GetStorage[components.RenderComponent](b.inst.World, components.CID_Render).Add(b.id, comp)
 	return b

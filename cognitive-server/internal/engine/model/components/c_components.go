@@ -1,9 +1,9 @@
 package components
 
 import (
-	"cognitive-server/internal/core/types"
 	"cognitive-server/pkg/ecs"
 	"cognitive-server/pkg/grid"
+	"cognitive-server/pkg/types/glyph"
 )
 
 type ComponentID = int
@@ -23,7 +23,7 @@ var (
 // Храним упакованный Glyph (4 байта) вместо строк.
 type RenderComponent struct {
 	ecs.StateMarker
-	Glyph types.Glyph
+	Glyph glyph.Glyph
 }
 
 // PositionComponent — где находится сущность.

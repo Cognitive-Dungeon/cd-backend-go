@@ -1,13 +1,13 @@
 package systems
 
 import (
-	"cognitive-server/internal/core/types"
 	"cognitive-server/internal/core/types/enums"
 	ecs2 "cognitive-server/internal/engine/model"
 	"cognitive-server/internal/engine/model/components"
 	"cognitive-server/pkg/ecs"
 	"cognitive-server/pkg/eventbus"
 	"cognitive-server/pkg/logger"
+	"cognitive-server/pkg/types/glyph"
 )
 
 type DeathSystem struct {
@@ -30,7 +30,7 @@ func (s *DeathSystem) onUnitDied(ev enums.ObjectDiedEvent) {
 	// Получаем доступ к компоненту Render напрямую через ECS
 	renderStore := ecs.GetStorage[components.RenderComponent](world, components.CID_Render)
 	if render := renderStore.Get(id); render != nil {
-		render.Glyph = types.MakeGlyph(0x888888, '%') // Серый %
+		render.Glyph = glyph.MakeGlyph(0x888888, '%') // Серый %
 	}
 
 	// 2. Имя (Добавляем пометку)
