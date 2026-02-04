@@ -5,6 +5,8 @@ import (
 	"cognitive-server/internal/core/types/enums"
 	"cognitive-server/internal/engine/model/components"
 	"cognitive-server/pkg/ecs"
+	"cognitive-server/pkg/entityindex"
+	"cognitive-server/pkg/geo"
 	"cognitive-server/pkg/grid"
 	"cognitive-server/pkg/types/glyph"
 	"cognitive-server/pkg/worldmap"
@@ -29,18 +31,20 @@ const (
 // Instance - Контейнер для всех данных инстанса.
 // Хранит состояние конкретного подземелья или континента.
 type Instance struct {
-	World     *ecs.World
-	WorldMap  *worldmap.World
-	nextIndex uint32
+	World      *ecs.World
+	WorldMap   *worldmap.World
+	EntityGrid *entityindex.Grid
+	nextIndex  uint32
 }
 
 // NewInstance - создает пустой мир
 func NewInstance() *Instance {
 	w := ecs.NewWorld()
 	inst := &Instance{
-		World:     w,
-		WorldMap:  worldmap.NewWorld(),
-		nextIndex: 1,
+		World:      w,
+		WorldMap:   worldmap.NewWorld(),
+		EntityGrid: entityindex.New(),
+		nextIndex:  1,
 	}
 	inst.registerComponents()
 	return inst
@@ -98,10 +102,15 @@ func (inst *Instance) NewEntityBuilder(guid ObjectGuid) *EntityBuilder {
 }
 
 func (b *EntityBuilder) WithPosition(x, y int) *EntityBuilder {
+	pos := grid.TilePos{X: grid.TileCoord(x), Y: grid.TileCoord(y)}
 	comp := components.PositionComponent{
-		TilePos: grid.TilePos{X: grid.TileCoord(x), Y: grid.TileCoord(y)},
+		TilePos: pos,
 	}
 	ecs.GetStorage[components.PositionComponent](b.inst.World, components.CID_Position).Add(b.id, comp)
+
+	geoPos := geo.Pos(x, y, 0)
+	b.inst.EntityGrid.Add(b.id, geoPos)
+
 	return b
 }
 

@@ -41,5 +41,9 @@ func (s *DeathSystem) onUnitDied(ev enums.ObjectDiedEvent) {
 
 	// 3. Забираем управление
 	// Удаляем ControllerComponent, чтобы игрок или AI больше не могли управлять сущностью.
-	// В новой архитектуре это делается мгновенно и безопасно
+	ecs.GetStorage[components.ControllerComponent](world, components.CID_Controller).Delete(id)
+
+	// 4. Очистка намерений (вдруг он хотел скастовать или пойти в этом кадре)
+	ecs.GetStorage[components.IntentMove](world, components.CID_IntentMove).Delete(id)
+	ecs.GetStorage[components.IntentCast](world, components.CID_IntentCast).Delete(id)
 }

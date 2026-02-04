@@ -53,17 +53,19 @@ func LogicMoveSystem(ctx ecs2.LogicContext) {
 
 		targetX := pos.X + data.TileCoord(intent.Dx)
 		targetY := pos.Y + data.TileCoord(intent.Dy)
-		targetPos := grid.TilePos{X: targetX, Y: targetY}
-		// TODO: Выкинуть старый пакет grid
 		// Конвертируем grid.TilePos (int32) -> geo.Location (uint64)
-		geoPos := geo.Pos(int(targetX), int(targetY), 0)
+		oldGeoPos := geo.Pos(int(pos.X), int(pos.Y), 0)
+		newGeoPos := geo.Pos(int(targetX), int(targetY), 0)
 
 		// Проверка коллизий
-		if !ctx.WorldMap.IsSolidFast(geoPos) {
+		if !ctx.WorldMap.IsSolidFast(newGeoPos) {
+			// 1. Сохраняем старую позицию для публикации события
 			oldPos := pos.TilePos
+			// 2. Меняем компонент (SoT)
+			pos.TilePos = grid.TilePos{X: targetX, Y: targetY}
 
-			// Мутация состояния (in-place update)
-			pos.TilePos = targetPos
+			// 3. Обновляем кеш
+			ctx.EntityGrid.Move(id, oldGeoPos, newGeoPos)
 
 			// Отправляем событие для других систем (например, триггеров или сети)
 			// События пока оставляем на EventBus для совместимости с Gateway notification,
@@ -71,7 +73,7 @@ func LogicMoveSystem(ctx ecs2.LogicContext) {
 			ctx.Bus.Publish(eventbus.EventType(enums.EventObjectMoved), enums.ObjectMovedEvent{
 				Object: types.ObjectGuid(id), // Обратная конвертация ID -> Guid
 				From:   oldPos,
-				To:     targetPos,
+				To:     pos.TilePos,
 			})
 		}
 	}

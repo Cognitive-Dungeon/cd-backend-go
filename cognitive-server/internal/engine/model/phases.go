@@ -3,6 +3,7 @@ package model
 import (
 	"cognitive-server/internal/engine/data"
 	"cognitive-server/pkg/ecs"
+	"cognitive-server/pkg/entityindex"
 	"cognitive-server/pkg/eventbus"
 	"cognitive-server/pkg/worldmap"
 )
@@ -43,15 +44,17 @@ type LogicContext struct {
 	WorldMap      *worldmap.World     // Нужен для проверки стен
 	Bus           *eventbus.EventBus  // Нужен для событий (урон, лог)
 	SpellRegistry *data.SpellRegistry // Нужен для свойств спеллов
+	EntityGrid    *entityindex.Grid   // Нужен для быстрого доступа к Entity
 }
 
 // NewLogicContext собирает зависимости для логического шага.
-func NewLogicContext(w *ecs.World, wm *worldmap.World, bus *eventbus.EventBus, reg *data.SpellRegistry) LogicContext {
+func NewLogicContext(w *ecs.World, wm *worldmap.World, bus *eventbus.EventBus, reg *data.SpellRegistry, eg *entityindex.Grid) LogicContext {
 	return LogicContext{
 		World:         w,
 		WorldMap:      wm,
 		Bus:           bus,
 		SpellRegistry: reg,
+		EntityGrid:    eg,
 	}
 }
 

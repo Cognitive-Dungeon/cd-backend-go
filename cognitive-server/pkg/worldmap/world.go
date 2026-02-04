@@ -132,6 +132,35 @@ func (w *World) IsSolidFast(pos geo.Location) bool {
 	return base.IsSolidLocal(lx, ly)
 }
 
+// IsOpaqueFast проверяет прозрачность файла максимально быстрым путём.
+//
+// Использует битовые маски:
+//   - сначала динамика (Static + Delta)
+//   - затем статика
+func (w *World) IsOpaqueFast(pos geo.Location) bool {
+	chunkKey := GetChunkKey(pos)
+	shard := w.Shards[getShardIndex(chunkKey)]
+	lx, ly := GetLocalCoords(pos)
+
+	flatIdx := (ly << ChunkShift) | lx
+	block := flatIdx >> 6
+	bit := uint64(1) << (flatIdx & 63)
+
+	shard.mu.RLock()
+	if delta := shard.GetDeltaUnsafe(chunkKey); delta != nil {
+		res := (delta.OpaqueMask[block] & bit) != 0
+		shard.mu.RUnlock()
+		return res
+	}
+	shard.mu.RUnlock()
+
+	base := w.getStaticChunk(chunkKey)
+	if base == nil {
+		return false
+	}
+	return base.IsOpaqueLocal(lx, ly)
+}
+
 // SetTile изменяет тайл по глобальным координатам.
 //
 // Все изменения пишутся ТОЛЬКО в SparseChunk.

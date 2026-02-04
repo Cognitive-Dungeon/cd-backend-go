@@ -194,7 +194,7 @@ loop:
 	w.ClearScope(ecs.ScopeInput) // Удаляем сырые команды
 
 	// 2. LOGIC PHASE
-	logicCtx := ecs2.NewLogicContext(w, e.Instance.WorldMap, e.Bus, e.SpellRegistry)
+	logicCtx := ecs2.NewLogicContext(w, e.Instance.WorldMap, e.Bus, e.SpellRegistry, e.Instance.EntityGrid)
 	// Система Movement: IntentMove -> Position change
 	systems.LogicMoveSystem(logicCtx)
 	systems.LogicSpellLogic(logicCtx)

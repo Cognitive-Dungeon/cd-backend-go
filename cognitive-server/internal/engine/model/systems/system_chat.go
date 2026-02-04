@@ -7,6 +7,7 @@ import (
 	"cognitive-server/internal/engine/model/components"
 	"cognitive-server/pkg/ecs"
 	"cognitive-server/pkg/eventbus"
+	"cognitive-server/pkg/geo"
 )
 
 const (
@@ -30,13 +31,15 @@ func (s *ChatSystem) onChat(ev enums.ChatRequestEvent) {
 	senderID := ecs.EntityID(ev.Source)
 
 	// 1. Получаем позицию отправителя напрямую из ECS
-	// Используем глобальный ID компонента для скорости
 	posStorage := ecs.GetStorage[components.PositionComponent](world, components.CID_Position)
-	senderPos := posStorage.Get(senderID)
+	senderPosComp := posStorage.Get(senderID)
 
-	if senderPos == nil {
+	if senderPosComp == nil {
 		return // Отправителя нет в мире или он удален
 	}
+
+	p := senderPosComp.TilePos
+	senderGeo := geo.Pos(int(p.X), int(p.Y), 0)
 
 	var recipients []types.ObjectGuid
 
@@ -51,14 +54,14 @@ func (s *ChatSystem) onChat(ev enums.ChatRequestEvent) {
 
 	case types.ChatTypeSay, types.ChatTypeEmote:
 		// FindObjectsInRange уже обновлен и использует ECS внутри
-		recipients = s.Instance.FindObjectsInRange(senderPos.TilePos, SayRange)
+		recipients = s.Instance.FindObjectsInRange(senderGeo, SayRange)
 
 	case types.ChatTypeYell:
-		recipients = s.Instance.FindObjectsInRange(senderPos.TilePos, YellRange)
+		recipients = s.Instance.FindObjectsInRange(senderGeo, YellRange)
 	}
 
 	// 3. Рассылка
-	// Получаем хранилище контроллеров один раз перед циклом
+	// Получаем хранилище контроллеров один раз перед циклом (проверяем наличие контроллера, чтобы не спамить NPC)
 	ctrlStorage := ecs.GetStorage[components.ControllerComponent](world, components.CID_Controller)
 
 	for _, receiverGuid := range recipients {

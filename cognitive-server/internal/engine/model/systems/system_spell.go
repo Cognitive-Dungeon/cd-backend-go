@@ -7,9 +7,10 @@ import (
 	"cognitive-server/internal/engine/model/components"
 	"cognitive-server/pkg/ecs"
 	"cognitive-server/pkg/eventbus"
+	"cognitive-server/pkg/geo"
 	"cognitive-server/pkg/grid"
 	"cognitive-server/pkg/logger"
-	"math"
+	"cognitive-server/pkg/worldmap"
 	"time"
 )
 
@@ -92,10 +93,18 @@ func LogicSpellLogic(ctx ecs2.LogicContext) {
 
 		// Если цель нужна, но ее нет или она далеко
 		if targetPos != nil {
-			dist := distance(pos.TilePos, targetPos.TilePos)
-			if dist > spellDef.Range {
+			distSq := pos.TilePos.DistanceSquared(targetPos.TilePos)
+			rangeSq := int64(spellDef.Range * spellDef.Range)
+			if distSq > rangeSq {
 				continue // Out of range
 			}
+
+			// Проверка Line of Sight (Raycast по WorldMap)
+			hasLoS := checkLoS(ctx.WorldMap, pos.TilePos, targetPos.TilePos)
+			if !hasLoS {
+				continue
+			}
+
 		} else if !spellDef.Attributes.Has(types.SpellAttrTargetSelf) {
 			continue // Цель обязательна, но не найдена
 		}
@@ -151,8 +160,18 @@ func LogicSpellLogic(ctx ecs2.LogicContext) {
 	}
 }
 
-func distance(p1, p2 grid.TilePos) float64 {
-	dx := float64(p1.X - p2.X)
-	dy := float64(p1.Y - p2.Y)
-	return math.Sqrt(dx*dx + dy*dy)
+func checkLoS(wm *worldmap.World, from, to grid.TilePos) bool {
+	blocked := false
+	grid.LineExclusive(from, to, func(p grid.TilePos) bool {
+		// Проверяем Opaque флаг
+		// Нужно конвертировать в geo.Location
+		gPos := geo.Pos(int(p.X), int(p.Y), 0)
+
+		if wm.IsOpaqueFast(gPos) {
+			blocked = true
+			return false // Прерываем луч, стена найдена
+		}
+		return true
+	})
+	return !blocked
 }
