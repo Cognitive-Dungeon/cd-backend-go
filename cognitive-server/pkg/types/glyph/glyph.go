@@ -1,5 +1,7 @@
 package glyph
 
+import "fmt"
+
 // Glyph представляет упакованное представление цветного символа.
 // Использует 32 бита (uint32) для хранения в формате:
 //
@@ -59,52 +61,19 @@ func (g Glyph) Char() byte {
 	return byte(g & maskChar)
 }
 
+// CharUTF8 возвращает строковое представление символа в UTF-8.
+// Используется для отправки клиенту (JSON) и вывода в консоль.
+// Это O(1) операция (чтение из массива).
+func (g Glyph) CharUTF8() string {
+	r := cp437ToUnicode[g.Char()]
+	return string(r)
+}
+
 // String возвращает человеко-читаемое представление Glyph.
 // Реализует интерфейс fmt.Stringer.
 // Формат: "Glyph{char='A', color=#FFA500}"
 func (g Glyph) String() string {
-	const hex = "0123456789ABCDEF"
-
-	char := g.Char()
-	color := g.Color()
-
-	var buf [64]byte
-	n := 0
-
-	// "Glyph{char='"
-	copy(buf[n:], "Glyph{char='")
-	n += len("Glyph{char='")
-
-	// char
-	if char >= 32 && char <= 126 {
-		buf[n] = char
-		n++
-	} else {
-		buf[n] = '\\'
-		buf[n+1] = 'x'
-		buf[n+2] = hex[char>>4]
-		buf[n+3] = hex[char&0xF]
-		n += 4
-	}
-
-	// "', color=#"
-	copy(buf[n:], "', color=#")
-	n += len("', color=#")
-
-	// color hex (RRGGBB)
-	buf[n+0] = hex[(color>>20)&0xF]
-	buf[n+1] = hex[(color>>16)&0xF]
-	buf[n+2] = hex[(color>>12)&0xF]
-	buf[n+3] = hex[(color>>8)&0xF]
-	buf[n+4] = hex[(color>>4)&0xF]
-	buf[n+5] = hex[color&0xF]
-	n += 6
-
-	// "}"
-	buf[n] = '}'
-	n++
-
-	return string(buf[:n])
+	return fmt.Sprintf("Glyph{'%s', %s}", g.CharUTF8(), g.HexColor())
 }
 
 // HexColor возвращает строковое HEX-представление цвета (например, "#00FF00").

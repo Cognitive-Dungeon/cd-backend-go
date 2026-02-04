@@ -11,6 +11,7 @@ import (
 	"cognitive-server/pkg/geo"
 	"cognitive-server/pkg/logger"
 	"cognitive-server/pkg/worldmap"
+	"cognitive-server/pkg/worldmap/materials"
 	"cognitive-server/pkg/worldmap/storage/tiled"
 	"context"
 	"encoding/json"
@@ -24,8 +25,9 @@ type Engine struct {
 	cfg *config.SimulationConfig
 	Bus *eventbus.EventBus
 
-	Instance      *ecs2.Instance
-	SpellRegistry *data.SpellRegistry // Храним реестр
+	Instance         *ecs2.Instance
+	SpellRegistry    *data.SpellRegistry // Храним реестр
+	MaterialRegistry *materials.MaterialRegistry
 
 	// Реактивные системы храним, чтобы они не были собраны GC
 	// (хотя EventBus держит ссылки на хендлеры, лучше держать их явно)
@@ -44,27 +46,37 @@ func New(cfg *config.SimulationConfig) *Engine {
 	inst := ecs2.NewInstance() // <--- Создаем мир
 
 	// --- ЗАГРУЗКА КАРТЫ ---
-	// В продакшене пути должны приходить из конфига
-	mapPath := "cognitive-tools/tiled/demo_map.tmj"
-	matPath := "assets/materials.json"
+	const (
+		//TODO: В продакшене пути должны приходить из конфига
+		mapPath = "cognitive-tools/tiled/demo_map.tmj"
+		matPath = "assets/materials.json"
+	)
+	// 1. Загрузка Реестра Материалов (Visuals & Meta)
+	// Используется для Snapshot (клиент) и AI
+	matReg, err := materials.LoadRegistryFromFile(matPath)
+	if err != nil {
+		logger.Log.Errorf("Failed to load materials registry: %v. Using empty fallback.", err)
+		matReg = materials.NewRegistry()
+	} else {
+		logger.Log.Info("🎨 Material Registry loaded")
+	}
 
+	// 2. Загрузка Физической Карты (Physics & Logic)
+	// Используется для коллизий и навигации
 	if err := loadMapIntoWorld(inst.WorldMap, mapPath, matPath); err != nil {
-		logger.Log.Errorf("Failed to load map: %v. Using empty world.", err)
-		// Не паникуем, сервер запустится с пустотой (или можно panic)
+		logger.Log.Errorf("Failed to load map: %v. World will be empty.", err)
 	} else {
 		logger.Log.Info("🌍 World Map loaded successfully")
 	}
 
-	// 1. Загрузка данных
+	// 3. Загрузка Спеллов
 	spellReg := data.NewSpellRegistry()
-	// Внимание: путь к assets должен быть корректным относительно точки запуска
-	// При запуске из корня проекта: raw_assets/spells.json
 	if err := spellReg.LoadFromFile("raw_assets/spells.json"); err != nil {
 		logger.Log.Fatalf("Failed to load spells: %v", err)
 	}
 	logger.Log.Info("✨ Spell Registry loaded")
 
-	// Эти системы не вызываются в Tick(), они реагируют на события.
+	// Системы
 	damageSys := systems.NewDamageSystem(inst, bus)
 	deathSys := systems.NewDeathSystem(inst, bus)
 	chatSys := systems.NewChatSystem(inst, bus)
@@ -73,14 +85,15 @@ func New(cfg *config.SimulationConfig) *Engine {
 	spawnTestEntities(inst)
 
 	return &Engine{
-		cfg:           cfg,
-		Bus:           bus,
-		Instance:      inst,
-		SpellRegistry: spellReg,
-		DamageSys:     damageSys,
-		DeathSys:      deathSys,
-		ChatSys:       chatSys,
-		commandQueue:  make(chan func(), 1024),
+		cfg:              cfg,
+		Bus:              bus,
+		Instance:         inst,
+		SpellRegistry:    spellReg,
+		MaterialRegistry: matReg,
+		DamageSys:        damageSys,
+		DeathSys:         deathSys,
+		ChatSys:          chatSys,
+		commandQueue:     make(chan func(), 1024),
 	}
 }
 

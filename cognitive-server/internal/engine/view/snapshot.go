@@ -26,6 +26,7 @@ func (b *SnapshotBuilder) BuildSnapshot(playerGuid ecs2.ObjectGuid) *api.ServerR
 	inst := b.Engine.Instance
 	w := inst.World
 	wm := inst.WorldMap
+	matReg := b.Engine.MaterialRegistry
 
 	// Область видимости для снапшота
 	// TODO: Убрать после реализации FOV
@@ -42,25 +43,16 @@ func (b *SnapshotBuilder) BuildSnapshot(playerGuid ecs2.ObjectGuid) *api.ServerR
 	for y := 0; y < viewH; y++ {
 		for x := 0; x < viewW; x++ {
 			pos := geo.Pos(x, y, 0)
+			tile := wm.GetTile(pos)
+			vis := matReg.GetVisual(tile.Material)
 
-			isSolid := wm.IsSolidFast(pos)
-			isOpaque := wm.GetTile(pos).Flags.Has(worldmap.FlagOpaque) // TODO: Сделать реализацию IsOpaqueFast
-
-			view := api.TileView{X: x, Y: y, IsVisible: true}
-
-			// Простая визуализация для демо (без доступа к Material Name пока что)
-			if isSolid {
-				view.Symbol = "#"
-				view.Color = "#555"
-				view.IsWall = true
-			} else {
-				view.Symbol = "."
-				view.Color = "#222"
-			}
-
-			// Если Opaque (туман войны/свет), можно добавить флаг
-			if isOpaque {
-				view.IsVisible = true // Пока все видно
+			view := api.TileView{
+				X:         x,
+				Y:         y,
+				Symbol:    vis.Glyph.CharUTF8(),
+				Color:     vis.Glyph.HexColor(),
+				IsWall:    tile.Flags.Has(worldmap.FlagSolid),
+				IsVisible: true,
 			}
 
 			resp.Map = append(resp.Map, view)

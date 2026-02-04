@@ -4,6 +4,13 @@
   <meta charset="UTF-8">
   <title>Cognitive Debugger v13 (Terminal Fix)</title>
   <style>
+    @font-face {
+      font-family: 'UniFont';
+      src: url('./tileset_gen/unifont-17.0.03.ttf') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+      font-display: swap;
+    }
     :root {
       --bg-dark: #0d1117;
       --bg-panel: #161b22;
@@ -422,7 +429,7 @@
         }
         if (t.isVisible || t.isExplored) {
           ctx.fillStyle = t.isVisible ? (t.color || '#444') : '#222';
-          ctx.font = `${ts-4}px monospace`;
+          ctx.font = `${ts-4}px UniFont`;
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
           ctx.fillText(t.symbol, tx + ts/2, ty + ts/2 + 2);
         }
