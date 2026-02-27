@@ -1,0 +1,11 @@
+.git
+bin/
+*.exe
+*.test
+*.out
+vendor/
+.idea/
+.vscode/
+docker-compose.yml
+Dockerfile
+README.md
